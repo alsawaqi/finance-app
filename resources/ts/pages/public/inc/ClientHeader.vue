@@ -1,14 +1,47 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../../../stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 
-function isPath(path: string) {
-  return route.path === path
+const navItems = [
+  {
+    label: 'Dashboard',
+    to: { name: 'client-dashboard' },
+    matches: ['client-dashboard'],
+  },
+  {
+    label: 'New Request',
+    to: { name: 'client-new-request' },
+    matches: ['client-new-request'],
+  },
+  {
+    label: 'My Requests',
+    to: { name: 'client-requests' },
+    matches: ['client-requests', 'client-request-details', 'client-request-sign', 'client-request-documents'],
+  },
+]
+
+const userName = computed(() => auth.user?.name || 'Abdallah')
+const userInitials = computed(() => {
+  return userName.value
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+})
+
+function isNavActive(names: string[]) {
+  return names.includes(String(route.name ?? ''))
 }
 
-function isHash(hash: string) {
-  return route.path === '/dashboard' && route.hash === hash
+async function handleLogout() {
+  await auth.logout()
+  await router.replace({ name: 'login' })
 }
 
 defineProps<{
@@ -32,7 +65,7 @@ defineEmits<{
         <div class="main_header_inner">
           <div class="main_header_logo">
             <figure>
-              <RouterLink to="/dashboard">
+              <RouterLink to="/">
                 <img src="/financer/assets/images/logo.png" alt="Company Logo" />
               </RouterLink>
             </figure>
@@ -48,20 +81,12 @@ defineEmits<{
             <nav class="main-menu">
               <div class="nav-outer">
                 <ul class="navigation">
-                  <li :class="{ active: isPath('/dashboard') && !route.hash }">
-                    <RouterLink to="/dashboard">Dashboard</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#requests') }">
-                    <RouterLink to="/dashboard#requests">My Requests</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#new-request') }">
-                    <RouterLink to="/dashboard#new-request">New Request</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#documents') }">
-                    <RouterLink to="/dashboard#documents">Documents</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#support') }">
-                    <RouterLink to="/dashboard#support">Support</RouterLink>
+                  <li
+                    v-for="item in navItems"
+                    :key="item.label"
+                    :class="{ active: isNavActive(item.matches) }"
+                  >
+                    <RouterLink :to="item.to">{{ item.label }}</RouterLink>
                   </li>
                 </ul>
               </div>
@@ -73,14 +98,19 @@ defineEmits<{
               <i class="icon-50"></i>
             </button>
 
-            <RouterLink to="/dashboard#new-request" class="btn_style_one client-header-cta">
-              <span>Submit Request</span>
+            <RouterLink :to="{ name: 'client-new-request' }" class="btn_style_one client-header-cta">
+              <span>Create Request</span>
             </RouterLink>
 
+            <button type="button" class="client-header-logout" @click="handleLogout">
+              <i class="fas fa-sign-out-alt"></i>
+              <span>Logout</span>
+            </button>
+
             <div class="client-user-chip">
-              <div class="client-user-chip__avatar">AK</div>
-              <div class="client-user-chip__content">
-                <strong>Abdallah</strong>
+              <div class="client-user-chip__avatar">{{ userInitials }}</div>
+              <div class="client-user-chip__text">
+                <strong>{{ userName }}</strong>
                 <span>Client Portal</span>
               </div>
             </div>
@@ -94,7 +124,7 @@ defineEmits<{
         <div class="main_header_inner">
           <div class="main_header_logo">
             <figure>
-              <RouterLink to="/dashboard">
+              <RouterLink :to="{ name: 'client-dashboard' }">
                 <img src="/financer/assets/images/logo.png" alt="Company Logo" />
               </RouterLink>
             </figure>
@@ -104,20 +134,12 @@ defineEmits<{
             <nav class="main-menu">
               <div class="nav-outer">
                 <ul class="navigation">
-                  <li :class="{ active: isPath('/dashboard') && !route.hash }">
-                    <RouterLink to="/dashboard">Dashboard</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#requests') }">
-                    <RouterLink to="/dashboard#requests">My Requests</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#new-request') }">
-                    <RouterLink to="/dashboard#new-request">New Request</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#documents') }">
-                    <RouterLink to="/dashboard#documents">Documents</RouterLink>
-                  </li>
-                  <li :class="{ active: isHash('#support') }">
-                    <RouterLink to="/dashboard#support">Support</RouterLink>
+                  <li
+                    v-for="item in navItems"
+                    :key="`${item.label}-sticky`"
+                    :class="{ active: isNavActive(item.matches) }"
+                  >
+                    <RouterLink :to="item.to">{{ item.label }}</RouterLink>
                   </li>
                 </ul>
               </div>
@@ -129,12 +151,21 @@ defineEmits<{
               <i class="icon-50"></i>
             </button>
 
-            <RouterLink to="/dashboard#new-request" class="btn_style_one client-header-cta">
-              <span>Submit Request</span>
+            <RouterLink :to="{ name: 'client-new-request' }" class="btn_style_one client-header-cta">
+              <span>Create Request</span>
             </RouterLink>
 
+            <button type="button" class="client-header-logout" @click="handleLogout">
+              <i class="fas fa-sign-out-alt"></i>
+              <span>Logout</span>
+            </button>
+
             <div class="client-user-chip client-user-chip--compact">
-              <div class="client-user-chip__avatar">AK</div>
+              <div class="client-user-chip__avatar">{{ userInitials }}</div>
+              <div class="client-user-chip__text">
+                <strong>{{ userName }}</strong>
+                <span>Client Portal</span>
+              </div>
             </div>
           </div>
         </div>
@@ -147,24 +178,32 @@ defineEmits<{
 
       <nav class="menu-box">
         <div class="nav-logo">
-          <RouterLink to="/dashboard" @click="$emit('close-mobile-menu')">
+          <RouterLink :to="{ name: 'client-dashboard' }" @click="$emit('close-mobile-menu')">
             <img src="/financer/assets/images/mobile-logo.png" alt="" title="" />
           </RouterLink>
         </div>
 
         <div class="mobile-client-cta-group">
           <RouterLink
-            to="/dashboard#new-request"
+            :to="{ name: 'client-new-request' }"
             class="mobile-client-cta"
             @click="$emit('close-mobile-menu')"
           >
-            Submit Request
+            Create Request
           </RouterLink>
 
+          <button
+            type="button"
+            class="mobile-client-logout"
+            @click="handleLogout"
+          >
+            Logout
+          </button>
+
           <div class="mobile-client-user">
-            <div class="client-user-chip__avatar">AK</div>
+            <div class="client-user-chip__avatar">{{ userInitials }}</div>
             <div>
-              <strong>Abdallah</strong>
+              <strong>{{ userName }}</strong>
               <span>Client Portal</span>
             </div>
           </div>
@@ -172,20 +211,12 @@ defineEmits<{
 
         <div class="menu-outer">
           <ul class="navigation clearfix">
-            <li :class="{ current: isPath('/dashboard') && !route.hash }">
-              <RouterLink to="/dashboard" @click="$emit('close-mobile-menu')">Dashboard</RouterLink>
-            </li>
-            <li :class="{ current: isHash('#requests') }">
-              <RouterLink to="/dashboard#requests" @click="$emit('close-mobile-menu')">My Requests</RouterLink>
-            </li>
-            <li :class="{ current: isHash('#new-request') }">
-              <RouterLink to="/dashboard#new-request" @click="$emit('close-mobile-menu')">New Request</RouterLink>
-            </li>
-            <li :class="{ current: isHash('#documents') }">
-              <RouterLink to="/dashboard#documents" @click="$emit('close-mobile-menu')">Documents</RouterLink>
-            </li>
-            <li :class="{ current: isHash('#support') }">
-              <RouterLink to="/dashboard#support" @click="$emit('close-mobile-menu')">Support</RouterLink>
+            <li
+              v-for="item in navItems"
+              :key="`${item.label}-mobile`"
+              :class="{ current: isNavActive(item.matches) }"
+            >
+              <RouterLink :to="item.to" @click="$emit('close-mobile-menu')">{{ item.label }}</RouterLink>
             </li>
           </ul>
         </div>
@@ -193,7 +224,7 @@ defineEmits<{
         <div class="contact-info">
           <h4>Client Help Desk</h4>
           <ul>
-            <li>Track requests, upload files, and follow your finance workflow.</li>
+            <li>Track requests, sign contracts, and upload documents only when requested.</li>
             <li><a href="tel:+96800000000">+968 0000 0000</a></li>
             <li><a href="mailto:support@example.com">support@example.com</a></li>
           </ul>

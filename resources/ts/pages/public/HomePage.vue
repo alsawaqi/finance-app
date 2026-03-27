@@ -35,16 +35,15 @@ type FAQ = {
   answer: string
 }
 
-const preloaderLetters = ['F', 'i', 'n', 'a', 'n', 'c', 'e', 'r']
+
 const showPreloader = ref(true)
 const searchOpen = ref(false)
 const mobileMenuOpen = ref(false)
 const isSticky = ref(false)
 const showScrollTop = ref(false)
-const searchText = ref('')
-const heroEmail = ref('')
+
 const ctaEmail = ref('')
-const newsletterEmail = ref('')
+
 const activeFaq = ref(1)
 const testimonialIndex = ref(0)
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)

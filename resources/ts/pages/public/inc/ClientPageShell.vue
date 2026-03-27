@@ -35,14 +35,14 @@
 </template>
 
 <script setup lang="ts">
-import '@/pages/public/inc/public-theme.css'
+import '../../public/inc/public-theme.css'
 import './client-theme.css'
 
-import PublicFooter from '@/pages/public/inc/PublicFooter.vue'
-import PublicPreloader from '@/pages/public/inc/PublicPreloader.vue'
-import PublicScrollTop from '@/pages/public/inc/PublicScrollTop.vue'
-import PublicSearchPopup from '@/pages/public/inc/PublicSearchPopup.vue'
-import { usePublicUi } from '@/pages/public/inc/usePublicUi'
+import PublicFooter from '../../public/inc/PublicFooter.vue'
+import PublicPreloader from '../../public/inc/PublicPreloader.vue'
+import PublicScrollTop from '../../public/inc/PublicScrollTop.vue'
+import PublicSearchPopup from '../../public/inc/PublicSearchPopup.vue'
+import { usePublicUi } from '../../public/inc/usePublicUi'
 import ClientHeader from './ClientHeader.vue'
 
 const {

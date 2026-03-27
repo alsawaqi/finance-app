@@ -10,9 +10,16 @@ import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage.vue'
 import ResetPasswordPage from '@/pages/auth/ResetPasswordPage.vue'
 import VerifyEmailPage from '@/pages/auth/VerifyEmailPage.vue'
 
-import ClientDashboardPage from '@/pages/client/ClientDashboardPage.vue'
+import ClientLayoutPage from '@/pages/client/ClientLayoutPage.vue'
+import ClientDashboardOverviewPage from '@/pages/client/ClientDashboardOverviewPage.vue'
+import ClientNewRequestPage from '@/pages/client/ClientNewRequestPage.vue'
+import ClientRequestsPage from '@/pages/client/ClientRequestsPage.vue'
+import ClientRequestDetailsPage from '@/pages/client/ClientRequestDetailsPage.vue'
+import ClientRequestSignPage from '@/pages/client/ClientRequestSignPage.vue'
+import ClientRequestDocumentsPage from '@/pages/client/ClientRequestDocumentsPage.vue'
+import AdminLayoutPage from '@/pages/admin/AdminLayoutPage.vue'
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage.vue'
-import StaffDashboardPage from '@/pages/staff/StaffDashboard.vue'
+import AdminRequestQuestionsPage from '@/pages/admin/AdminRequestQuestionsPage.vue'
 
 import NotFoundPage from '@/pages/NotFoundPage.vue'
 
@@ -53,31 +60,72 @@ const router = createRouter({
       path: '/reset-password/:token',
       name: 'reset-password',
       component: ResetPasswordPage,
-      meta: { layout: 'auth' },
+      meta: { guestOnly: true, layout: 'auth' },
     },
     {
       path: '/verify-email',
       name: 'verify-email',
       component: VerifyEmailPage,
-      meta: { layout: 'auth' },
+      meta: { requiresAuth: true, layout: 'auth' },
     },
     {
       path: '/dashboard',
-      name: 'client-dashboard',
-      component: ClientDashboardPage,
-      meta: { requiresAuth: true, role: 'client', layout: 'client' },
+      component: ClientLayoutPage,
+      meta: { requiresAuth: true, allowedRoles: ['client'], layout: 'client' },
+      children: [
+        {
+          path: '',
+          name: 'client-dashboard',
+          component: ClientDashboardOverviewPage,
+        },
+        {
+          path: 'new-request',
+          name: 'client-new-request',
+          component: ClientNewRequestPage,
+        },
+        {
+          path: 'requests',
+          name: 'client-requests',
+          component: ClientRequestsPage,
+        },
+        {
+          path: 'requests/:id',
+          name: 'client-request-details',
+          component: ClientRequestDetailsPage,
+        },
+        {
+          path: 'requests/:id/sign',
+          name: 'client-request-sign',
+          component: ClientRequestSignPage,
+        },
+        {
+          path: 'requests/:id/documents',
+          name: 'client-request-documents',
+          component: ClientRequestDocumentsPage,
+        },
+      ],
     },
     {
       path: '/admin',
-      name: 'admin-dashboard',
-      component: AdminDashboardPage,
-      meta: { requiresAuth: true, role: 'admin', layout: 'admin' },
+      component: AdminLayoutPage,
+      meta: { requiresAuth: true, allowedRoles: ['admin', 'staff'], layout: 'admin' },
+      children: [
+        {
+          path: '',
+          name: 'admin-dashboard',
+          component: AdminDashboardPage,
+        },
+        {
+          path: 'request-questions',
+          name: 'admin-request-questions',
+          component: AdminRequestQuestionsPage,
+        },
+      ],
     },
     {
       path: '/staff',
-      name: 'staff-dashboard',
-      component: StaffDashboardPage,
-      meta: { requiresAuth: true, role: 'staff', layout: 'staff' },
+      redirect: { name: 'admin-dashboard' },
+      meta: { requiresAuth: true, allowedRoles: ['admin', 'staff'] },
     },
     {
       path: '/:pathMatch(.*)*',
@@ -90,7 +138,17 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  await auth.init()
+  const hasRoleRules = Array.isArray(to.meta.allowedRoles)
+    ? to.meta.allowedRoles.length > 0
+    : typeof to.meta.role === 'string'
+
+  // Revalidate auth state from server for guarded/guest routes so browser
+  // history restores (back-forward cache) cannot show stale authenticated UI.
+  if (!auth.initialized || to.meta.requiresAuth || to.meta.guestOnly || hasRoleRules) {
+    await auth.fetchUser()
+  } else {
+    await auth.init()
+  }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {
     return { name: auth.dashboardRouteName }
@@ -103,12 +161,25 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.meta.role && !auth.roleNames.includes(to.meta.role)) {
-    if (auth.isAuthenticated) {
-      return { name: auth.dashboardRouteName }
-    }
+  const allowedRoles = Array.isArray(to.meta.allowedRoles)
+    ? to.meta.allowedRoles.filter((role) => typeof role === 'string')
+    : typeof to.meta.role === 'string'
+      ? [to.meta.role]
+      : []
 
-    return { name: 'login' }
+  if (allowedRoles.length > 0) {
+    const canAccessRoute = allowedRoles.some((role) => auth.roleNames.includes(role))
+
+    if (!canAccessRoute) {
+      if (auth.isAuthenticated) {
+        return { name: auth.dashboardRouteName }
+      }
+
+      return {
+        name: 'login',
+        query: { redirect: to.fullPath },
+      }
+    }
   }
 
   return true

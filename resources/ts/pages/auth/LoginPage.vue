@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 import AuthPageShell from '../public/inc/AuthPageShell.vue'
+import { useAuthStore } from '@/stores/auth'
 
+const router = useRouter()
+const route = useRoute()
+const auth = useAuthStore()
 
 const form = ref({
   email: '',
@@ -11,11 +16,52 @@ const form = ref({
 })
 
 const showPassword = ref(false)
+const formError = ref('')
+const fieldErrors = ref<Record<string, string[]>>({})
+
+const isSubmitting = computed(() => auth.loading)
+
+function resetErrors() {
+  formError.value = ''
+  fieldErrors.value = {}
+}
+
+function firstFieldError(field: string) {
+  return fieldErrors.value[field]?.[0] ?? ''
+}
+
+async function submitLogin() {
+  resetErrors()
+
+  try {
+    await auth.login({
+      email: form.value.email,
+      password: form.value.password,
+      remember: form.value.remember,
+    })
+
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+
+    if (redirect) {
+      await router.push(redirect)
+      return
+    }
+
+    await router.push({ name: auth.dashboardRouteName })
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      formError.value = error.response?.data?.message ?? 'Unable to sign in right now.'
+      fieldErrors.value = error.response?.data?.errors ?? {}
+      return
+    }
+
+    formError.value = 'Unable to sign in right now.'
+  }
+}
 </script>
 
 <template>
   <AuthPageShell>
-
     <section class="auth-hero-section">
       <div class="container">
         <div class="auth-page-head auth-reveal-up">
@@ -28,8 +74,6 @@ const showPassword = ref(false)
         </div>
 
         <div class="row g-4 align-items-stretch">
-           
-
           <div class="col-lg-12">
             <div class="auth-form-card auth-reveal-up">
               <div class="auth-form-card__shine"></div>
@@ -42,12 +86,16 @@ const showPassword = ref(false)
                   </span>
                   <h3>Login to your account</h3>
                   <p>
-                    Enter your account details to continue to your client portal. This is the design-first version,
-                    ready for you to connect with the real authentication logic next.
+                    Enter your account details to continue. Once authenticated, you will be redirected
+                    to the correct dashboard for your account type.
                   </p>
                 </div>
 
-                <form class="auth-grid" @submit.prevent>
+                <div v-if="formError" class="auth-alert auth-alert--error">
+                  {{ formError }}
+                </div>
+
+                <form class="auth-grid" @submit.prevent="submitLogin">
                   <div class="auth-field">
                     <label for="login-email">Email address</label>
                     <div class="auth-input-wrap">
@@ -57,10 +105,12 @@ const showPassword = ref(false)
                         v-model="form.email"
                         type="email"
                         class="auth-input"
+                        :class="{ 'auth-input--error': firstFieldError('email') }"
                         placeholder="Enter your email"
                         autocomplete="email"
                       />
                     </div>
+                    <small v-if="firstFieldError('email')" class="auth-field-error">{{ firstFieldError('email') }}</small>
                   </div>
 
                   <div class="auth-field">
@@ -72,6 +122,7 @@ const showPassword = ref(false)
                         v-model="form.password"
                         :type="showPassword ? 'text' : 'password'"
                         class="auth-input"
+                        :class="{ 'auth-input--error': firstFieldError('password') }"
                         placeholder="Enter your password"
                         autocomplete="current-password"
                       />
@@ -83,6 +134,7 @@ const showPassword = ref(false)
                         {{ showPassword ? 'Hide' : 'Show' }}
                       </button>
                     </div>
+                    <small v-if="firstFieldError('password')" class="auth-field-error">{{ firstFieldError('password') }}</small>
                   </div>
 
                   <div class="auth-row-between">
@@ -96,25 +148,10 @@ const showPassword = ref(false)
                     </RouterLink>
                   </div>
 
-                  <button type="submit" class="btn_style_one auth-submit">
-                    Sign In
+                  <button type="submit" class="btn_style_one auth-submit" :disabled="isSubmitting">
+                    <span>{{ isSubmitting ? 'Signing In...' : 'Sign In' }}</span>
                   </button>
                 </form>
-
-                <div class="auth-divider">
-                  <span>or continue with</span>
-                </div>
-
-                <div class="auth-social-grid">
-                  <button type="button" class="auth-social-btn">
-                    <i class="fab fa-google"></i>
-                    Google
-                  </button>
-                  <button type="button" class="auth-social-btn">
-                    <i class="fab fa-apple"></i>
-                    Apple
-                  </button>
-                </div>
 
                 <p class="auth-foot-note">
                   Don’t have an account?

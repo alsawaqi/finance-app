@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Auth\MeController;
 use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\ResetPasswordController;
 use App\Http\Controllers\Api\Auth\VerifyEmailController;
+use App\Http\Controllers\Api\Admin\RequestQuestionController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -41,9 +42,13 @@ Route::prefix('client')
     });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:admin'])
+    ->middleware(['auth:sanctum', 'role:admin|staff'])
     ->group(function () {
-        //
+        Route::get('/request-questions', [RequestQuestionController::class, 'index']);
+        Route::post('/request-questions', [RequestQuestionController::class, 'store']);
+        Route::put('/request-questions/{requestQuestion}', [RequestQuestionController::class, 'update']);
+        Route::patch('/request-questions/{requestQuestion}/toggle-active', [RequestQuestionController::class, 'toggleActive']);
+        Route::post('/request-questions/reorder', [RequestQuestionController::class, 'reorder']);
     });
 
 Route::prefix('staff')

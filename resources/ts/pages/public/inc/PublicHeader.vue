@@ -1,7 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const auth = useAuthStore()
+
+if (!auth.initialized) {
+  auth.init()
+}
+
+const isAuthenticated = computed(() => auth.isAuthenticated)
+const dashboardRoute = computed(() => ({ name: auth.dashboardRouteName }))
+const isDashboardActive = computed(() => route.path.startsWith('/dashboard') || route.path.startsWith('/admin') || route.path.startsWith('/staff'))
 
 function isActive(path: string) {
   return route.path === path
@@ -122,7 +133,7 @@ defineEmits<{
               <i class="icon-50"></i>
             </button>
 
-            <div class="auth-header-actions">
+            <div class="auth-header-actions" v-if="!isAuthenticated">
               <RouterLink
                 to="/login"
                 class="auth-btn auth-btn-login"
@@ -137,6 +148,16 @@ defineEmits<{
                 :class="{ active: isActive('/register') }"
               >
                 Register
+              </RouterLink>
+            </div>
+
+            <div class="auth-header-actions" v-else>
+              <RouterLink
+                :to="dashboardRoute"
+                class="auth-btn auth-btn-register"
+                :class="{ active: isDashboardActive }"
+              >
+                Dashboard
               </RouterLink>
             </div>
           </div>
@@ -244,7 +265,7 @@ defineEmits<{
               <i class="icon-50"></i>
             </button>
 
-            <div class="auth-header-actions">
+            <div class="auth-header-actions" v-if="!isAuthenticated">
               <RouterLink
                 to="/login"
                 class="auth-btn auth-btn-login"
@@ -259,6 +280,16 @@ defineEmits<{
                 :class="{ active: isActive('/register') }"
               >
                 Register
+              </RouterLink>
+            </div>
+
+            <div class="auth-header-actions" v-else>
+              <RouterLink
+                :to="dashboardRoute"
+                class="auth-btn auth-btn-register"
+                :class="{ active: isDashboardActive }"
+              >
+                Dashboard
               </RouterLink>
             </div>
           </div>
@@ -277,7 +308,7 @@ defineEmits<{
           </RouterLink>
         </div>
 
-        <div class="mobile-auth-actions">
+        <div class="mobile-auth-actions" v-if="!isAuthenticated">
           <RouterLink
             to="/login"
             class="mobile-auth-btn mobile-auth-btn-login"
@@ -294,6 +325,17 @@ defineEmits<{
             @click="$emit('close-mobile-menu')"
           >
             Register
+          </RouterLink>
+        </div>
+
+        <div class="mobile-auth-actions" v-else>
+          <RouterLink
+            :to="dashboardRoute"
+            class="mobile-auth-btn mobile-auth-btn-register"
+            :class="{ active: isDashboardActive }"
+            @click="$emit('close-mobile-menu')"
+          >
+            Dashboard
           </RouterLink>
         </div>
 

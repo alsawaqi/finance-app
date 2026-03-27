@@ -11,7 +11,8 @@ class LogoutController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        Auth::logout();
+        // SPA login uses the session `web` guard; `auth:sanctum` may resolve a RequestGuard that has no logout().
+        Auth::guard('web')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

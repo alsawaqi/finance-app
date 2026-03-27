@@ -1,10 +1,13 @@
 import 'vue-router'
 
+type AuthRoleName = 'admin' | 'staff' | 'client'
+
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
     guestOnly?: boolean
-    role?: 'admin' | 'staff' | 'client'
+    role?: AuthRoleName
+    allowedRoles?: AuthRoleName[]
     layout?: 'public' | 'auth' | 'client' | 'admin' | 'staff'
   }
 }
