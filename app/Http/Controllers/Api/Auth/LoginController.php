@@ -3,16 +3,15 @@
 namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
 {
-    public function __invoke(LoginRequest $request): JsonResponse
+    public function __invoke(\App\Http\Requests\Auth\LoginRequest $request): JsonResponse
     {
         $credentials = [
-            'email' => $request->string('email')->toString(),
+            'email' => strtolower(trim($request->string('email')->toString())),
             'password' => $request->string('password')->toString(),
             'is_active' => true,
         ];
@@ -30,11 +29,14 @@ class LoginController extends Controller
 
         $request->session()->regenerate();
 
-        $user = $request->user()->load('roles');
+        $user = $request->user();
+        $user->forceFill([
+            'last_login_at' => now(),
+        ])->save();
 
         return response()->json([
             'message' => 'Login successful.',
-            'user' => $user,
+            'user' => $user->fresh()->load('roles'),
         ]);
     }
 }

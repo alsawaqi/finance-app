@@ -1,12 +1,17 @@
 import { defineStore } from 'pinia'
-import * as authApi from '@/services/auth'
+import * as authApi from '../services/auth'
+
+type AuthRole = {
+  name: string
+}
 
 type AuthUser = {
   id: number
   name: string
   email: string
+  phone?: string | null
   email_verified_at: string | null
-  roles?: Array<{ name: string }>
+  roles?: AuthRole[]
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -18,7 +23,7 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => !!state.user,
-    roleNames: (state) => state.user?.roles?.map(r => r.name) ?? [],
+    roleNames: (state) => state.user?.roles?.map((role) => role.name) ?? [],
     isAdmin(): boolean {
       return this.roleNames.includes('admin')
     },
@@ -29,9 +34,19 @@ export const useAuthStore = defineStore('auth', {
       return this.roleNames.includes('client')
     },
     isVerified: (state) => !!state.user?.email_verified_at,
+    dashboardRouteName(): string {
+      if (this.isAdmin) return 'admin-dashboard'
+      if (this.isStaff) return 'staff-dashboard'
+      return 'client-dashboard'
+    },
   },
 
   actions: {
+    async init() {
+      if (this.initialized) return
+      await this.fetchUser()
+    },
+
     async fetchUser() {
       try {
         const { data } = await authApi.me()
@@ -45,6 +60,7 @@ export const useAuthStore = defineStore('auth', {
 
     async login(payload: { email: string; password: string; remember?: boolean }) {
       this.loading = true
+
       try {
         await authApi.login(payload)
         await this.fetchUser()
@@ -61,6 +77,7 @@ export const useAuthStore = defineStore('auth', {
       password_confirmation: string
     }) {
       this.loading = true
+
       try {
         await authApi.register(payload)
         await this.fetchUser()
@@ -69,10 +86,17 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async resendVerification() {
+      return authApi.resendVerification()
+    },
+
     async logout() {
-      await authApi.logout()
-      this.user = null
-      this.initialized = true
+      try {
+        await authApi.logout()
+      } finally {
+        this.user = null
+        this.initialized = true
+      }
     },
   },
 })

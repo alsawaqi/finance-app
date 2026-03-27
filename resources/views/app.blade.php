@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Finance App</title>
+    <link rel="icon" href="{{ asset('financer/assets/images/icons/favicon.png') }}">
     @vite(['resources/css/app.css', 'resources/ts/app.ts'])
 </head>
 <body class="bg-slate-50 text-slate-900">

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Auth;
 
+use App\Enums\UserAccountType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
@@ -14,11 +15,11 @@ class RegisterController extends Controller
     public function __invoke(RegisterRequest $request): JsonResponse
     {
         $user = User::create([
-            'name' => $request->string('name')->toString(),
-            'email' => $request->string('email')->toString(),
-            'phone' => $request->input('phone'),
+            'name' => trim($request->string('name')->toString()),
+            'email' => strtolower(trim($request->string('email')->toString())),
+            'phone' => $request->filled('phone') ? trim((string) $request->input('phone')) : null,
             'password' => $request->string('password')->toString(),
-            'account_type' => 'client',
+            'account_type' => UserAccountType::CLIENT,
             'is_active' => true,
         ]);
 

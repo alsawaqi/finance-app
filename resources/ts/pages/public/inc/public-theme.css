@@ -1,0 +1,276 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@import url('../../../../../public/financer/assets/css/bootstrap.css');
+@import url('../../../../../public/financer/assets/css/fontawesome-all.css');
+@import url('../../../../../public/financer/assets/css/animate.css');
+@import url('../../../../../public/financer/assets/css/icomoon.css');
+@import url('../../../../../public/financer/assets/css/owl.css');
+@import url('../../../../../public/financer/assets/css/jquery-ui.css');
+@import url('../../../../../public/financer/assets/css/nice-select.css');
+@import url('../../../../../public/financer/assets/css/jquery.fancybox.min.css');
+@import url('../../../../../public/financer/assets/css/aos.css');
+@import url('../../../../../public/financer/assets/css/global.css');
+@import url('../../../../../public/financer/assets/css/elements-css/header.css');
+@import url('../../../../../public/financer/assets/css/elements-css/footer.css');
+@import url('../../../../../public/financer/assets/css/style.css');
+@import url('../../../../../public/financer/assets/css/responsive.css');
+
+.financer-home {
+  overflow-x: hidden;
+}
+
+.financer-home .main_header_inner {
+  gap: 20px;
+}
+
+.financer-home .main_header_menu {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.financer-home .main_header_menu .main-menu {
+  display: block;
+}
+
+.financer-home .main_header_menu .nav-outer {
+  display: block;
+}
+
+.financer-home .main-menu .navigation {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.financer-home .sticky_header .main_header_menu {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.financer-home .sticky_header .main-menu .navigation {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.financer-home .sticky_header {
+  pointer-events: none;
+}
+
+.financer-home .fixed_header .sticky_header {
+  pointer-events: auto;
+}
+
+.financer-home .main-menu .navigation > li > a,
+.financer-home .main-menu .navigation > li > span,
+.financer-home .main-menu .navigation > li > .router-link-active {
+  white-space: nowrap;
+  display: block;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.financer-home .main-menu .navigation > li {
+  cursor: pointer;
+}
+
+.financer-home .main-menu .navigation > li > ul > li > a,
+.financer-home .main-menu .navigation > li > ul > li > ul > li > a {
+  cursor: pointer;
+}
+
+.financer-home .main-menu .navigation > li > ul,
+.financer-home .main-menu .navigation > li > .megamenu {
+  top: 100%;
+  margin-top: 0;
+  display: block !important;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: opacity 220ms ease, transform 220ms ease, visibility 220ms ease;
+}
+
+.financer-home .main-menu .navigation > li > ul > li > ul {
+  display: block !important;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: opacity 220ms ease, transform 220ms ease, visibility 220ms ease;
+}
+
+.financer-home .main-menu .navigation > li.dropdown:hover > ul,
+.financer-home .main-menu .navigation > li.dropdown:hover > .megamenu {
+  top: 100% !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.financer-home .main-menu .navigation li > ul > li.dropdown:hover > ul {
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.financer-home .mobile-menu .menu-box {
+  right: 0;
+  left: auto;
+}
+
+.financer-home .mobile-menu .navigation li > a {
+  padding-right: 60px;
+}
+
+.financer-home .mobile-menu .navigation li > ul {
+  display: none;
+}
+
+.financer-home .mobile-menu .navigation li > ul[style*='display: block'] {
+  display: block !important;
+}
+
+.financer-home .mobile-menu .navigation li.dropdown .dropdown-btn {
+  top: 8px;
+  right: 10px;
+}
+
+.financer-home .mobile-menu .navigation li.dropdown .dropdown-btn.open {
+  transform: rotate(90deg);
+}
+
+.financer-home .mobile-menu .navigation li ul li > a {
+  padding-left: 40px;
+}
+
+@media (max-width: 1200px) {
+  .financer-home .main-menu .navigation > li {
+    padding: 7px 10px;
+  }
+
+  .financer-home .main-menu .navigation > li > a {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 991px) {
+  .financer-home .main_header_inner {
+    justify-content: space-between;
+    min-height: 86px;
+  }
+
+  .financer-home .main_header_menu {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+  }
+
+  .financer-home .main_header_logo img {
+    max-height: 42px;
+    width: auto;
+  }
+}
+
+
+@media (max-width: 767px) {
+  .financer-home .banner_style_one {
+    padding-top: 110px;
+  }
+}
+
+.financer-home .home-testimonial-track {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 30px;
+}
+
+.financer-home .custom-owl-dots {
+  margin-top: 35px;
+  text-align: center;
+}
+
+.financer-home .custom-owl-dots .owl-dot {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0 5px;
+}
+
+.financer-home .custom-owl-dots .owl-dot span {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d1d5db;
+  transition: all 0.3s ease;
+}
+
+.financer-home .custom-owl-dots .owl-dot.active span {
+  width: 28px;
+  border-radius: 9999px;
+  background: #7c3aed;
+}
+
+@media (max-width: 1199px) {
+  .financer-home .home-testimonial-track {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Match original template header behavior across breakpoints */
+@media (min-width: 1200px) {
+  .financer-home .main_header_menu .main-menu {
+    display: block !important;
+  }
+
+  .financer-home .main_header_menu .mobile-nav-toggler {
+    display: none !important;
+  }
+}
+
+
+@media (max-width: 1199px) {
+  .financer-home .main_header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 99999;
+    background: #ffffff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  }
+
+  .financer-home .sticky_header {
+    display: none !important;
+  }
+
+  .financer-home .main_header_menu .main-menu {
+    display: none !important;
+  }
+
+  .financer-home .main_header_menu .mobile-nav-toggler {
+    display: block !important;
+  }
+
+  .financer-home .banner_style_one {
+    padding-top: 120px;
+  }
+}
+ 
+@media (max-width: 767px) {
+  .financer-home .home-testimonial-track {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

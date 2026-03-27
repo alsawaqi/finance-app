@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Enums\RequestEmailDeliveryStatus;
+use App\Enums\RequestEmailDirection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -32,11 +34,13 @@ class RequestEmail extends Model
     protected function casts(): array
     {
         return [
-            'to_emails_json'  => 'array',
-            'cc_emails_json'  => 'array',
+            'direction' => RequestEmailDirection::class,
+            'delivery_status' => RequestEmailDeliveryStatus::class,
+            'to_emails_json' => 'array',
+            'cc_emails_json' => 'array',
             'bcc_emails_json' => 'array',
-            'sent_at'         => 'datetime',
-            'received_at'     => 'datetime',
+            'sent_at' => 'datetime',
+            'received_at' => 'datetime',
         ];
     }
 

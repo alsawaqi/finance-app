@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Enums\RequestCommentVisibility;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -18,6 +19,13 @@ class RequestComment extends Model
         'comment_text',
         'visibility',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'visibility' => RequestCommentVisibility::class,
+        ];
+    }
 
     public function financeRequest(): BelongsTo
     {

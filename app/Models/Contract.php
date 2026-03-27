@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Enums\ContractStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Contract extends Model
@@ -31,10 +32,11 @@ class Contract extends Model
     protected function casts(): array
     {
         return [
-            'generated_at'      => 'datetime',
-            'admin_signed_at'   => 'datetime',
-            'client_signed_at'  => 'datetime',
-            'is_current'        => 'boolean',
+            'status' => ContractStatus::class,
+            'generated_at' => 'datetime',
+            'admin_signed_at' => 'datetime',
+            'client_signed_at' => 'datetime',
+            'is_current' => 'boolean',
         ];
     }
 

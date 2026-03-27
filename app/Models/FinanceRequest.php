@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Enums\FinanceRequestPriority;
+use App\Enums\FinanceRequestStatus;
+use App\Enums\FinanceRequestWorkflowStage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -31,13 +34,16 @@ class FinanceRequest extends Model
     protected function casts(): array
     {
         return [
-            'submitted_at'         => 'datetime',
-            'approved_at'          => 'datetime',
-            'rejected_at'          => 'datetime',
-            'completed_at'         => 'datetime',
-            'cancelled_at'         => 'datetime',
+            'status' => FinanceRequestStatus::class,
+            'workflow_stage' => FinanceRequestWorkflowStage::class,
+            'priority' => FinanceRequestPriority::class,
+            'submitted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
             'latest_assignment_at' => 'datetime',
-            'latest_activity_at'   => 'datetime',
+            'latest_activity_at' => 'datetime',
         ];
     }
 
