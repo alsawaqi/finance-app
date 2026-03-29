@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import { useAppLocale } from '@/composables/useAppLocale'
+import type { AppLocale } from '@/i18n'
 
 const route = useRoute()
 const auth = useAuthStore()
+const { t } = useI18n()
+const { currentLocale, localeOptions, changeLocale } = useAppLocale()
 
 if (!auth.initialized) {
   auth.init()
@@ -16,6 +21,12 @@ const isDashboardActive = computed(() => route.path.startsWith('/dashboard') || 
 
 function isActive(path: string) {
   return route.path === path
+}
+
+function onLocaleChange(event: Event) {
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  changeLocale(target.value as AppLocale)
 }
 
 defineProps<{
@@ -56,79 +67,75 @@ defineEmits<{
               <div class="nav-outer">
                 <ul class="navigation">
                   <li :class="{ active: isActive('/') }">
-                    <RouterLink to="/">Home</RouterLink>
+                    <RouterLink to="/">{{ t('publicHeader.home') }}</RouterLink>
                   </li>
 
                   <li :class="{ active: isActive('/about') }">
-                    <RouterLink to="/about">About Us</RouterLink>
+                    <RouterLink to="/about">{{ t('publicHeader.about') }}</RouterLink>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>Services</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Services</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
                       <li><a href="#" @click.prevent>Services Two</a></li>
                       <li><a href="#" @click.prevent>Service Details</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>Project</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Project</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
                       <li><a href="#" @click.prevent>Project Details</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>Pages</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>Faq's</a></li>
                       <li><a href="#" @click.prevent>Error Page</a></li>
-                      <li class="dropdown">
-                        <a href="#" @click.prevent>Shop Page</a>
-                        <ul>
-                          <li><a href="#" @click.prevent>Pricing</a></li>
-                          <li><a href="#" @click.prevent>Shop Page</a></li>
-                          <li><a href="#" @click.prevent>Shop Details</a></li>
-                          <li><a href="#" @click.prevent>Cart Page</a></li>
-                          <li><a href="#" @click.prevent>Check Out</a></li>
-                        </ul>
-                      </li>
-                      <li class="dropdown">
-                        <a href="#" @click.prevent>Testimonial</a>
-                        <ul>
-                          <li><a href="#" @click.prevent>Testimonial One</a></li>
-                          <li><a href="#" @click.prevent>Testimonial Two</a></li>
-                        </ul>
-                      </li>
-                      <li class="dropdown">
-                        <a href="#" @click.prevent>Our Team</a>
-                        <ul>
-                          <li><a href="#" @click.prevent>Our Team</a></li>
-                          <li><a href="#" @click.prevent>Team Details</a></li>
-                        </ul>
-                      </li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>News</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>Blog Grid</a></li>
                       <li><a href="#" @click.prevent>Blog Standard</a></li>
                       <li><a href="#" @click.prevent>Blog Details</a></li>
-                      <li><a href="#" @click.prevent>Blog Details Two</a></li>
                     </ul>
                   </li>
 
-                  <li><a href="#" @click.prevent>Contact Us</a></li>
+                  <li><a href="#" @click.prevent>{{ t('publicHeader.contact') }}</a></li>
                 </ul>
               </div>
             </nav>
           </div>
 
           <div class="header_right_content auth-header-actions-wrap">
+            <div class="header-language-switcher">
+              <label class="visually-hidden" for="public-language-switcher">{{ t('common.languageLabel') }}</label>
+              <div class="language-select-shell">
+                <span class="language-select-icon"><i class="fa-solid fa-earth-asia"></i></span>
+                <select
+                  id="public-language-switcher"
+                  class="language-select"
+                  :value="currentLocale"
+                  @change="onLocaleChange"
+                >
+                  <option
+                    v-for="option in localeOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
             <button class="search-toggler" @click="$emit('open-search')">
               <i class="icon-50"></i>
             </button>
@@ -139,7 +146,7 @@ defineEmits<{
                 class="auth-btn auth-btn-login"
                 :class="{ active: isActive('/login') }"
               >
-                Login
+                {{ t('publicHeader.login') }}
               </RouterLink>
 
               <RouterLink
@@ -147,7 +154,7 @@ defineEmits<{
                 class="auth-btn auth-btn-register"
                 :class="{ active: isActive('/register') }"
               >
-                Register
+                {{ t('publicHeader.register') }}
               </RouterLink>
             </div>
 
@@ -157,7 +164,7 @@ defineEmits<{
                 class="auth-btn auth-btn-register"
                 :class="{ active: isDashboardActive }"
               >
-                Dashboard
+                {{ t('publicHeader.dashboard') }}
               </RouterLink>
             </div>
           </div>
@@ -181,86 +188,75 @@ defineEmits<{
               <div class="nav-outer">
                 <ul class="navigation">
                   <li :class="{ active: isActive('/') }">
-                    <RouterLink to="/">Home</RouterLink>
-                    <ul>
-                      <li><RouterLink to="/">Home One</RouterLink></li>
-                      <li><a href="#" @click.prevent>Home Two</a></li>
-                      <li><a href="#" @click.prevent>Home Three</a></li>
-                      <li><a href="#" @click.prevent>Home Four</a></li>
-                      <li><a href="#" @click.prevent>Home Five</a></li>
-                    </ul>
+                    <RouterLink to="/">{{ t('publicHeader.home') }}</RouterLink>
                   </li>
 
                   <li :class="{ active: isActive('/about') }">
-                    <RouterLink to="/about">About Us</RouterLink>
+                    <RouterLink to="/about">{{ t('publicHeader.about') }}</RouterLink>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>Services</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Services</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
                       <li><a href="#" @click.prevent>Services Two</a></li>
                       <li><a href="#" @click.prevent>Service Details</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>Project</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Project</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
                       <li><a href="#" @click.prevent>Project Details</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>Pages</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>Faq's</a></li>
                       <li><a href="#" @click.prevent>Error Page</a></li>
-                      <li class="dropdown">
-                        <a href="#" @click.prevent>Shop Page</a>
-                        <ul>
-                          <li><a href="#" @click.prevent>Pricing</a></li>
-                          <li><a href="#" @click.prevent>Shop Page</a></li>
-                          <li><a href="#" @click.prevent>Shop Details</a></li>
-                          <li><a href="#" @click.prevent>Cart Page</a></li>
-                          <li><a href="#" @click.prevent>Check Out</a></li>
-                        </ul>
-                      </li>
-                      <li class="dropdown">
-                        <a href="#" @click.prevent>Testimonial</a>
-                        <ul>
-                          <li><a href="#" @click.prevent>Testimonial One</a></li>
-                          <li><a href="#" @click.prevent>Testimonial Two</a></li>
-                        </ul>
-                      </li>
-                      <li class="dropdown">
-                        <a href="#" @click.prevent>Our Team</a>
-                        <ul>
-                          <li><a href="#" @click.prevent>Our Team</a></li>
-                          <li><a href="#" @click.prevent>Team Details</a></li>
-                        </ul>
-                      </li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
-                    <a href="#" @click.prevent>News</a>
+                    <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>Blog Grid</a></li>
                       <li><a href="#" @click.prevent>Blog Standard</a></li>
                       <li><a href="#" @click.prevent>Blog Details</a></li>
-                      <li><a href="#" @click.prevent>Blog Details Two</a></li>
                     </ul>
                   </li>
 
-                  <li><a href="#" @click.prevent>Contact Us</a></li>
+                  <li><a href="#" @click.prevent>{{ t('publicHeader.contact') }}</a></li>
                 </ul>
               </div>
             </nav>
           </div>
 
           <div class="header_right_content auth-header-actions-wrap">
+            <div class="header-language-switcher">
+              <label class="visually-hidden" for="public-language-switcher-sticky">{{ t('common.languageLabel') }}</label>
+              <div class="language-select-shell">
+                <span class="language-select-icon"><i class="fa-solid fa-earth-asia"></i></span>
+                <select
+                  id="public-language-switcher-sticky"
+                  class="language-select"
+                  :value="currentLocale"
+                  @change="onLocaleChange"
+                >
+                  <option
+                    v-for="option in localeOptions"
+                    :key="`sticky-${option.value}`"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
             <button class="search-toggler" @click="$emit('open-search')">
               <i class="icon-50"></i>
             </button>
@@ -271,7 +267,7 @@ defineEmits<{
                 class="auth-btn auth-btn-login"
                 :class="{ active: isActive('/login') }"
               >
-                Login
+                {{ t('publicHeader.login') }}
               </RouterLink>
 
               <RouterLink
@@ -279,7 +275,7 @@ defineEmits<{
                 class="auth-btn auth-btn-register"
                 :class="{ active: isActive('/register') }"
               >
-                Register
+                {{ t('publicHeader.register') }}
               </RouterLink>
             </div>
 
@@ -289,7 +285,7 @@ defineEmits<{
                 class="auth-btn auth-btn-register"
                 :class="{ active: isDashboardActive }"
               >
-                Dashboard
+                {{ t('publicHeader.dashboard') }}
               </RouterLink>
             </div>
           </div>
@@ -308,6 +304,27 @@ defineEmits<{
           </RouterLink>
         </div>
 
+        <div class="mobile-language-switcher">
+          <label class="visually-hidden" for="mobile-language-switcher">{{ t('common.languageLabel') }}</label>
+          <div class="language-select-shell mobile-language-select-shell">
+            <span class="language-select-icon"><i class="fa-solid fa-earth-asia"></i></span>
+            <select
+              id="mobile-language-switcher"
+              class="language-select"
+              :value="currentLocale"
+              @change="onLocaleChange"
+            >
+              <option
+                v-for="option in localeOptions"
+                :key="`mobile-${option.value}`"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+
         <div class="mobile-auth-actions" v-if="!isAuthenticated">
           <RouterLink
             to="/login"
@@ -315,7 +332,7 @@ defineEmits<{
             :class="{ active: isActive('/login') }"
             @click="$emit('close-mobile-menu')"
           >
-            Login
+            {{ t('publicHeader.login') }}
           </RouterLink>
 
           <RouterLink
@@ -324,7 +341,7 @@ defineEmits<{
             :class="{ active: isActive('/register') }"
             @click="$emit('close-mobile-menu')"
           >
-            Register
+            {{ t('publicHeader.register') }}
           </RouterLink>
         </div>
 
@@ -335,75 +352,62 @@ defineEmits<{
             :class="{ active: isDashboardActive }"
             @click="$emit('close-mobile-menu')"
           >
-            Dashboard
+            {{ t('publicHeader.dashboard') }}
           </RouterLink>
         </div>
 
         <div class="menu-outer">
           <ul class="navigation clearfix">
             <li class="dropdown" :class="{ current: isActive('/') }">
-              <RouterLink to="/" @click="$emit('close-mobile-menu')">Home</RouterLink>
+              <RouterLink to="/" @click="$emit('close-mobile-menu')">{{ t('publicHeader.home') }}</RouterLink>
               <div class="dropdown-btn" :class="{ open: mobileDropdowns.home }" @click="$emit('toggle-mobile-dropdown', 'home')">
                 <i class="fa fa-angle-right"></i>
               </div>
               <ul :style="{ display: mobileDropdowns.home ? 'block' : 'none' }">
-                <li><RouterLink to="/" @click="$emit('close-mobile-menu')">Home One</RouterLink></li>
-                <li><a href="#" @click.prevent>Home Two</a></li>
-                <li><a href="#" @click.prevent>Home Three</a></li>
-                <li><a href="#" @click.prevent>Home Four</a></li>
-                <li><a href="#" @click.prevent>Home Five</a></li>
+                <li><RouterLink to="/" @click="$emit('close-mobile-menu')">{{ t('publicHeader.home') }}</RouterLink></li>
               </ul>
             </li>
 
             <li :class="{ current: isActive('/about') }">
-              <RouterLink to="/about" @click="$emit('close-mobile-menu')">About Us</RouterLink>
+              <RouterLink to="/about" @click="$emit('close-mobile-menu')">{{ t('publicHeader.about') }}</RouterLink>
             </li>
 
             <li class="dropdown">
-              <a href="#" @click.prevent>Services</a>
+              <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
               <div class="dropdown-btn" :class="{ open: mobileDropdowns.services }" @click="$emit('toggle-mobile-dropdown', 'services')">
                 <i class="fa fa-angle-right"></i>
               </div>
               <ul :style="{ display: mobileDropdowns.services ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>Services</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
                 <li><a href="#" @click.prevent>Services Two</a></li>
                 <li><a href="#" @click.prevent>Service Details</a></li>
               </ul>
             </li>
 
             <li class="dropdown">
-              <a href="#" @click.prevent>Project</a>
+              <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
               <div class="dropdown-btn" :class="{ open: mobileDropdowns.project }" @click="$emit('toggle-mobile-dropdown', 'project')">
                 <i class="fa fa-angle-right"></i>
               </div>
               <ul :style="{ display: mobileDropdowns.project ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>Project</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
                 <li><a href="#" @click.prevent>Project Details</a></li>
               </ul>
             </li>
 
             <li class="dropdown">
-              <a href="#" @click.prevent>Pages</a>
+              <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
               <div class="dropdown-btn" :class="{ open: mobileDropdowns.pages }" @click="$emit('toggle-mobile-dropdown', 'pages')">
                 <i class="fa fa-angle-right"></i>
               </div>
               <ul :style="{ display: mobileDropdowns.pages ? 'block' : 'none' }">
                 <li><a href="#" @click.prevent>Faq's</a></li>
                 <li><a href="#" @click.prevent>Error Page</a></li>
-                <li><a href="#" @click.prevent>Pricing</a></li>
-                <li><a href="#" @click.prevent>Shop Page</a></li>
-                <li><a href="#" @click.prevent>Shop Details</a></li>
-                <li><a href="#" @click.prevent>Cart Page</a></li>
-                <li><a href="#" @click.prevent>Check Out</a></li>
-                <li><a href="#" @click.prevent>Testimonial One</a></li>
-                <li><a href="#" @click.prevent>Testimonial Two</a></li>
-                <li><a href="#" @click.prevent>Our Team</a></li>
-                <li><a href="#" @click.prevent>Team Details</a></li>
               </ul>
             </li>
 
             <li class="dropdown">
-              <a href="#" @click.prevent>News</a>
+              <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
               <div class="dropdown-btn" :class="{ open: mobileDropdowns.news }" @click="$emit('toggle-mobile-dropdown', 'news')">
                 <i class="fa fa-angle-right"></i>
               </div>
@@ -411,18 +415,17 @@ defineEmits<{
                 <li><a href="#" @click.prevent>Blog Grid</a></li>
                 <li><a href="#" @click.prevent>Blog Standard</a></li>
                 <li><a href="#" @click.prevent>Blog Details</a></li>
-                <li><a href="#" @click.prevent>Blog Details Two</a></li>
               </ul>
             </li>
 
-            <li><a href="#" @click.prevent>Contact Us</a></li>
+            <li><a href="#" @click.prevent>{{ t('publicHeader.contact') }}</a></li>
           </ul>
         </div>
 
         <div class="contact-info">
-          <h4>Contact Info</h4>
+          <h4>{{ t('publicHeader.contactInfo') }}</h4>
           <ul>
-            <li>Chicago 12, Melborne City, USA</li>
+            <li>{{ t('publicHeader.officeAddress') }}</li>
             <li><a href="tel:+8801682648101">+88 01682648101</a></li>
             <li><a href="mailto:info@example.com">info@example.com</a></li>
           </ul>
@@ -445,6 +448,55 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.header-language-switcher {
+  display: flex;
+  align-items: center;
+}
+
+.language-select-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 158px;
+  height: 48px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.language-select-icon {
+  position: absolute;
+  left: 16px;
+  color: #475569;
+  pointer-events: none;
+  font-size: 14px;
+}
+
+.language-select {
+  width: 100%;
+  height: 100%;
+  padding: 0 38px 0 42px;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.mobile-language-switcher {
+  padding: 16px 0 6px;
+}
+
+.mobile-language-select-shell {
+  min-width: 100%;
+  border-radius: 16px;
 }
 
 .auth-header-actions {
@@ -518,45 +570,62 @@ defineEmits<{
 
 .mobile-auth-btn-login {
   color: #0f172a;
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.06);
 }
 
-.mobile-auth-btn-login.active {
+.mobile-auth-btn-login.active,
+.mobile-auth-btn-login:hover {
+  background: rgba(109, 40, 217, 0.12);
   color: #6d28d9;
-  border-color: rgba(109, 40, 217, 0.28);
 }
 
 .mobile-auth-btn-register {
   color: #ffffff;
   background: linear-gradient(135deg, #7c3aed, #2563eb);
-  border: 1px solid transparent;
 }
 
-.mobile-auth-btn-register.active {
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.20);
+.mobile-auth-btn-register.active,
+.mobile-auth-btn-register:hover {
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.20);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:global(html[dir='rtl']) .language-select-icon,
+:global(body[dir='rtl']) .language-select-icon {
+  left: auto;
+  right: 16px;
+}
+
+:global(html[dir='rtl']) .language-select,
+:global(body[dir='rtl']) .language-select {
+  padding: 0 42px 0 38px;
 }
 
 @media (max-width: 1199px) {
-  .auth-btn {
-    min-width: 96px;
-    padding: 0 18px;
-    height: 44px;
-    font-size: 14px;
-  }
-
-  .auth-header-actions {
-    gap: 10px;
+  .header-language-switcher {
+    display: none;
   }
 }
 
-@media (max-width: 991px) {
-  .auth-header-actions {
-    display: none;
-  }
-
+@media (max-width: 767px) {
   .auth-header-actions-wrap {
     gap: 10px;
+  }
+
+  .auth-header-actions {
+    margin-left: 0;
   }
 }
 </style>

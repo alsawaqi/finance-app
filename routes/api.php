@@ -1,5 +1,12 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminAssignmentController;
+use App\Http\Controllers\Api\Admin\AdminContractController;
+use App\Http\Controllers\Api\Admin\AdminFinanceRequestController;
+use App\Http\Controllers\Api\Admin\AgentController;
+use App\Http\Controllers\Api\Admin\DocumentUploadStepController;
+use App\Http\Controllers\Api\Admin\RequestQuestionController;
+use App\Http\Controllers\Api\Admin\StaffUserController;
 use App\Http\Controllers\Api\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Api\Auth\ForgotPasswordController;
 use App\Http\Controllers\Api\Auth\LoginController;
@@ -8,7 +15,9 @@ use App\Http\Controllers\Api\Auth\MeController;
 use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\ResetPasswordController;
 use App\Http\Controllers\Api\Auth\VerifyEmailController;
-use App\Http\Controllers\Api\Admin\RequestQuestionController;
+use App\Http\Controllers\Api\Client\ClientContractController;
+use App\Http\Controllers\Api\Client\ClientRequestPortalController;
+use App\Http\Controllers\Api\Staff\StaffRequestWorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -22,23 +31,55 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/user', MeController::class);
         Route::post('/logout', LogoutController::class);
-
         Route::post('/email/verification-notification', EmailVerificationNotificationController::class)
             ->middleware('throttle:6,1');
-
         Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
             ->middleware('signed')
             ->name('verification.verify');
     });
 });
 
-
-
-
 Route::prefix('client')
     ->middleware(['auth:sanctum', 'role:client'])
     ->group(function () {
-        //
+        Route::get('/request-questions', [ClientRequestPortalController::class, 'questions']);
+        Route::post('/requests', [ClientRequestPortalController::class, 'store']);
+
+        Route::get('/requests', [ClientRequestPortalController::class, 'index']);
+        Route::get('/requests/{financeRequest}', [ClientRequestPortalController::class, 'show']);
+        Route::get('/requests/{financeRequest}/contract', [ClientContractController::class, 'show']);
+        Route::post('/requests/{financeRequest}/contract/sign', [ClientContractController::class, 'sign']);
+        Route::get('/requests/{financeRequest}/contract/download', [ClientContractController::class, 'downloadPdf']);
+    });
+
+Route::prefix('admin')
+    ->middleware(['auth:sanctum', 'role:admin', 'permission:assign staff'])
+    ->group(function () {
+        Route::get('/requests/ready-to-assign', [AdminAssignmentController::class, 'indexReady']);
+        Route::get('/staff-directory', [AdminAssignmentController::class, 'staffDirectory']);
+        Route::post('/requests/{financeRequest}/assign-staff', [AdminAssignmentController::class, 'assign']);
+    });
+
+Route::prefix('admin')
+    ->middleware(['auth:sanctum', 'role:admin|staff'])
+    ->group(function () {
+        Route::get('/requests/new', [AdminFinanceRequestController::class, 'indexNew']);
+        Route::get('/requests/{financeRequest}', [AdminFinanceRequestController::class, 'show']);
+        Route::post('/requests/{financeRequest}/approve', [AdminFinanceRequestController::class, 'approve']);
+        Route::get('/requests/{financeRequest}/contract', [AdminContractController::class, 'show']);
+        Route::post('/requests/{financeRequest}/contract', [AdminContractController::class, 'storeAndSend']);
+        Route::get('/requests/{financeRequest}/contract/download', [AdminContractController::class, 'downloadPdf']);
+    });
+
+Route::prefix('admin')
+    ->middleware(['auth:sanctum', 'role:admin'])
+    ->group(function () {
+        Route::get('/document-upload-steps', [DocumentUploadStepController::class, 'index']);
+        Route::post('/document-upload-steps', [DocumentUploadStepController::class, 'store']);
+        Route::put('/document-upload-steps/{documentUploadStep}', [DocumentUploadStepController::class, 'update']);
+        Route::delete('/document-upload-steps/{documentUploadStep}', [DocumentUploadStepController::class, 'destroy']);
+        Route::patch('/document-upload-steps/{documentUploadStep}/toggle-active', [DocumentUploadStepController::class, 'toggleActive']);
+        Route::post('/document-upload-steps/reorder', [DocumentUploadStepController::class, 'reorder']);
     });
 
 Route::prefix('admin')
@@ -51,8 +92,29 @@ Route::prefix('admin')
         Route::post('/request-questions/reorder', [RequestQuestionController::class, 'reorder']);
     });
 
-Route::prefix('staff')
-    ->middleware(['auth:sanctum', 'role:staff'])
+Route::prefix('admin')
+    ->middleware(['auth:sanctum', 'role:admin|staff', 'permission:manage staff'])
     ->group(function () {
-        //
+        Route::get('/staff-users', [StaffUserController::class, 'index']);
+        Route::post('/staff-users', [StaffUserController::class, 'store']);
+        Route::put('/staff-users/{staffUser}', [StaffUserController::class, 'update']);
+        Route::patch('/staff-users/{staffUser}/toggle-active', [StaffUserController::class, 'toggleActive']);
+    });
+
+Route::prefix('admin')
+    ->middleware(['auth:sanctum', 'role:admin|staff', 'permission:manage agents'])
+    ->group(function () {
+        Route::get('/agents', [AgentController::class, 'index']);
+        Route::post('/agents', [AgentController::class, 'store']);
+        Route::put('/agents/{agent}', [AgentController::class, 'update']);
+        Route::patch('/agents/{agent}/toggle-active', [AgentController::class, 'toggleActive']);
+    });
+
+Route::prefix('staff')
+    ->middleware(['auth:sanctum', 'role:admin|staff'])
+    ->group(function () {
+        Route::get('/requests', [StaffRequestWorkspaceController::class, 'index']);
+        Route::get('/requests/{financeRequest}', [StaffRequestWorkspaceController::class, 'show']);
+        Route::post('/requests/{financeRequest}/comments', [StaffRequestWorkspaceController::class, 'storeComment']);
+        Route::get('/agents', [StaffRequestWorkspaceController::class, 'agents']);
     });

@@ -527,3 +527,635 @@
   .financer-client .client-summary-item,
   .financer-client .client-doc-item { flex-direction: column; align-items: flex-start; }
 }
+
+.financer-client .client-start-card {
+  padding: 24px;
+}
+
+.financer-client .client-wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.financer-client .client-wizard-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(226,232,240,0.8);
+}
+
+.financer-client .client-wizard-step.is-active {
+  border-color: rgba(124,58,237,0.35);
+  box-shadow: 0 18px 30px rgba(124,58,237,0.10);
+}
+
+.financer-client .client-wizard-step.is-complete {
+  border-color: rgba(16,185,129,0.25);
+}
+
+.financer-client .client-wizard-step__index {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.financer-client .client-wizard-step strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.financer-client .client-wizard-step p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.financer-client .client-form-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.financer-client .client-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.financer-client .client-form-group {
+  display: grid;
+  gap: 8px;
+}
+
+.financer-client .client-form-group--full {
+  grid-column: span 2;
+}
+
+.financer-client .client-form-label {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.financer-client .client-required-mark {
+  color: #dc2626;
+}
+
+.financer-client .client-form-control {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148,163,184,0.3);
+  background: #fff;
+  color: #0f172a;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.financer-client .client-form-control:focus {
+  border-color: rgba(124,58,237,0.55);
+  box-shadow: 0 0 0 4px rgba(124,58,237,0.10);
+}
+
+.financer-client .client-form-control--textarea {
+  min-height: 120px;
+  padding: 14px;
+  resize: vertical;
+}
+
+.financer-client .client-form-help,
+.financer-client .client-form-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.financer-client .client-form-help {
+  color: #64748b;
+}
+
+.financer-client .client-form-error {
+  color: #dc2626;
+}
+
+.financer-client .client-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.financer-client .client-choice-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148,163,184,0.28);
+  background: rgba(255,255,255,0.92);
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.financer-client .client-choice-card input {
+  accent-color: #7c3aed;
+}
+
+.financer-client .client-upload-box {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(124,58,237,0.35);
+  background: rgba(124,58,237,0.04);
+  cursor: pointer;
+}
+
+.financer-client .client-upload-box__input {
+  display: none;
+}
+
+.financer-client .client-upload-box__title {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.financer-client .client-upload-box__text {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.financer-client .client-file-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.financer-client .client-file-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(248,250,252,0.95);
+  border: 1px solid rgba(226,232,240,0.8);
+}
+
+.financer-client .client-file-list li strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.financer-client .client-file-list li span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.financer-client .client-file-list--stacked li {
+  justify-content: flex-start;
+}
+
+.financer-client .client-review-card {
+  margin-top: 22px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(248,250,252,0.95);
+  border: 1px solid rgba(226,232,240,0.85);
+}
+
+.financer-client .client-alert {
+  padding: 14px 16px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.financer-client .client-alert--error {
+  background: rgba(239,68,68,0.08);
+  color: #b91c1c;
+  border: 1px solid rgba(239,68,68,0.15);
+}
+
+.financer-client .client-alert--success {
+  background: rgba(16,185,129,0.08);
+  color: #047857;
+  border: 1px solid rgba(16,185,129,0.15);
+}
+
+.financer-client .client-empty-state {
+  padding: 18px;
+  text-align: center;
+}
+
+.financer-client .client-empty-state--inner {
+  padding: 24px 0;
+}
+
+.financer-client .client-empty-state h3 {
+  margin: 0 0 8px;
+}
+
+.financer-client .client-summary-list--compact .client-summary-item {
+  padding: 10px 0;
+}
+
+@media (max-width: 991px) {
+  .financer-client .client-wizard-steps,
+  .financer-client .client-form-grid,
+  .financer-client .client-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .financer-client .client-form-group--full {
+    grid-column: span 1;
+  }
+}
+
+
+/* ==============================
+   Client request / contract pages
+   ============================== */
+.financer-client .client-shell {
+  display: grid;
+  gap: 22px;
+}
+
+.financer-client .client-shell .hero-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 28px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(226,232,240,0.9);
+  border-radius: 28px;
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.08);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.financer-client .client-shell .hero-card::after {
+  content: '';
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  right: -82px;
+  top: -82px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59,130,246,0.18), transparent 70%);
+}
+
+.financer-client .client-shell .hero-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.financer-client .client-shell .hero-card h1 {
+  margin: 12px 0 10px;
+  font-size: clamp(1.5rem, 2.35vw, 2.15rem);
+  line-height: 1.08;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.financer-client .client-shell .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(124, 58, 237, 0.08);
+  color: #7c3aed;
+}
+
+.financer-client .client-shell .hero-card p,
+.financer-client .client-shell .subtext,
+.financer-client .client-shell .empty-state,
+.financer-client .client-shell .timeline-item p,
+.financer-client .client-shell .qa-item p {
+  color: #64748b;
+  line-height: 1.72;
+}
+
+.financer-client .client-shell .action-stack,
+.financer-client .client-shell .signature-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.financer-client .client-shell .panel-card {
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(226,232,240,0.9);
+  border-radius: 26px;
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.08);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+}
+
+.financer-client .client-shell .panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.financer-client .client-shell .panel-head h2,
+.financer-client .client-shell .panel-card > h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.1rem;
+  line-height: 1.25;
+}
+
+.financer-client .client-shell .table-wrap {
+  overflow-x: auto;
+}
+
+.financer-client .client-shell .request-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.financer-client .client-shell .request-table th,
+.financer-client .client-shell .request-table td {
+  padding: 16px 14px;
+  border-bottom: 1px solid rgba(226,232,240,0.95);
+  vertical-align: top;
+  text-align: left;
+}
+
+.financer-client .client-shell .request-table thead th {
+  padding-top: 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.financer-client .client-shell .request-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.financer-client .client-shell .request-table tbody tr:hover {
+  background: rgba(124, 58, 237, 0.03);
+}
+
+.financer-client .client-shell .muted-small {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.financer-client .client-shell .detail-grid,
+.financer-client .client-shell .contract-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.financer-client .client-shell .detail-grid > .panel-card,
+.financer-client .client-shell .contract-grid > .panel-card {
+  grid-column: span 6;
+}
+
+.financer-client .client-shell .detail-grid > .wide-card,
+.financer-client .client-shell .contract-grid > .wide-card,
+.financer-client .client-shell .contract-grid > .terms-card,
+.financer-client .client-shell .contract-grid > .signature-card {
+  grid-column: 1 / -1;
+}
+
+.financer-client .client-shell .contract-grid > .info-card {
+  grid-column: span 4;
+}
+
+.financer-client .client-shell .summary-grid,
+.financer-client .client-shell .terms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.financer-client .client-shell .summary-grid > div,
+.financer-client .client-shell .summary-row,
+.financer-client .client-shell .term-box {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(226,232,240,0.95);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94));
+}
+
+.financer-client .client-shell .summary-grid span,
+.financer-client .client-shell .summary-row span,
+.financer-client .client-shell .term-box span,
+.financer-client .client-shell .term-list-title,
+.financer-client .client-shell .term-note span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.financer-client .client-shell .summary-grid strong,
+.financer-client .client-shell .summary-row strong,
+.financer-client .client-shell .term-box strong,
+.financer-client .client-shell .qa-item strong,
+.financer-client .client-shell .timeline-item strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.financer-client .client-shell .qa-list,
+.financer-client .client-shell .timeline-list {
+  display: grid;
+  gap: 14px;
+}
+
+.financer-client .client-shell .qa-item,
+.financer-client .client-shell .timeline-item,
+.financer-client .client-shell .term-list-box,
+.financer-client .client-shell .term-note {
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(226,232,240,0.95);
+  background: rgba(248,250,252,0.82);
+}
+
+.financer-client .client-shell .qa-item p,
+.financer-client .client-shell .timeline-item p,
+.financer-client .client-shell .term-note p {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.financer-client .client-shell .timeline-item span {
+  display: inline-block;
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.financer-client .client-shell .term-list-box ol {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  color: #0f172a;
+  display: grid;
+  gap: 10px;
+}
+
+.financer-client .client-shell .signature-pad-shell {
+  margin-top: 14px;
+  border-radius: 22px;
+  border: 1px dashed rgba(124, 58, 237, 0.30);
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));
+  padding: 14px;
+}
+
+.financer-client .client-shell .signature-canvas {
+  width: 100%;
+  min-height: 220px;
+  height: 220px;
+  display: block;
+  border-radius: 16px;
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.financer-client .client-shell .error-state {
+  padding: 16px 18px;
+  border-radius: 18px;
+  color: #991b1b;
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  background: rgba(254, 242, 242, 0.95);
+}
+
+.financer-client .client-shell .empty-state {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px dashed rgba(203, 213, 225, 0.95);
+  background: rgba(255,255,255,0.68);
+}
+
+.financer-client .client-shell .ghost-btn,
+.financer-client .client-shell .primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+
+.financer-client .client-shell .ghost-btn {
+  color: #0f172a;
+  background: #fff;
+  border-color: rgba(15,23,42,0.10);
+}
+
+.financer-client .client-shell .primary-btn {
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  box-shadow: 0 16px 34px rgba(37,99,235,.20);
+}
+
+.financer-client .client-shell .ghost-btn:hover,
+.financer-client .client-shell .primary-btn:hover {
+  transform: translateY(-1px);
+}
+
+.financer-client .client-shell .small-btn {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .financer-client .client-shell .detail-grid > .panel-card,
+  .financer-client .client-shell .contract-grid > .panel-card,
+  .financer-client .client-shell .contract-grid > .info-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 768px) {
+  .financer-client .client-shell .hero-card,
+  .financer-client .client-shell .panel-card {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .financer-client .client-shell .hero-card {
+    flex-direction: column;
+  }
+
+  .financer-client .client-shell .action-stack,
+  .financer-client .client-shell .signature-actions {
+    justify-content: flex-start;
+  }
+
+  .financer-client .client-shell .summary-grid,
+  .financer-client .client-shell .terms-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .financer-client .client-shell .request-table {
+    min-width: 820px;
+  }
+
+  .financer-client .client-shell .signature-canvas {
+    min-height: 180px;
+    height: 180px;
+  }
+}

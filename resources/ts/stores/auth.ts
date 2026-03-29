@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import * as authApi from '../services/auth'
+import * as authApi from '../services/authApi'
 
 type AuthRole = {
+  id?: number
   name: string
 }
 
@@ -12,6 +13,7 @@ type AuthUser = {
   phone?: string | null
   email_verified_at: string | null
   roles?: AuthRole[]
+  permission_names?: string[]
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -24,6 +26,7 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isAuthenticated: (state) => !!state.user,
     roleNames: (state) => state.user?.roles?.map((role) => role.name) ?? [],
+    permissionNames: (state) => state.user?.permission_names ?? [],
     isAdmin(): boolean {
       return this.roleNames.includes('admin')
     },
@@ -36,12 +39,16 @@ export const useAuthStore = defineStore('auth', {
     isVerified: (state) => !!state.user?.email_verified_at,
     dashboardRouteName(): string {
       if (this.isAdmin) return 'admin-dashboard'
-      if (this.isStaff) return 'staff-dashboard'
+      if (this.isStaff) return 'staff-requests'
       return 'client-dashboard'
     },
   },
 
   actions: {
+    can(permission: string) {
+      return this.isAdmin || this.permissionNames.includes(permission)
+    },
+
     async init() {
       if (this.initialized) return
       await this.fetchUser()
@@ -60,7 +67,6 @@ export const useAuthStore = defineStore('auth', {
 
     async login(payload: { email: string; password: string; remember?: boolean }) {
       this.loading = true
-
       try {
         await authApi.login(payload)
         await this.fetchUser()
@@ -69,15 +75,8 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async register(payload: {
-      name: string
-      email: string
-      phone?: string
-      password: string
-      password_confirmation: string
-    }) {
+    async register(payload: { name: string; email: string; phone?: string; password: string; password_confirmation: string }) {
       this.loading = true
-
       try {
         await authApi.register(payload)
         await this.fetchUser()

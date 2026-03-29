@@ -16,12 +16,14 @@ class FinanceRequest extends Model
 
     protected $fillable = [
         'reference_number',
+        'approval_reference_number',
         'user_id',
         'primary_staff_id',
         'current_contract_id',
         'status',
         'workflow_stage',
         'priority',
+        'intake_details_json',
         'submitted_at',
         'approved_at',
         'rejected_at',
@@ -37,6 +39,7 @@ class FinanceRequest extends Model
             'status' => FinanceRequestStatus::class,
             'workflow_stage' => FinanceRequestWorkflowStage::class,
             'priority' => FinanceRequestPriority::class,
+            'intake_details_json' => 'array',
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
             'rejected_at' => 'datetime',

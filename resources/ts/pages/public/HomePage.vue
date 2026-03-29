@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PublicPageShell from './inc/PublicPageShell.vue'
+
+const { t, tm } = useI18n()
 
 type FunFact = {
   title: string
@@ -61,143 +64,21 @@ const mobileDropdowns = ref<Record<string, boolean>>({
   news: false,
 })
 
-const funfacts: FunFact[] = [
-  { title: 'Expert Team Members', target: 150, suffix: '+' },
-  { title: 'Total Assets under Manage', target: 3.5, prefix: '$', suffix: 'B+', decimals: 1 },
-  { title: 'Project Completed', target: 270, suffix: '+' },
-  { title: 'Customer Satisfaction', target: 99, suffix: '%' },
-]
-
-const chooseUs: SimpleCard[] = [
-  {
-    icon: 'icon-47',
-    title: 'Investor Relations',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-    extraClass: '',
-  },
-  {
-    icon: 'icon-46',
-    title: 'Corporate calendar',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-    extraClass: 'mt_70',
-  },
-  {
-    icon: 'icon-45',
-    title: 'Sustainability',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-    extraClass: 'mt_-70',
-  },
-  {
-    icon: 'icon-44',
-    title: 'Annual reporting',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-    extraClass: '',
-  },
-]
-
-const services: SimpleCard[] = [
-  {
-    icon: 'icon-33',
-    title: 'Retirement Solutions',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-  },
-  {
-    icon: 'icon-32',
-    title: 'Fraud & Protect',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-  },
-  {
-    icon: 'icon-31',
-    title: 'Risk & Compliance',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-  },
-  {
-    icon: 'icon-30',
-    title: 'Wealth Management',
-    text: 'Duis aute irure dolor in velit one reprehenderit in voluptate more esse cillum dolore neris.',
-  },
-]
-
-const processes: SimpleCard[] = [
-  {
-    icon: 'icon-35',
-    title: 'Step 1: Create Account',
-    text: 'Easily create your Zaplin account with one click and get 100 Million Tokens',
-  },
-  {
-    icon: 'icon-36',
-    title: 'Step 2: Type Contex',
-    text: 'Easily create your Zaplin account with one click and get 100 Million Tokens',
-    extraClass: 'shape_image',
-  },
-  {
-    icon: 'icon-37',
-    title: 'Step 3: Get Images',
-    text: 'Easily create your Zaplin account with one click and get 100 Million Tokens',
-  },
-]
-
-const team: TeamMember[] = [
-  { name: 'Ronald Richards', designation: 'Digital Marketer', image: '/financer/assets/images/team/team-1.jpg' },
-  { name: 'Theresa Webb', designation: 'Content Creator', image: '/financer/assets/images/team/team-2.jpg' },
-  { name: 'Brooklyn Simmons', designation: 'Product Designer', image: '/financer/assets/images/team/team-3.jpg' },
-  { name: 'Leslie Alexander', designation: 'Web Developer', image: '/financer/assets/images/team/team-4.jpg' },
-]
-
-const testimonialBase: Testimonial[] = [
-  {
-    text: "We will assist in the establishment of the legal entities, working with the Fund and Sponsor's advisers to prepare bespoke documentation, supporting you get you smoothly through to launch.",
-    image: '/financer/assets/images/resource/testimonial-1.jpg',
-    name: 'Ronald Rogan',
-    designation: 'UI Designer',
-  },
-  {
-    text: "We will assist in the establishment of the legal entities, working with the Fund and Sponsor's advisers to prepare bespoke documentation, supporting you get you smoothly through to launch.",
-    image: '/financer/assets/images/resource/testimonial-2.jpg',
-    name: 'Ronald Rogan',
-    designation: 'UI Designer',
-  },
-  {
-    text: "We will assist in the establishment of the legal entities, working with the Fund and Sponsor's advisers to prepare bespoke documentation, supporting you get you smoothly through to launch.",
-    image: '/financer/assets/images/resource/testimonial-3.jpg',
-    name: 'Ronald Rogan',
-    designation: 'UI Designer',
-  },
-]
+const funfacts = computed<FunFact[]>(() => tm('homePage.funfacts') as FunFact[])
+const chooseUs = computed<SimpleCard[]>(() => tm('homePage.chooseUs') as SimpleCard[])
+const services = computed<SimpleCard[]>(() => tm('homePage.services') as SimpleCard[])
+const processes = computed<SimpleCard[]>(() => tm('homePage.processes') as SimpleCard[])
+const team = computed<TeamMember[]>(() => tm('homePage.team') as TeamMember[])
+const testimonialBase = computed<Testimonial[]>(() => tm('homePage.testimonials') as Testimonial[])
 
 const testimonialItems = computed<Testimonial[]>(() => {
-  return Array.from({ length: 9 }, (_, index) => testimonialBase[index % testimonialBase.length])
+  const base = testimonialBase.value
+  return Array.from({ length: 9 }, (_, index) => base[index % base.length])
 })
 
-const faqs: FAQ[] = [
-  {
-    question: '1.     How To Cancel Chase Card?',
-    answer:
-      'Lorem ipsum dolor sit amet consectetur. Ut parturient at volutpat dolor nunc cursus at rhoncus. Quis sit id tempus aliquam. Mauris felis purus morbi facilisis. Ullamcorper id consectetur ultricies nunc nunc enim accumsan porttitor.',
-  },
-  {
-    question: '2.     What is GlobalWebPay Alternative?',
-    answer:
-      'Lorem ipsum dolor sit amet consectetur. Ut parturient at volutpat dolor nunc cursus at rhoncus. Quis sit id tempus aliquam. Mauris felis purus morbi facilisis. Ullamcorper id consectetur ultricies nunc nunc enim accumsan porttitor.',
-  },
-  {
-    question: '3.     What are BIC and SWIFT codes?',
-    answer:
-      'Lorem ipsum dolor sit amet consectetur. Ut parturient at volutpat dolor nunc cursus at rhoncus. Quis sit id tempus aliquam. Mauris felis purus morbi facilisis. Ullamcorper id consectetur ultricies nunc nunc enim accumsan porttitor.',
-  },
-  {
-    question: "4.     Explaining what Britain's exit from the EU means?",
-    answer:
-      'Lorem ipsum dolor sit amet consectetur. Ut parturient at volutpat dolor nunc cursus at rhoncus. Quis sit id tempus aliquam. Mauris felis purus morbi facilisis. Ullamcorper id consectetur ultricies nunc nunc enim accumsan porttitor.',
-  },
-  {
-    question: '5.     What is Gross Domestic Product or GDP?',
-    answer:
-      'Lorem ipsum dolor sit amet consectetur. Ut parturient at volutpat dolor nunc cursus at rhoncus. Quis sit id tempus aliquam. Mauris felis purus morbi facilisis. Ullamcorper id consectetur ultricies nunc nunc enim accumsan porttitor.',
-  },
-]
+const faqs = computed<FAQ[]>(() => tm('homePage.faqs') as FAQ[])
 
-const animatedCounts = ref<number[]>(funfacts.map(() => 0))
+const animatedCounts = ref<number[]>([0, 0, 0, 0])
 
 const visibleCards = computed(() => {
   if (viewportWidth.value < 768) return 1
@@ -295,8 +176,9 @@ function animateCounter(index: number, target: number, decimals = 0, speed = 150
 }
 
 function setupCounters() {
+  const list = funfacts.value
   if (!('IntersectionObserver' in window)) {
-    funfacts.forEach((item, index) => {
+    list.forEach((item, index) => {
       animatedCounts.value[index] = item.target
     })
     return
@@ -309,9 +191,10 @@ function setupCounters() {
 
         const target = entry.target as HTMLElement
         const index = Number(target.dataset.countIndex ?? '-1')
+        const item = funfacts.value[index]
 
-        if (index >= 0 && animatedCounts.value[index] === 0) {
-          animateCounter(index, funfacts[index].target, funfacts[index].decimals ?? 0)
+        if (index >= 0 && item && animatedCounts.value[index] === 0) {
+          animateCounter(index, item.target, item.decimals ?? 0)
           countObserver?.unobserve(entry.target)
         }
       })
@@ -409,11 +292,11 @@ onBeforeUnmount(() => {
 
       <div class="container">
         <div class="banner_content">
-          <div class="tag_text"><h6>Consultant</h6></div>
-          <h1>Smarter Investing,Brilliantly <br /> Spending</h1>
+          <div class="tag_text"><h6>{{ t('homePage.bannerTag') }}</h6></div>
+          <h1>{{ t('homePage.bannerTitleLine1') }} <br /> {{ t('homePage.bannerTitleLine2') }}</h1>
           <p>
-            Establish your vision and value proposition and turn them <br />
-            into testable prototypes.
+            {{ t('homePage.bannerSubtitleLine1') }} <br />
+            {{ t('homePage.bannerSubtitleLine2') }}
           </p>
 
           <div class="subscribe-inner">
@@ -422,10 +305,10 @@ onBeforeUnmount(() => {
 
           <div class="income_chart float-bob-y">
             <div class="title_box">
-              <h6>Total Income</h6>
-              <div class="rate">$ 18532.52</div>
+              <h6>{{ t('homePage.totalIncome') }}</h6>
+              <div class="rate">{{ t('homePage.incomeAmount') }}</div>
             </div>
-            <div class="percentage"><i class="fa-solid fa-arrow-trend-up"></i> +11%</div>
+            <div class="percentage"><i class="fa-solid fa-arrow-trend-up"></i> {{ t('homePage.incomeTrend') }}</div>
           </div>
 
           <div class="banner_image">
@@ -474,8 +357,8 @@ onBeforeUnmount(() => {
               <div class="tag_icon">
                 <i class="icon-49"></i>
               </div>
-              <h3>Secure Retirement</h3>
-              <p>Want to feel more confident about financial future? Our range of annuity strategies can help.</p>
+              <h3>{{ t('homePage.feature1Title') }}</h3>
+              <p>{{ t('homePage.feature1Text') }}</p>
               <div class="chart_box">
                 <img src="/financer/assets/images/resource/chart_2.png" alt="" />
               </div>
@@ -487,8 +370,8 @@ onBeforeUnmount(() => {
               <div class="tag_icon">
                 <i class="icon-48"></i>
               </div>
-              <h3>Invest with Protential</h3>
-              <p>FlexGuard includes a Performance Lock feature which gives clients the flexibility End Date for your Future.</p>
+              <h3>{{ t('homePage.feature2Title') }}</h3>
+              <p>{{ t('homePage.feature2Text') }}</p>
               <div class="chart_box">
                 <img src="/financer/assets/images/resource/chart_3.png" alt="" />
               </div>
@@ -504,14 +387,13 @@ onBeforeUnmount(() => {
         <div class="row why_choose_us_row">
           <div class="col-xl-6 col-lg-6 col-md-12 col-sm-12">
             <div class="why_choose_left aos-init" data-aos="fade-right" data-aos-easing="linear" data-aos-duration="500">
-              <div class="tag_text"><h6>Why Choose US</h6></div>
-              <h2>Investment views and financial market data</h2>
+              <div class="tag_text"><h6>{{ t('homePage.whyChooseTag') }}</h6></div>
+              <h2>{{ t('homePage.whyChooseTitle') }}</h2>
               <p>
-                We want to create superior value for our clients, shareholders and employees. And we want to stand out as a winner
-                in our industry for our expertise, advice and execution
+                {{ t('homePage.whyChooseBody') }}
               </p>
               <div class="link_btn">
-                <a href="#" class="btn_style_one" @click.prevent>Contact Us</a>
+                <a href="#" class="btn_style_one" @click.prevent>{{ t('publicHeader.contact') }}</a>
               </div>
             </div>
           </div>
@@ -548,8 +430,8 @@ onBeforeUnmount(() => {
 
       <div class="container">
         <div class="section_title light centred">
-          <div class="tag_text"><h6>Services</h6></div>
-          <h2>Provide quality Services.</h2>
+          <div class="tag_text"><h6>{{ t('homePage.servicesTag') }}</h6></div>
+          <h2>{{ t('homePage.servicesTitle') }}</h2>
         </div>
 
         <div class="row">
@@ -560,12 +442,12 @@ onBeforeUnmount(() => {
               </div>
               <h4><a href="#" @click.prevent>{{ item.title }}</a></h4>
               <p>{{ item.text }}</p>
-              <div class="link_btn"><a href="#" @click.prevent>Discover More</a></div>
+              <div class="link_btn"><a href="#" @click.prevent>{{ t('homePage.discoverMore') }}</a></div>
             </div>
           </div>
         </div>
 
-        <h1 class="section_tag">Services</h1>
+        <h1 class="section_tag">{{ t('homePage.servicesWatermark') }}</h1>
       </div>
     </section>
 
@@ -573,8 +455,8 @@ onBeforeUnmount(() => {
     <section class="work_process_section">
       <div class="container">
         <div class="section_title centred">
-          <div class="tag_text"><h6>Work Process</h6></div>
-          <h2>How it works</h2>
+          <div class="tag_text"><h6>{{ t('homePage.workProcessTag') }}</h6></div>
+          <h2>{{ t('homePage.workProcessTitle') }}</h2>
         </div>
 
         <div class="row">
@@ -615,8 +497,8 @@ onBeforeUnmount(() => {
 
       <div class="container">
         <div class="section_title centred">
-          <div class="tag_text"><h6>Our Team</h6></div>
-          <h2>Our Expert Team</h2>
+          <div class="tag_text"><h6>{{ t('homePage.teamTag') }}</h6></div>
+          <h2>{{ t('homePage.teamTitle') }}</h2>
         </div>
 
         <div class="row">
@@ -648,13 +530,13 @@ onBeforeUnmount(() => {
     <section class="cta_section aos-init" data-aos="fade-up" data-aos-easing="linear" data-aos-duration="500">
       <div class="container">
         <div class="cta_inner">
-          <h3>Subscribe for latest update <br /> about Finance</h3>
+          <h3>{{ t('homePage.ctaTitleLine1') }} <br /> {{ t('homePage.ctaTitleLine2') }}</h3>
 
           <div class="subscribe-inner">
             <form class="subscribe-form" @submit.prevent>
               <div class="form-group">
-                <input v-model="ctaEmail" type="email" name="email" placeholder="Enter your email" />
-                <button type="submit" class="btn_style_one">Get Started</button>
+                <input v-model="ctaEmail" type="email" name="email" :placeholder="t('homePage.emailPlaceholder')" />
+                <button type="submit" class="btn_style_one">{{ t('homePage.getStarted') }}</button>
               </div>
             </form>
           </div>
@@ -678,8 +560,8 @@ onBeforeUnmount(() => {
         <div class="shape_bg"></div>
 
         <div class="section_title centred">
-          <div class="tag_text"><h6>Testimonials</h6></div>
-          <h2>Love from Clients</h2>
+          <div class="tag_text"><h6>{{ t('homePage.testimonialsTag') }}</h6></div>
+          <h2>{{ t('homePage.testimonialsTitle') }}</h2>
         </div>
 
         <div class="three-item-carousel owl-carousel owl-theme owl-dots-one owl-nav-none owl-loaded">
@@ -722,8 +604,8 @@ onBeforeUnmount(() => {
     <section class="faq_section aos-init" data-aos="fade-up" data-aos-easing="linear" data-aos-duration="500">
       <div class="container">
         <div class="section_title centred">
-          <div class="tag_text"><h6>General FAQ</h6></div>
-          <h2>Frequently Asked Questions</h2>
+          <div class="tag_text"><h6>{{ t('homePage.faqTag') }}</h6></div>
+          <h2>{{ t('homePage.faqTitle') }}</h2>
         </div>
 
         <div class="inner_box">

@@ -16,6 +16,7 @@ class Contract extends Model
         'contract_template_id',
         'version_no',
         'contract_content',
+        'terms_json',
         'contract_pdf_path',
         'generated_by',
         'generated_at',
@@ -32,6 +33,7 @@ class Contract extends Model
     protected function casts(): array
     {
         return [
+            'terms_json' => 'array',
             'status' => ContractStatus::class,
             'generated_at' => 'datetime',
             'admin_signed_at' => 'datetime',

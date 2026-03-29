@@ -1,146 +1,25 @@
-<script setup lang="ts">
-import AdminRequestPipeline from './inc/AdminRequestPipeline.vue'
-import AdminRecentRequests from './inc/AdminRecentRequests.vue'
-import AdminStatCard from './inc/AdminStatCard.vue'
-import AdminTaskPanel from './inc/AdminTaskPanel.vue'
-
-const stats = [
-  {
-    label: 'Active requests',
-    value: '128',
-    trend: '+12 this week',
-    icon: 'fas fa-layer-group',
-  },
-  {
-    label: 'Awaiting approval',
-    value: '24',
-    trend: '8 urgent',
-    icon: 'fas fa-user-check',
-  },
-  {
-    label: 'Pending signatures',
-    value: '11',
-    trend: '4 ready today',
-    icon: 'fas fa-file-signature',
-  },
-  {
-    label: 'Documents in review',
-    value: '19',
-    trend: '6 updated',
-    icon: 'fas fa-folder-open',
-  },
-]
-
-const pipeline = [
-  {
-    stage: 'New submissions',
-    count: 18,
-    helper: 'Fresh requests waiting for first admin review.',
-    tone: 'violet',
-  },
-  {
-    stage: 'Approved / waiting sign',
-    count: 9,
-    helper: 'Clients need to review and sign generated contracts.',
-    tone: 'blue',
-  },
-  {
-    stage: 'Waiting documents',
-    count: 14,
-    helper: 'Signed requests that now need supporting uploads.',
-    tone: 'amber',
-  },
-  {
-    stage: 'Processing',
-    count: 21,
-    helper: 'Requests moving through final internal checks.',
-    tone: 'emerald',
-  },
-]
-
-const rows = [
-  {
-    code: 'REQ-2026-0142',
-    client: 'Abdullah Al Sawaqi',
-    type: 'Personal Finance',
-    status: 'Approved',
-    stage: 'Waiting signature',
-  },
-  {
-    code: 'REQ-2026-0138',
-    client: 'Nizwa Trading LLC',
-    type: 'Business Facility',
-    status: 'Under review',
-    stage: 'Admin review',
-  },
-  {
-    code: 'REQ-2026-0133',
-    client: 'Huda Al Riyami',
-    type: 'Auto Finance',
-    status: 'Signed',
-    stage: 'Waiting documents',
-  },
-  {
-    code: 'REQ-2026-0129',
-    client: 'Muscat Retail Group',
-    type: 'Working Capital',
-    status: 'Processing',
-    stage: 'Internal review',
-  },
-]
-
-const tasks = [
-  {
-    title: 'Approve high-value requests',
-    helper: 'Review flagged items that need decision today.',
-    value: '6 due',
-  },
-  {
-    title: 'Check pending client signatures',
-    helper: 'Follow up on requests ready for signing.',
-    value: '11 pending',
-  },
-  {
-    title: 'Review missing documents',
-    helper: 'Requests where the client uploaded new files.',
-    value: '7 updates',
-  },
-]
-</script>
-
 <template>
-  <div class="admin-dashboard-page">
-    <section class="admin-hero admin-reveal-up">
-      <div class="admin-hero__content">
-        <span class="admin-hero__eyebrow">Operations summary</span>
-        <h2>Keep approvals, signatures, and document collection moving smoothly.</h2>
-        <p>
-          A compact admin overview designed for real daily use, with full-width content, cleaner spacing,
-          and room for your next request management pages under the same shell.
-        </p>
+  <section class="shell">
+    <div class="card hero">
+      <div>
+        <p class="eyebrow">Admin workspace</p>
+        <h1>Admin Dashboard</h1>
+        <p>Use the review queue to approve submitted requests and move them into the contract stage.</p>
       </div>
-
-      <div class="admin-hero__actions">
-        <button type="button" class="admin-primary-btn">Review requests</button>
-        <button type="button" class="admin-secondary-btn">Export summary</button>
-      </div>
-    </section>
-
-    <section class="admin-stats-grid">
-      <AdminStatCard
-        v-for="stat in stats"
-        :key="stat.label"
-        :label="stat.label"
-        :value="stat.value"
-        :trend="stat.trend"
-        :icon="stat.icon"
-      />
-    </section>
-
-    <section class="admin-content-grid">
-      <AdminRequestPipeline :items="pipeline" />
-      <AdminTaskPanel :tasks="tasks" />
-      <AdminRecentRequests :rows="rows" />
-    </section>
-  </div>
+      <RouterLink to="/admin/requests/new" class="primary-btn">Open new requests</RouterLink>
+    </div>
+  </section>
 </template>
+
+<script setup lang="ts"></script>
+
+<style scoped>
+.shell { padding:28px; max-width:1200px; margin:0 auto; }
+.card { background:#fff; border:1px solid #e2e8f0; border-radius:22px; box-shadow:0 18px 45px rgba(15,23,42,.06); padding:24px; }
+.hero { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.eyebrow { margin:0 0 6px; color:#7c3aed; text-transform:uppercase; font-size:12px; font-weight:700; letter-spacing:.08em; }
+h1 { margin:0; }
+p { margin:8px 0 0; color:#64748b; max-width:640px; }
+.primary-btn { border-radius:12px; padding:10px 14px; text-decoration:none; font-weight:700; font-size:14px; background:#2563eb; border:1px solid #2563eb; color:#fff; }
+@media (max-width:768px){ .shell{padding:16px;} .hero{flex-direction:column; align-items:flex-start;} }
+</style>

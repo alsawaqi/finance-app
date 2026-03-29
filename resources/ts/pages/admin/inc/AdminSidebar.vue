@@ -18,52 +18,76 @@ const auth = useAuthStore()
 const displayName = computed(() => auth.user?.name || 'Admin User')
 const displayEmail = computed(() => auth.user?.email || 'admin@finance.test')
 
-const menuItems = computed(() => [
-  {
-    label: 'Dashboard',
-    icon: 'fas fa-chart-pie',
-    to: { name: 'admin-dashboard' },
-    active: route.name === 'admin-dashboard',
-    badge: 'Live',
-  },
-  {
-    label: 'Request Questions',
-    icon: 'fas fa-list-check',
-    to: { name: 'admin-request-questions' },
-    active: route.name === 'admin-request-questions',
-    badge: 'Setup',
-  },
-  {
-    label: 'Requests Queue',
-    icon: 'fas fa-inbox',
-    note: 'Next',
-  },
-  {
-    label: 'Approvals',
-    icon: 'fas fa-check-circle',
-    note: 'Next',
-  },
-  {
-    label: 'Contracts',
-    icon: 'fas fa-file-signature',
-    note: 'Next',
-  },
-  {
-    label: 'Documents',
-    icon: 'fas fa-folder-open',
-    note: 'Next',
-  },
-  {
-    label: 'Clients',
-    icon: 'fas fa-users',
-    note: 'Next',
-  },
-  {
-    label: 'Settings',
-    icon: 'fas fa-cog',
-    note: 'Later',
-  },
-])
+const menuItems = computed(() => {
+  const items = [
+    {
+      label: 'Dashboard',
+      icon: 'fas fa-chart-pie',
+      to: { name: 'admin-dashboard' },
+      active: route.name === 'admin-dashboard',
+      badge: 'Live',
+      show: auth.isAdmin,
+    },
+    {
+      label: auth.isAdmin ? 'New Requests' : 'Review Queue',
+      icon: 'fas fa-inbox',
+      to: { name: 'admin-new-requests' },
+      active: route.name === 'admin-new-requests' || route.name === 'admin-request-details' || route.name === 'admin-request-contract',
+      badge: 'Queue',
+      show: auth.isAdmin,
+    },
+    {
+      label: 'Assignments',
+      icon: 'fas fa-user-check',
+      to: { name: 'admin-assignments' },
+      active: route.name === 'admin-assignments',
+      badge: 'Next',
+      show: auth.isAdmin && auth.can('assign staff'),
+    },
+    {
+      label: 'Assigned Requests',
+      icon: 'fas fa-clipboard-check',
+      to: { name: 'staff-requests' },
+      active: route.name === 'staff-requests' || route.name === 'staff-request-details',
+      badge: auth.isStaff && !auth.isAdmin ? 'My queue' : 'Workspace',
+      show: auth.isAdmin || auth.can('view assigned requests'),
+    },
+    {
+      label: 'Request Questions',
+      icon: 'fas fa-list-check',
+      to: { name: 'admin-request-questions' },
+      active: route.name === 'admin-request-questions',
+      badge: 'Setup',
+      show: auth.can('manage questions'),
+    },
+    {
+      label: 'Document Steps',
+      icon: 'fas fa-folder-open',
+      to: { name: 'admin-document-upload-steps' },
+      active: route.name === 'admin-document-upload-steps',
+      badge: 'Setup',
+      show: auth.can('manage document steps'),
+    },
+    {
+      label: 'Staff',
+      icon: 'fas fa-user-shield',
+      to: { name: 'admin-staff' },
+      active: route.name === 'admin-staff',
+      badge: 'Control',
+      show: auth.can('manage staff'),
+    },
+    {
+      label: 'Agents',
+      icon: 'fas fa-user-tie',
+      to: { name: 'admin-agents' },
+      active: route.name === 'admin-agents',
+      badge: 'Setup',
+      show: auth.can('manage agents'),
+    },
+  ]
+
+  return items.filter((item) => item.show)
+})
 
 async function handleLogout() {
   await auth.logout()
@@ -82,26 +106,19 @@ function handleNavClick() {
       <RouterLink to="/admin" class="admin-sidebar__brand-link" @click="handleNavClick">
         <span class="admin-sidebar__brand-logo">F</span>
         <div>
-          <strong>Finance Admin</strong>
-          <small>Operations Console</small>
+          <strong>{{ auth.isStaff && !auth.isAdmin ? 'Finance Staff' : 'Finance Admin' }}</strong>
+          <small>{{ auth.isStaff && !auth.isAdmin ? 'Assigned Workspace' : 'Operations Console' }}</small>
         </div>
       </RouterLink>
 
-      <button
-        type="button"
-        class="admin-sidebar__close"
-        aria-label="Close sidebar"
-        @click="emit('close-sidebar')"
-      >
+      <button type="button" class="admin-sidebar__close" aria-label="Close sidebar" @click="emit('close-sidebar')">
         <i class="fas fa-times"></i>
       </button>
     </div>
 
     <div class="admin-sidebar__mobile-tools">
       <div class="admin-sidebar__mobile-profile">
-        <span class="admin-profile-chip__avatar">
-          {{ displayName.charAt(0).toUpperCase() }}
-        </span>
+        <span class="admin-profile-chip__avatar">{{ displayName.charAt(0).toUpperCase() }}</span>
         <div>
           <strong>{{ displayName }}</strong>
           <small>{{ displayEmail }}</small>
@@ -109,12 +126,8 @@ function handleNavClick() {
       </div>
 
       <div class="admin-sidebar__mobile-actions">
-        <button type="button" class="admin-icon-btn" aria-label="Search">
-          <i class="fas fa-search"></i>
-        </button>
-        <button type="button" class="admin-icon-btn" aria-label="Notifications">
-          <i class="fas fa-bell"></i>
-        </button>
+        <button type="button" class="admin-icon-btn" aria-label="Search"><i class="fas fa-search"></i></button>
+        <button type="button" class="admin-icon-btn" aria-label="Notifications"><i class="fas fa-bell"></i></button>
         <button type="button" class="admin-logout-btn admin-logout-btn--sidebar" @click="handleLogout">
           <i class="fas fa-sign-out-alt"></i>
           <span>Logout</span>
@@ -127,40 +140,13 @@ function handleNavClick() {
 
       <nav class="admin-sidebar__nav">
         <template v-for="item in menuItems" :key="item.label">
-          <RouterLink
-            v-if="item.to"
-            :to="item.to"
-            class="admin-sidebar__link"
-            :class="{ 'is-active': item.active }"
-            @click="handleNavClick"
-          >
+          <RouterLink v-if="item.to" :to="item.to" class="admin-sidebar__link" :class="{ 'is-active': item.active }" @click="handleNavClick">
             <span class="admin-sidebar__link-icon"><i :class="item.icon"></i></span>
             <span class="admin-sidebar__link-text">{{ item.label }}</span>
             <span v-if="item.badge" class="admin-sidebar__link-badge">{{ item.badge }}</span>
           </RouterLink>
-
-          <button
-            v-else
-            type="button"
-            class="admin-sidebar__link is-muted"
-          >
-            <span class="admin-sidebar__link-icon"><i :class="item.icon"></i></span>
-            <span class="admin-sidebar__link-text">{{ item.label }}</span>
-            <span v-if="item.note" class="admin-sidebar__link-note">{{ item.note }}</span>
-          </button>
         </template>
       </nav>
-    </div>
-
-    <div class="admin-sidebar__card">
-      <span class="admin-sidebar__card-eyebrow">Today’s focus</span>
-      <h4>Review new finance requests</h4>
-      <p>
-        Keep approvals, contracts, and document collection flowing from a single admin workspace.
-      </p>
-      <RouterLink :to="{ name: 'admin-dashboard' }" class="admin-sidebar__card-btn" @click="handleNavClick">
-        Open dashboard
-      </RouterLink>
     </div>
   </aside>
 </template>
