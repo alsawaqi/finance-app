@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import type { AgentItem } from '@/services/agents'
+import type { BankItem } from '@/services/banks'
 
 defineProps<{
-  rows: AgentItem[]
+  rows: BankItem[]
   loading: boolean
 }>()
 
 defineEmits<{
-  (e: 'edit', row: AgentItem): void
-  (e: 'toggle', row: AgentItem): void
+  (e: 'edit', row: BankItem): void
+  (e: 'toggle', row: BankItem): void
 }>()
 </script>
 
@@ -16,29 +16,28 @@ defineEmits<{
   <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
     <div class="admin-panel__head">
       <div>
-        <span class="admin-panel__eyebrow">Agent directory</span>
-        <h2>Agents and external contacts</h2>
+        <span class="admin-panel__eyebrow">Bank directory</span>
+        <h2>Banks available for agent mapping</h2>
       </div>
-      <span class="admin-panel__action is-static">{{ rows.length }} agents</span>
+      <span class="admin-panel__action is-static">{{ rows.length }} banks</span>
     </div>
 
-    <div v-if="loading" class="admin-table-empty">Loading agents...</div>
+    <div v-if="loading" class="admin-table-empty">Loading banks...</div>
 
     <template v-else>
       <div v-if="rows.length === 0" class="admin-table-empty">
-        No agents added yet. Create your first contact from the form.
+        No banks added yet. Create your first bank from the form.
       </div>
 
       <div v-else class="admin-table-wrap">
         <table class="admin-table">
           <thead>
             <tr>
-              <th>Agent</th>
               <th>Bank</th>
-              <th>Company</th>
-              <th>Type</th>
+              <th>Code</th>
+              <th>Short name</th>
+              <th>Linked agents</th>
               <th>Status</th>
-              <th>Notes</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -47,29 +46,16 @@ defineEmits<{
               <td>
                 <div class="admin-question-table__text">
                   <strong>{{ row.name }}</strong>
-                  <small>{{ row.email || 'No email' }} · {{ row.phone || 'No phone' }}</small>
+                  <small>{{ row.creator_name || 'System' }}</small>
                 </div>
               </td>
-              <td>
-                <div class="admin-question-table__text">
-                  <strong>{{ row.bank_name || 'No bank linked' }}</strong>
-                  <small>{{ row.bank_short_name || row.bank_code || '—' }}</small>
-                </div>
-              </td>
-              <td>{{ row.company_name || '—' }}</td>
-              <td>
-                <span class="admin-chip admin-chip--blue">{{ row.agent_type || 'general' }}</span>
-              </td>
+              <td>{{ row.code || '—' }}</td>
+              <td>{{ row.short_name || '—' }}</td>
+              <td>{{ row.agents_count }}</td>
               <td>
                 <span class="admin-status-pill" :class="row.is_active ? 'is-success' : 'is-muted'">
                   {{ row.is_active ? 'Active' : 'Inactive' }}
                 </span>
-              </td>
-              <td>
-                <div class="admin-question-table__text">
-                  <strong>{{ row.notes ? row.notes.slice(0, 44) + (row.notes.length > 44 ? '…' : '') : 'No notes' }}</strong>
-                  <small>{{ row.creator_name || 'System' }}</small>
-                </div>
               </td>
               <td>
                 <div class="admin-table-actions">

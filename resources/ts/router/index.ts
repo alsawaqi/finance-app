@@ -24,6 +24,8 @@ import AdminDashboardPage from '@/pages/admin/AdminDashboardPage.vue'
 import AdminRequestQuestionsPage from '@/pages/admin/AdminRequestQuestionsPage.vue'
 import AdminDocumentUploadStepsPage from '@/pages/admin/AdminDocumentUploadStepsPage.vue'
 import AdminStaffPage from '@/pages/admin/AdminStaffPage.vue'
+import AdminBanksPage from '@/pages/admin/AdminBanksPage.vue'
+import AdminCategorizationPage from '@/pages/admin/AdminCategorizationPage.vue'
 import AdminAgentsPage from '@/pages/admin/AdminAgentsPage.vue'
 import AdminNewRequestsPage from '@/pages/admin/AdminNewRequestsPage.vue'
 import AdminRequestDetailsPage from '@/pages/admin/AdminRequestDetailsPage.vue'
@@ -69,6 +71,8 @@ const router = createRouter({
         { path: 'request-questions', name: 'admin-request-questions', component: AdminRequestQuestionsPage },
         { path: 'document-upload-steps', name: 'admin-document-upload-steps', component: AdminDocumentUploadStepsPage },
         { path: 'staff', name: 'admin-staff', component: AdminStaffPage },
+        { path: 'banks', name: 'admin-banks', component: AdminBanksPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'categorization', name: 'admin-categorization', component: AdminCategorizationPage, meta: { allowedRoles: ['admin'] } },
         { path: 'agents', name: 'admin-agents', component: AdminAgentsPage },
         { path: 'assignments', name: 'admin-assignments', component: AdminAssignmentsPage, meta: { allowedRoles: ['admin'] } },
         { path: 'assigned-requests', name: 'staff-requests', component: StaffRequestsPage },

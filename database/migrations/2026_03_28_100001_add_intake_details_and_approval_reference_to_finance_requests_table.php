@@ -18,7 +18,7 @@ return new class extends Migration
     {
         Schema::table('finance_requests', function (Blueprint $table) {
             $table->dropUnique(['approval_reference_number']);
-            $table->dropColumn(['approval_reference_number', 'intake_details_json']);
+            $table->dropColumn(['approval_reference_number']);
         });
     }
 };

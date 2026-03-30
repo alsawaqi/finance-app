@@ -8,6 +8,7 @@ enum FinanceRequestWorkflowStage: string
     case REVIEW = 'review';
     case CONTRACT = 'contract';
     case DOCUMENT_COLLECTION = 'document_collection';
+    case AWAITING_ADDITIONAL_DOCUMENTS = 'awaiting_additional_documents';
     case READY_FOR_PROCESSING = 'ready_for_processing';
     case ASSIGNED_TO_STAFF = 'assigned_to_staff';
     case PROCESSING = 'processing';

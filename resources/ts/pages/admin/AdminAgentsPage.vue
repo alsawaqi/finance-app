@@ -5,6 +5,8 @@ import AdminAgentBuilderForm from './inc/AdminAgentBuilderForm.vue'
 import AdminAgentLibraryTable from './inc/AdminAgentLibraryTable.vue'
 import type { AgentItem, AgentPayload } from '@/services/agents'
 import { createAgent, listAgents, toggleAgentActive, updateAgent } from '@/services/agents'
+import type { BankItem } from '@/services/banks'
+import { listBanks } from '@/services/banks'
 
 type AgentForm = {
   id: number | null
@@ -12,37 +14,41 @@ type AgentForm = {
   email: string
   phone: string
   company_name: string
+  bank_id: number | null
   agent_type: string
   notes: string
   is_active: boolean
 }
 
 const rows = ref<AgentItem[]>([])
+const banks = ref<BankItem[]>([])
 const isLoading = ref(false)
+const isLoadingBanks = ref(false)
 const isSaving = ref(false)
 const formError = ref('')
 const successMessage = ref('')
 const fieldErrors = ref<Record<string, string[]>>({})
 
 const form = ref<AgentForm>(createDefaultForm())
-const isEditing = computed(() => form.value.id !== null)
 
+const isEditing = computed(() => form.value.id !== null)
+const activeBanks = computed(() => banks.value.filter((bank) => bank.is_active))
 const stats = computed(() => {
   const total = rows.value.length
   const active = rows.value.filter((item) => item.is_active).length
-  const withCompanies = rows.value.filter((item) => !!item.company_name).length
-  const typed = rows.value.filter((item) => !!item.agent_type).length
+  const linkedBanks = new Set(rows.value.map((item) => item.bank_id).filter((id): id is number => typeof id === 'number')).size
+  const withoutBank = rows.value.filter((item) => !item.bank_id).length
 
   return [
-    { label: 'Total agents', value: String(total), tone: 'violet' },
-    { label: 'Active contacts', value: String(active), tone: 'emerald' },
-    { label: 'Linked companies', value: String(withCompanies), tone: 'blue' },
-    { label: 'Typed contacts', value: String(typed), tone: 'amber' },
+    { label: 'Total agents', value: String(total), tone: 'emerald' },
+    { label: 'Active agents', value: String(active), tone: 'blue' },
+    { label: 'Banks linked', value: String(linkedBanks), tone: 'violet' },
+    { label: 'Without bank', value: String(withoutBank), tone: 'amber' },
   ]
 })
 
 onMounted(async () => {
-  await fetchRows()
+  await Promise.all([fetchRows(), fetchBanks()])
 })
 
 function createDefaultForm(): AgentForm {
@@ -52,7 +58,8 @@ function createDefaultForm(): AgentForm {
     email: '',
     phone: '',
     company_name: '',
-    agent_type: '',
+    bank_id: null,
+    agent_type: 'bank',
     notes: '',
     is_active: true,
   }
@@ -62,6 +69,11 @@ function clearMessages() {
   formError.value = ''
   successMessage.value = ''
   fieldErrors.value = {}
+}
+
+function resetForm() {
+  clearMessages()
+  form.value = createDefaultForm()
 }
 
 async function fetchRows() {
@@ -78,9 +90,17 @@ async function fetchRows() {
   }
 }
 
-function resetForm() {
-  clearMessages()
-  form.value = createDefaultForm()
+async function fetchBanks() {
+  isLoadingBanks.value = true
+
+  try {
+    const { data } = await listBanks()
+    banks.value = data.data
+  } catch (error) {
+    formError.value = extractErrorMessage(error, 'Unable to load banks right now.')
+  } finally {
+    isLoadingBanks.value = false
+  }
 }
 
 function buildPayload(): AgentPayload {
@@ -89,6 +109,7 @@ function buildPayload(): AgentPayload {
     email: form.value.email.trim() || null,
     phone: form.value.phone.trim() || null,
     company_name: form.value.company_name.trim() || null,
+    bank_id: form.value.bank_id,
     agent_type: form.value.agent_type.trim() || null,
     notes: form.value.notes.trim() || null,
     is_active: form.value.is_active,
@@ -130,6 +151,7 @@ function editRow(row: AgentItem) {
     email: row.email ?? '',
     phone: row.phone ?? '',
     company_name: row.company_name ?? '',
+    bank_id: row.bank_id ?? null,
     agent_type: row.agent_type ?? '',
     notes: row.notes ?? '',
     is_active: row.is_active,
@@ -166,13 +188,13 @@ function extractErrorMessage(error: unknown, fallback: string) {
         <span class="admin-hero__eyebrow">Agent Management</span>
         <h2>Create the external contacts you will later use in request communications.</h2>
         <p>
-          Agents are stored separately from users. This is the right place for banks, brokers, insurers,
-          government contacts, and any operational contacts you email about finance requests.
+          Agents are stored separately from users. Link each agent to a bank so staff can later filter
+          contacts by bank before sending emails about finance requests.
         </p>
       </div>
 
       <div class="admin-hero__actions">
-        <button type="button" class="admin-primary-btn" :disabled="isSaving" @click="saveRow">
+        <button type="button" class="admin-primary-btn" :disabled="isSaving || isLoadingBanks" @click="saveRow">
           {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update agent' : 'Create agent' }}
         </button>
         <button type="button" class="admin-secondary-btn" @click="resetForm">
@@ -194,6 +216,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
     <div class="admin-question-builder-grid">
       <AdminAgentBuilderForm
         v-model="form"
+        :banks="banks"
         :is-editing="isEditing"
         :is-saving="isSaving"
         :errors="fieldErrors"
@@ -215,8 +238,8 @@ function extractErrorMessage(error: unknown, fallback: string) {
             <strong>Agents will be linked later when the team sends request-related emails.</strong>
           </article>
           <article class="admin-question-preview__note">
-            <span>Types</span>
-            <strong>Use consistent types like bank, insurance, broker, government, or vendor.</strong>
+            <span>Bank linkage</span>
+            <strong>{{ activeBanks.length }} active banks are currently available for agent mapping.</strong>
           </article>
           <article class="admin-question-preview__note">
             <span>Availability</span>
@@ -226,7 +249,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
 
         <div class="admin-pill-list">
           <span class="admin-chip admin-chip--violet">agent table is separate from users</span>
-          <span class="admin-chip admin-chip--blue">best for external contacts</span>
+          <span class="admin-chip admin-chip--blue">bank-linked contacts</span>
           <span class="admin-chip admin-chip--emerald">ready for request-email integration</span>
         </div>
       </section>

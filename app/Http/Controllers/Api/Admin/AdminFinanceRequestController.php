@@ -8,12 +8,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ApproveFinanceRequestRequest;
 use App\Models\FinanceRequest;
 use App\Models\RequestTimeline;
+use App\Services\FinanceRequestDocumentChecklistService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdminFinanceRequestController extends Controller
 {
+    public function __construct(
+        private readonly FinanceRequestDocumentChecklistService $documentChecklistService,
+    ) {
+    }
+
     public function indexNew(Request $request): JsonResponse
     {
         $requests = FinanceRequest::query()
@@ -35,13 +41,18 @@ class AdminFinanceRequestController extends Controller
             'answers.question:id,code,question_text,question_type,sort_order',
             'attachments.uploader:id,name',
             'timeline.actor:id,name',
-            'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
-            'assignments' => fn ($query) => $query->where('is_active', true)->with(['staff:id,name,email', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
             'currentContract',
+            'shareholders',
+            'additionalDocuments.requester:id,name',
+            'additionalDocuments.uploader:id,name',
+            'assignments.staff:id,name,email',
+            'comments.user:id,name',
+            'emails.agents.bank:id,name,short_name,code',
         ]);
 
         return response()->json([
             'request' => $financeRequest,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($financeRequest)->values(),
         ]);
     }
 

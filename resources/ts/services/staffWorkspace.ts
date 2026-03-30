@@ -31,6 +31,44 @@ export type RequestComment = {
   } | null
 }
 
+export type RequiredDocumentChecklistItem = {
+  document_upload_step_id: number
+  code?: string | null
+  name: string
+  is_required: boolean
+  status: string
+  is_uploaded: boolean
+  upload?: {
+    id: number
+    file_name: string
+    file_path: string
+    status: string
+    uploaded_at?: string | null
+  } | null
+}
+
+export type AdditionalDocumentItem = {
+  id: number
+  title: string
+  reason?: string | null
+  status: string
+  requested_at?: string | null
+  uploaded_at?: string | null
+  file_name?: string | null
+  file_path?: string | null
+  rejection_reason?: string | null
+  requester?: {
+    id: number
+    name: string
+    email?: string | null
+  } | null
+  uploader?: {
+    id: number
+    name: string
+    email?: string | null
+  } | null
+}
+
 export type StaffWorkspaceRequestSummary = {
   id: number
   reference_number: string
@@ -96,6 +134,7 @@ export type StaffWorkspaceRequestDetails = StaffWorkspaceRequestSummary & {
     admin_signed_at?: string | null
     client_signed_at?: string | null
   } | null
+  additional_documents?: AdditionalDocumentItem[]
 }
 
 export type AgentOption = {
@@ -105,6 +144,17 @@ export type AgentOption = {
   phone?: string | null
   company_name?: string | null
   agent_type?: string | null
+  bank_id?: number | null
+  bank_name?: string | null
+  bank_short_name?: string | null
+  bank_code?: string | null
+}
+
+export type BankOption = {
+  id: number
+  name: string
+  short_name?: string | null
+  code?: string | null
 }
 
 export async function getStaffRequests(params?: { search?: string; workflow_stage?: string }) {
@@ -114,22 +164,38 @@ export async function getStaffRequests(params?: { search?: string; workflow_stag
 
 export async function getStaffRequest(id: string | number) {
   const { data } = await api.get(`/api/staff/requests/${id}`)
-  return data as { request: StaffWorkspaceRequestDetails }
+  return data as {
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+  }
 }
 
 export async function addStaffComment(
   id: string | number,
-  payload: { comment_text: string; visibility?: 'internal' | 'admin_only' | 'client_visible' },
+  payload: { comment_text: string; visibility?: 'internal' | 'admin_only' },
 ) {
   const { data } = await api.post(`/api/staff/requests/${id}/comments`, payload)
   return data as {
     message: string
     comment: RequestComment
     request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
   }
 }
 
-export async function getStaffAgents() {
-  const { data } = await api.get('/api/staff/agents')
-  return data as { agents: AgentOption[] }
+export async function requestAdditionalDocument(
+  id: string | number,
+  payload: { title: string; reason?: string | null },
+) {
+  const { data } = await api.post(`/api/staff/requests/${id}/additional-documents`, payload)
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+  }
+}
+
+export async function getStaffAgents(params?: { bank_id?: number | null }) {
+  const { data } = await api.get('/api/staff/agents', { params })
+  return data as { banks: BankOption[]; agents: AgentOption[] }
 }

@@ -11,7 +11,7 @@ const search = ref('')
 const workflowStage = ref('')
 const requests = ref<StaffWorkspaceRequestSummary[]>([])
 
-const availableStages = computed(() => ['assigned_to_staff', 'processing', 'ready_for_processing'])
+const availableStages = computed(() => ['document_collection', 'awaiting_additional_documents', 'processing', 'completed'])
 
 async function load() {
   loading.value = true

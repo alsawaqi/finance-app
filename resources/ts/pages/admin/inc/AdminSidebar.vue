@@ -77,6 +77,22 @@ const menuItems = computed(() => {
       show: auth.can('manage staff'),
     },
     {
+      label: 'Banks',
+      icon: 'fas fa-building-columns',
+      to: { name: 'admin-banks' },
+      active: route.name === 'admin-banks',
+      badge: 'Master',
+      show: auth.isAdmin,
+    },
+    {
+      label: 'Categorization',
+      icon: 'fas fa-layer-group',
+      to: { name: 'admin-categorization' },
+      active: route.name === 'admin-categorization',
+      badge: 'Insights',
+      show: auth.isAdmin,
+    },
+    {
       label: 'Agents',
       icon: 'fas fa-user-tie',
       to: { name: 'admin-agents' },

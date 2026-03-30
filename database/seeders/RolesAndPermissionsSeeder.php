@@ -28,6 +28,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // Staff / management
             'manage staff',
+            'manage banks',
             'manage agents',
             'manage questions',
             'manage document steps',

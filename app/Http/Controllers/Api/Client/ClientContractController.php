@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\SignClientContractRequest;
 use App\Models\FinanceRequest;
 use App\Models\RequestTimeline;
+use App\Support\ContractDocumentBuilder;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -23,8 +24,8 @@ class ClientContractController extends Controller
             'client:id,name,email,phone',
             'answers.question:id,code,question_text,question_type,sort_order',
             'attachments',
-            'timeline.actor:id,name',
             'currentContract',
+            'shareholders',
         ]);
 
         return response()->json([
@@ -51,9 +52,11 @@ class ClientContractController extends Controller
             $contract->client_signed_at = now();
             $contract->client_signed_by = $client->id;
             $contract->status = ContractStatus::FULLY_SIGNED;
+
+            $this->renderAndPersistFinalPdf($financeRequest, $contract);
             $contract->save();
 
-            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::READY_FOR_PROCESSING;
+            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::CONTRACT;
             $financeRequest->latest_activity_at = now();
             $financeRequest->save();
 
@@ -65,13 +68,10 @@ class ClientContractController extends Controller
                 'event_description' => 'The client reviewed the contract PDF and submitted the final signature.',
                 'metadata_json' => [
                     'contract_id' => $contract->id,
+                    'contract_status' => $contract->status->value,
                 ],
                 'created_at' => now(),
             ]);
-
-            if ($contract->contract_pdf_path && Storage::disk('public')->exists($contract->contract_pdf_path)) {
-                // Keep existing PDF as audit output for now.
-            }
         });
 
         return response()->json([
@@ -114,5 +114,27 @@ class ClientContractController extends Controller
         Storage::disk('public')->put($relativePath, $binary);
 
         return $relativePath;
+    }
+
+    private function renderAndPersistFinalPdf(FinanceRequest $financeRequest, $contract): void
+    {
+        $terms = (array) ($contract->terms_json ?? []);
+        $html = ContractDocumentBuilder::buildHtml(
+            $financeRequest->fresh('client'),
+            $terms,
+            $contract
+        );
+
+        $contract->contract_content = $html;
+
+        $pdfRelativePath = $contract->contract_pdf_path
+            ?: 'contracts/pdfs/request-' . $financeRequest->id . '-v' . $contract->version_no . '.pdf';
+
+        $pdf = Pdf::loadHTML($html)
+            ->setPaper('a4')
+            ->setWarnings(false);
+
+        Storage::disk('public')->put($pdfRelativePath, $pdf->output());
+        $contract->contract_pdf_path = $pdfRelativePath;
     }
 }

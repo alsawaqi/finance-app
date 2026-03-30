@@ -10,12 +10,18 @@ use App\Models\FinanceRequest;
 use App\Models\FinanceRequestStaffAssignment;
 use App\Models\RequestTimeline;
 use App\Models\User;
+use App\Services\FinanceRequestWorkflowService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdminAssignmentController extends Controller
 {
+    public function __construct(
+        private readonly FinanceRequestWorkflowService $workflowService,
+    ) {
+    }
+
     public function indexReady(Request $request): JsonResponse
     {
         $requests = FinanceRequest::query()
@@ -35,11 +41,14 @@ class AdminAssignmentController extends Controller
                 ]);
             })
             ->whereIn('workflow_stage', [
-                FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
-                FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
+                FinanceRequestWorkflowStage::CONTRACT->value,
+                FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+                FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
                 FinanceRequestWorkflowStage::PROCESSING->value,
+                FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
+                FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
             ])
-            ->orderByRaw("CASE WHEN workflow_stage = ? THEN 0 ELSE 1 END", [FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value])
+            ->orderByRaw("CASE WHEN workflow_stage = ? THEN 0 ELSE 1 END", [FinanceRequestWorkflowStage::CONTRACT->value])
             ->orderByDesc('latest_activity_at')
             ->orderByDesc('id')
             ->get();
@@ -143,10 +152,11 @@ class AdminAssignmentController extends Controller
             }
 
             $financeRequest->primary_staff_id = $primaryStaffId;
-            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF;
             $financeRequest->latest_assignment_at = now();
             $financeRequest->latest_activity_at = now();
             $financeRequest->save();
+
+            $this->workflowService->moveToDocumentCollection($financeRequest);
 
             $assignedUsers = User::query()
                 ->whereIn('id', $staffIdsToKeep)
@@ -158,7 +168,7 @@ class AdminAssignmentController extends Controller
                 'actor_user_id' => $admin?->id,
                 'event_type' => 'request.assigned_to_staff',
                 'event_title' => 'Request assigned to staff',
-                'event_description' => 'The request was assigned to the staff workspace for follow-up and processing.',
+                'event_description' => 'The request was assigned to the staff workspace and the client can now upload the required documents.',
                 'metadata_json' => [
                     'primary_staff_id' => $primaryStaffId,
                     'staff' => $assignedUsers->map(fn (User $user) => [
@@ -181,6 +191,9 @@ class AdminAssignmentController extends Controller
                 'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
                 'assignments' => fn ($query) => $query->where('is_active', true)->with('staff:id,name,email')->orderByDesc('is_primary')->orderBy('assigned_at'),
                 'currentContract',
+                'shareholders',
+                'additionalDocuments.requester:id,name',
+                'additionalDocuments.uploader:id,name',
             ]),
         ]);
     }

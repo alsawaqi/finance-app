@@ -6,6 +6,10 @@ export interface AgentItem {
   email: string | null
   phone: string | null
   company_name: string | null
+  bank_id: number | null
+  bank_name: string | null
+  bank_short_name: string | null
+  bank_code: string | null
   agent_type: string | null
   notes: string | null
   is_active: boolean
@@ -20,6 +24,7 @@ export interface AgentPayload {
   email?: string | null
   phone?: string | null
   company_name?: string | null
+  bank_id?: number | null
   agent_type?: string | null
   notes?: string | null
   is_active?: boolean

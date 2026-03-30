@@ -20,6 +20,8 @@ class FinanceRequest extends Model
         'user_id',
         'primary_staff_id',
         'current_contract_id',
+        'applicant_type',
+        'company_name',
         'status',
         'workflow_stage',
         'priority',
@@ -83,6 +85,16 @@ class FinanceRequest extends Model
     public function documentUploads(): HasMany
     {
         return $this->hasMany(RequestDocumentUpload::class, 'finance_request_id');
+    }
+
+    public function shareholders(): HasMany
+    {
+        return $this->hasMany(FinanceRequestShareholder::class, 'finance_request_id')->orderBy('sort_order');
+    }
+
+    public function additionalDocuments(): HasMany
+    {
+        return $this->hasMany(RequestAdditionalDocument::class, 'finance_request_id')->latest('id');
     }
 
     public function contracts(): HasMany

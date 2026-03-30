@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AdminAssignmentController;
+use App\Http\Controllers\Api\Admin\AdminCategorizationController;
 use App\Http\Controllers\Api\Admin\AdminContractController;
 use App\Http\Controllers\Api\Admin\AdminFinanceRequestController;
+use App\Http\Controllers\Api\Admin\BankController;
 use App\Http\Controllers\Api\Admin\AgentController;
 use App\Http\Controllers\Api\Admin\DocumentUploadStepController;
 use App\Http\Controllers\Api\Admin\RequestQuestionController;
@@ -16,7 +18,7 @@ use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\ResetPasswordController;
 use App\Http\Controllers\Api\Auth\VerifyEmailController;
 use App\Http\Controllers\Api\Client\ClientContractController;
-use App\Http\Controllers\Api\Client\ClientRequestPortalController;
+use App\Http\Controllers\Api\Client\ClientRequestController;
 use App\Http\Controllers\Api\Staff\StaffRequestWorkspaceController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,11 +44,12 @@ Route::prefix('auth')->group(function () {
 Route::prefix('client')
     ->middleware(['auth:sanctum', 'role:client'])
     ->group(function () {
-        Route::get('/request-questions', [ClientRequestPortalController::class, 'questions']);
-        Route::post('/requests', [ClientRequestPortalController::class, 'store']);
-
-        Route::get('/requests', [ClientRequestPortalController::class, 'index']);
-        Route::get('/requests/{financeRequest}', [ClientRequestPortalController::class, 'show']);
+        Route::get('/request-questions', [ClientRequestController::class, 'questions']);
+        Route::post('/requests', [ClientRequestController::class, 'store']);
+        Route::get('/requests', [ClientRequestController::class, 'index']);
+        Route::get('/requests/{financeRequest}', [ClientRequestController::class, 'show']);
+        Route::post('/requests/{financeRequest}/documents', [ClientRequestController::class, 'uploadRequiredDocument']);
+        Route::post('/requests/{financeRequest}/additional-documents/{additionalDocument}/upload', [ClientRequestController::class, 'uploadAdditionalDocument']);
         Route::get('/requests/{financeRequest}/contract', [ClientContractController::class, 'show']);
         Route::post('/requests/{financeRequest}/contract/sign', [ClientContractController::class, 'sign']);
         Route::get('/requests/{financeRequest}/contract/download', [ClientContractController::class, 'downloadPdf']);
@@ -74,6 +77,11 @@ Route::prefix('admin')
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'role:admin'])
     ->group(function () {
+        Route::get('/categorization', AdminCategorizationController::class);
+        Route::post('/banks', [BankController::class, 'store']);
+        Route::put('/banks/{bank}', [BankController::class, 'update']);
+        Route::patch('/banks/{bank}/toggle-active', [BankController::class, 'toggleActive']);
+
         Route::get('/document-upload-steps', [DocumentUploadStepController::class, 'index']);
         Route::post('/document-upload-steps', [DocumentUploadStepController::class, 'store']);
         Route::put('/document-upload-steps/{documentUploadStep}', [DocumentUploadStepController::class, 'update']);
@@ -104,6 +112,7 @@ Route::prefix('admin')
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'role:admin|staff', 'permission:manage agents'])
     ->group(function () {
+        Route::get('/banks', [BankController::class, 'index']);
         Route::get('/agents', [AgentController::class, 'index']);
         Route::post('/agents', [AgentController::class, 'store']);
         Route::put('/agents/{agent}', [AgentController::class, 'update']);
@@ -116,5 +125,6 @@ Route::prefix('staff')
         Route::get('/requests', [StaffRequestWorkspaceController::class, 'index']);
         Route::get('/requests/{financeRequest}', [StaffRequestWorkspaceController::class, 'show']);
         Route::post('/requests/{financeRequest}/comments', [StaffRequestWorkspaceController::class, 'storeComment']);
+        Route::post('/requests/{financeRequest}/additional-documents', [StaffRequestWorkspaceController::class, 'storeAdditionalDocument']);
         Route::get('/agents', [StaffRequestWorkspaceController::class, 'agents']);
     });

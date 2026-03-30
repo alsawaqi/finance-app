@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { listClientRequests } from '@/services/clientPortal'
 import { countryNameFromCode } from '@/utils/countries'
@@ -8,6 +8,12 @@ import { intakeCountryCode, intakeRequestedAmount } from '@/utils/requestIntake'
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<any[]>([])
+
+const stats = computed(() => ({
+  total: requests.value.length,
+  active: requests.value.filter((item) => item.status === 'active').length,
+  needsAction: requests.value.filter((item) => item.current_contract?.status === 'admin_signed' || ['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)).length,
+}))
 
 async function load() {
   loading.value = true
@@ -25,21 +31,43 @@ async function load() {
 function contractActionLabel(item: any) {
   if (item.current_contract?.status === 'admin_signed') return 'Review contract'
   if (item.current_contract?.status === 'fully_signed') return 'View signed request'
+  if (['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)) return 'Open documents'
   return 'View details'
+}
+
+function contractActionRoute(item: any) {
+  if (item.current_contract?.status === 'admin_signed') return { name: 'client-request-sign', params: { id: item.id } }
+  if (['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)) return { name: 'client-request-documents', params: { id: item.id } }
+  return { name: 'client-request-details', params: { id: item.id } }
 }
 
 onMounted(load)
 </script>
 
 <template>
-  <section class="client-shell">
+  <section class="client-shell client-request-detail-shell">
     <div class="hero-card">
       <div>
         <p class="eyebrow">Client portal</p>
         <h1>My Requests</h1>
-        <p>Track your submitted requests, review contract status, and continue the next action when prompted.</p>
+        <p>Track request status, open contract actions, and move directly to the next client-side step when required.</p>
       </div>
       <RouterLink to="/dashboard" class="ghost-btn">Back to dashboard</RouterLink>
+    </div>
+
+    <div class="client-status-chip-grid client-status-chip-grid--summary">
+      <div class="client-status-chip-card">
+        <strong>{{ loading ? '…' : stats.total }}</strong>
+        <span>Total requests</span>
+      </div>
+      <div class="client-status-chip-card">
+        <strong>{{ loading ? '…' : stats.active }}</strong>
+        <span>Active</span>
+      </div>
+      <div class="client-status-chip-card">
+        <strong>{{ loading ? '…' : stats.needsAction }}</strong>
+        <span>Need action</span>
+      </div>
     </div>
 
     <div class="panel-card">
@@ -73,8 +101,7 @@ onMounted(load)
               <td>{{ item.workflow_stage }}</td>
               <td>{{ item.submitted_at ? new Date(item.submitted_at).toLocaleString() : '—' }}</td>
               <td>
-                <RouterLink v-if="item.current_contract?.status === 'admin_signed'" :to="{ name: 'client-request-sign', params: { id: item.id } }" class="primary-btn small-btn">{{ contractActionLabel(item) }}</RouterLink>
-                <RouterLink v-else :to="{ name: 'client-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ contractActionLabel(item) }}</RouterLink>
+                <RouterLink :to="contractActionRoute(item)" class="primary-btn small-btn">{{ contractActionLabel(item) }}</RouterLink>
               </td>
             </tr>
           </tbody>

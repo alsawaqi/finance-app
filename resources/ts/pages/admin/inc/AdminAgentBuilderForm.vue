@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { BankItem } from '@/services/banks'
 
 type AgentForm = {
   id: number | null
@@ -7,6 +8,7 @@ type AgentForm = {
   email: string
   phone: string
   company_name: string
+  bank_id: number | null
   agent_type: string
   notes: string
   is_active: boolean
@@ -16,6 +18,7 @@ const props = defineProps<{
   modelValue: AgentForm
   isEditing: boolean
   isSaving: boolean
+  banks: BankItem[]
   errors?: Record<string, string[]>
 }>()
 
@@ -59,6 +62,23 @@ function firstError(field: string) {
         <span>Name</span>
         <input :value="form.name" type="text" class="admin-form-input" :class="{ 'has-error': firstError('name') }" placeholder="Agent or contact name" @input="updateField('name', ($event.target as HTMLInputElement).value)" />
         <small v-if="firstError('name')" class="admin-form-error">{{ firstError('name') }}</small>
+      </label>
+
+      <label class="admin-form-field">
+        <span>Bank</span>
+        <select
+          class="admin-form-select"
+          :class="{ 'has-error': firstError('bank_id') }"
+          :value="form.bank_id ?? ''"
+          @change="updateField('bank_id', ($event.target as HTMLSelectElement).value ? Number(($event.target as HTMLSelectElement).value) : null)"
+        >
+          <option value="">Select a bank</option>
+          <option v-for="bank in banks" :key="bank.id" :value="bank.id">
+            {{ bank.name }}{{ bank.short_name ? ` · ${bank.short_name}` : '' }}{{ !bank.is_active ? ' (inactive)' : '' }}
+          </option>
+        </select>
+        <small v-if="firstError('bank_id')" class="admin-form-error">{{ firstError('bank_id') }}</small>
+        <small v-else-if="banks.length === 0" class="admin-form-hint">Create banks first from the Banks page.</small>
       </label>
 
       <label class="admin-form-field">

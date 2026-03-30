@@ -26,7 +26,7 @@ class AgentController extends Controller
 
         return response()->json([
             'message' => 'Agent created successfully.',
-            'data' => $this->serializeAgent($agent->fresh('creator')),
+            'data' => $this->serializeAgent($agent->fresh(['creator:id,name,email', 'bank:id,name,short_name,code'])),
         ], 201);
     }
 
@@ -36,7 +36,7 @@ class AgentController extends Controller
 
         return response()->json([
             'message' => 'Agent updated successfully.',
-            'data' => $this->serializeAgent($agent->fresh('creator')),
+            'data' => $this->serializeAgent($agent->fresh(['creator:id,name,email', 'bank:id,name,short_name,code'])),
         ]);
     }
 
@@ -50,26 +50,20 @@ class AgentController extends Controller
             'message' => $agent->is_active
                 ? 'Agent activated successfully.'
                 : 'Agent deactivated successfully.',
-            'data' => $this->serializeAgent($agent->fresh('creator')),
+            'data' => $this->serializeAgent($agent->fresh(['creator:id,name,email', 'bank:id,name,short_name,code'])),
         ]);
     }
 
-    /**
-     * @return array<int, array<string, mixed>>
-     */
     private function serializeAgents(): array
     {
         return Agent::query()
-            ->with('creator:id,name,email')
+            ->with(['creator:id,name,email', 'bank:id,name,short_name,code'])
             ->orderBy('name')
             ->get()
             ->map(fn (Agent $agent) => $this->serializeAgent($agent))
             ->all();
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     private function serializeAgent(Agent $agent): array
     {
         return [
@@ -78,6 +72,10 @@ class AgentController extends Controller
             'email' => $agent->email,
             'phone' => $agent->phone,
             'company_name' => $agent->company_name,
+            'bank_id' => $agent->bank_id,
+            'bank_name' => $agent->bank?->name,
+            'bank_short_name' => $agent->bank?->short_name,
+            'bank_code' => $agent->bank?->code,
             'agent_type' => $agent->agent_type,
             'notes' => $agent->notes,
             'is_active' => (bool) $agent->is_active,

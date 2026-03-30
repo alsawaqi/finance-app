@@ -1159,3 +1159,75 @@
     height: 180px;
   }
 }
+
+/* 2026-03-29 client workspace refinement */
+.financer-client .client-status-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.financer-client .client-status-chip-grid--summary {
+  margin-bottom: 20px;
+}
+.financer-client .client-status-chip-card,
+.financer-client .client-request-summary-card {
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
+  padding: 18px;
+}
+.financer-client .client-status-chip-card strong {
+  display: block;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+.financer-client .client-status-chip-card span {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+}
+.financer-client .client-accordion-stack {
+  display: grid;
+  gap: 18px;
+}
+.financer-client .client-accordion-card > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 22px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.financer-client .client-accordion-card > summary::-webkit-details-marker { display:none; }
+.financer-client .client-accordion-card > summary::after {
+  content: '\f078';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  color: #475569;
+  transition: transform .2s ease;
+}
+.financer-client .client-accordion-card[open] > summary::after { transform: rotate(180deg); }
+.financer-client .client-accordion-card > summary h2 { margin: 0; font-size: 1.08rem; color: #0f172a; }
+.financer-client .client-accordion-card > summary p { margin: 6px 0 0; color: #64748b; }
+.financer-client .client-accordion-card__body { padding: 0 24px 24px; }
+.financer-client .client-two-col-grid,
+.financer-client .client-request-summary-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:18px; }
+.financer-client .client-status-chip-grid,
+.financer-client .client-request-summary-grid { margin-top: 0; }
+.financer-client .client-request-summary-card .client-card-head { margin-bottom: 12px; }
+.financer-client .client-inline-actions--stackable { display:flex; flex-wrap: wrap; align-items:center; gap:12px; }
+.financer-client .client-inline-actions--stackable .client-form-control { flex:1 1 240px; }
+.financer-client .client-request-detail-shell .panel-card.slim-card { padding: 18px; }
+.financer-client .client-status-chip-card,
+.financer-client .client-request-summary-card,
+.financer-client .client-accordion-card { min-width: 0; }
+@media (max-width: 960px) {
+  .financer-client .client-status-chip-grid,
+  .financer-client .client-two-col-grid,
+  .financer-client .client-request-summary-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .financer-client .client-accordion-card > summary,
+  .financer-client .client-accordion-card__body { padding-left: 18px; padding-right: 18px; }
+}

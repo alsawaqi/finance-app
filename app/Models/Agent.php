@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -16,6 +16,7 @@ class Agent extends Model
         'email',
         'phone',
         'company_name',
+        'bank_id',
         'agent_type',
         'notes',
         'is_active',
@@ -25,6 +26,7 @@ class Agent extends Model
     protected function casts(): array
     {
         return [
+            'bank_id' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -32,6 +34,11 @@ class Agent extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function bank(): BelongsTo
+    {
+        return $this->belongsTo(Bank::class, 'bank_id');
     }
 
     public function requestEmails(): BelongsToMany
