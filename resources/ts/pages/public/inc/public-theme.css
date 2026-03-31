@@ -311,9 +311,15 @@
 
 .financer-home .main_header_inner {
   gap: 24px;
+  align-items: center;
 }
 
-financer-home .header_right_content 
+.financer-home .header_right_content {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
 
 .financer-home .main_header_logo img {
   max-width: 180px;
@@ -581,4 +587,28 @@ html[dir='rtl'] .financer-home .row {
   .financer-home .section_title h2 {
     line-height: 1.25;
   }
+}
+
+/* Professional spacing/alignment refinements */
+.financer-home .main_header,
+.financer-home .sticky_header {
+  backdrop-filter: saturate(145%) blur(8px);
+}
+
+.financer-home .main_footer .footer_top .row {
+  row-gap: 24px;
+}
+
+.financer-home .main_footer .footer_widget {
+  height: 100%;
+}
+
+@media (max-width: 575px) {
+  .financer-home .main_footer .footer_widget {
+    margin-bottom: 0;
+  }
+}
+
+html[dir='rtl'] .financer-home .header_right_content {
+  justify-content: flex-start;
 }
