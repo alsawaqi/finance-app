@@ -1,4 +1,4 @@
-import api from './api'
+ import api from './api'
 
 export type ClientQuestion = {
   id: number
@@ -63,6 +63,9 @@ export type ClientRequestDetails = ClientRequestSummary & {
   shareholders?: Array<{
     id: number
     shareholder_name: string
+    phone_country_code?: string | null
+    phone_number?: string | null
+    id_number?: string | null
     id_file_name: string
     id_file_path: string
     file_size?: number | null
@@ -99,17 +102,27 @@ export type ClientRequestDetails = ClientRequestSummary & {
 export type ClientRequestWizardPayload = {
   answers: Array<{ question_id: number; value: unknown }>
   details: {
-    full_name: string
-    country_code: string
-    requested_amount: string | number
-    finance_type: 'individual' | 'company'
-    company_name?: string
-    notes?: string
-  }
+      country: string
+      requested_amount: string | number
+      finance_type: 'individual' | 'company'
+      company_name?: string
+      company_cr_number?: string
+      email: string
+      phone_country_code: string
+      phone_number: string
+      unified_number: string
+      national_address_number: string
+      address: string
+      notes?: string
+    }
   attachments: File[]
+  national_address_attachment: File
   company_cr?: File | null
   shareholders?: Array<{
     name: string
+    phone_country_code: string
+    phone_number: string
+    id_number: string
     id_file?: File | null
   }>
 }
@@ -141,16 +154,24 @@ export async function submitClientRequest(payload: ClientRequestWizardPayload) {
     }
   })
 
-  formData.append('details[full_name]', payload.details.full_name)
-  formData.append('details[country_code]', payload.details.country_code)
+  formData.append('details[country]', payload.details.country)
   formData.append('details[requested_amount]', String(payload.details.requested_amount))
   formData.append('details[finance_type]', payload.details.finance_type)
   formData.append('details[company_name]', payload.details.company_name ?? '')
+  formData.append('details[company_cr_number]', payload.details.company_cr_number ?? '')
+  formData.append('details[email]', payload.details.email)
+  formData.append('details[phone_country_code]', payload.details.phone_country_code)
+  formData.append('details[phone_number]', payload.details.phone_number)
+  formData.append('details[unified_number]', payload.details.unified_number)
+  formData.append('details[national_address_number]', payload.details.national_address_number)
+  formData.append('details[address]', payload.details.address)
   formData.append('details[notes]', payload.details.notes ?? '')
 
   payload.attachments.forEach((file) => {
     formData.append('attachments[]', file)
   })
+
+  formData.append('national_address_attachment', payload.national_address_attachment)
 
   if (payload.company_cr) {
     formData.append('company_cr', payload.company_cr)
@@ -158,6 +179,10 @@ export async function submitClientRequest(payload: ClientRequestWizardPayload) {
 
   ;(payload.shareholders ?? []).forEach((shareholder, index) => {
     formData.append(`shareholders[${index}][name]`, shareholder.name)
+    formData.append(`shareholders[${index}][phone_country_code]`, shareholder.phone_country_code)
+    formData.append(`shareholders[${index}][phone_number]`, shareholder.phone_number)
+    formData.append(`shareholders[${index}][id_number]`, shareholder.id_number)
+
     if (shareholder.id_file) {
       formData.append(`shareholders[${index}][id_file]`, shareholder.id_file)
     }

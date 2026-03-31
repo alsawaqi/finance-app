@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+import { useI18n } from 'vue-i18n'
 import AdminBankBuilderForm from './inc/AdminBankBuilderForm.vue'
 import AdminBankLibraryTable from './inc/AdminBankLibraryTable.vue'
 import type { BankItem, BankPayload } from '@/services/banks'
@@ -21,6 +22,7 @@ const formError = ref('')
 const successMessage = ref('')
 const fieldErrors = ref<Record<string, string[]>>({})
 const form = ref<BankForm>(createDefaultForm())
+const { t } = useI18n()
 
 const isEditing = computed(() => form.value.id !== null)
 const stats = computed(() => {
@@ -30,10 +32,10 @@ const stats = computed(() => {
   const linkedAgents = rows.value.reduce((sum, item) => sum + item.agents_count, 0)
 
   return [
-    { label: 'Total banks', value: String(total), tone: 'emerald' },
-    { label: 'Active banks', value: String(active), tone: 'blue' },
-    { label: 'Inactive banks', value: String(inactive), tone: 'amber' },
-    { label: 'Linked agents', value: String(linkedAgents), tone: 'violet' },
+    { label: t('adminBanksPage.stats.totalBanks'), value: String(total), tone: 'emerald' },
+    { label: t('adminBanksPage.stats.activeBanks'), value: String(active), tone: 'blue' },
+    { label: t('adminBanksPage.stats.inactiveBanks'), value: String(inactive), tone: 'amber' },
+    { label: t('adminBanksPage.stats.linkedAgents'), value: String(linkedAgents), tone: 'violet' },
   ]
 })
 
@@ -79,7 +81,7 @@ async function fetchRows() {
     const { data } = await listBanks()
     rows.value = data.data
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to load banks right now.')
+    formError.value = extractErrorMessage(error, t('adminBanksPage.errors.loadFailed'))
   } finally {
     isLoading.value = false
   }
@@ -102,10 +104,10 @@ async function saveRow() {
     resetForm()
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      formError.value = error.response?.data?.message ?? 'Unable to save the bank.'
+      formError.value = error.response?.data?.message ?? t('adminBanksPage.errors.saveFailed')
       fieldErrors.value = error.response?.data?.errors ?? {}
     } else {
-      formError.value = 'Unable to save the bank.'
+      formError.value = t('adminBanksPage.errors.saveFailed')
     }
   } finally {
     isSaving.value = false
@@ -133,7 +135,7 @@ async function toggleRow(row: BankItem) {
     successMessage.value = data.message
     rows.value = rows.value.map((item) => (item.id === row.id ? data.data : item))
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to update bank status right now.')
+    formError.value = extractErrorMessage(error, t('adminBanksPage.errors.toggleFailed'))
   }
 }
 
@@ -150,20 +152,19 @@ function extractErrorMessage(error: unknown, fallback: string) {
   <div class="admin-question-page">
     <section class="admin-hero admin-reveal-up">
       <div class="admin-hero__content">
-        <span class="admin-hero__eyebrow">Bank Management</span>
-        <h2>Create the banks first, then link each agent to the correct bank from the agent page.</h2>
+        <span class="admin-hero__eyebrow">{{ t('adminBanksPage.hero.eyebrow') }}</span>
+        <h2>{{ t('adminBanksPage.hero.title') }}</h2>
         <p>
-          This page is for the main admin to manage the bank master list. Once the banks are available,
-          agent records can be linked cleanly and later filtered in request communications and reporting.
+          {{ t('adminBanksPage.hero.subtitle') }}
         </p>
       </div>
 
       <div class="admin-hero__actions">
         <button type="button" class="admin-primary-btn" :disabled="isSaving" @click="saveRow">
-          {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update bank' : 'Create bank' }}
+          {{ isSaving ? (isEditing ? t('adminBanksPage.actions.updating') : t('adminBanksPage.actions.saving')) : isEditing ? t('adminBanksPage.actions.updateBank') : t('adminBanksPage.actions.createBank') }}
         </button>
         <button type="button" class="admin-secondary-btn" @click="resetForm">
-          {{ isEditing ? 'Cancel edit' : 'Reset form' }}
+          {{ isEditing ? t('adminBanksPage.actions.cancelEdit') : t('adminBanksPage.actions.resetForm') }}
         </button>
       </div>
     </section>
@@ -191,30 +192,30 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
         <div class="admin-panel__head">
           <div>
-            <span class="admin-panel__eyebrow">Why banks matter</span>
-            <h2>Master list before agents</h2>
+            <span class="admin-panel__eyebrow">{{ t('adminBanksPage.notes.eyebrow') }}</span>
+            <h2>{{ t('adminBanksPage.notes.title') }}</h2>
           </div>
         </div>
 
         <div class="admin-question-preview__notes">
           <article class="admin-question-preview__note">
-            <span>Agent linkage</span>
-            <strong>Every agent can be linked to a bank from the agent builder form.</strong>
+            <span>{{ t('adminBanksPage.notes.agentLinkageLabel') }}</span>
+            <strong>{{ t('adminBanksPage.notes.agentLinkageValue') }}</strong>
           </article>
           <article class="admin-question-preview__note">
-            <span>Staff composer</span>
-            <strong>Staff will later filter agents by bank before preparing request emails.</strong>
+            <span>{{ t('adminBanksPage.notes.staffComposerLabel') }}</span>
+            <strong>{{ t('adminBanksPage.notes.staffComposerValue') }}</strong>
           </article>
           <article class="admin-question-preview__note">
-            <span>Reporting</span>
-            <strong>Bank-linked agents will later support admin reporting by bank, agent, and request.</strong>
+            <span>{{ t('adminBanksPage.notes.reportingLabel') }}</span>
+            <strong>{{ t('adminBanksPage.notes.reportingValue') }}</strong>
           </article>
         </div>
 
         <div class="admin-pill-list">
-          <span class="admin-chip admin-chip--violet">admin master data</span>
-          <span class="admin-chip admin-chip--blue">agent linkage ready</span>
-          <span class="admin-chip admin-chip--emerald">reporting foundation</span>
+          <span class="admin-chip admin-chip--violet">{{ t('adminBanksPage.chips.masterData') }}</span>
+          <span class="admin-chip admin-chip--blue">{{ t('adminBanksPage.chips.linkageReady') }}</span>
+          <span class="admin-chip admin-chip--emerald">{{ t('adminBanksPage.chips.reportingFoundation') }}</span>
         </div>
       </section>
     </div>

@@ -8,7 +8,7 @@ export type AppLocale = (typeof SUPPORTED_LOCALES)[number]
 
 export const LOCALE_STORAGE_KEY = 'finance-app-locale'
 
-const DEFAULT_LOCALE: AppLocale = 'en'
+const DEFAULT_LOCALE: AppLocale = 'ar'
 
 function isSupportedLocale(value: string | null | undefined): value is AppLocale {
   return value === 'en' || value === 'ar'

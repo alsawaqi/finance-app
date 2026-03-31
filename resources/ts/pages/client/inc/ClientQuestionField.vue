@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ClientQuestion } from '@/services/clientRequests'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   question: ClientQuestion
@@ -10,6 +11,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: unknown): void
 }>()
+
+const { t } = useI18n()
 
 function updateText(event: Event) {
   emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value)
@@ -66,7 +69,7 @@ function isChecked(option: string) {
       :value="(modelValue as string | undefined) ?? ''"
       @change="updateText"
     >
-      <option value="">Choose an option</option>
+      <option value="">{{ t('clientQuestionField.chooseOption') }}</option>
       <option v-for="option in question.options_json || []" :key="option" :value="option">
         {{ option }}
       </option>

@@ -26,11 +26,14 @@ import AdminDocumentUploadStepsPage from '@/pages/admin/AdminDocumentUploadSteps
 import AdminStaffPage from '@/pages/admin/AdminStaffPage.vue'
 import AdminBanksPage from '@/pages/admin/AdminBanksPage.vue'
 import AdminCategorizationPage from '@/pages/admin/AdminCategorizationPage.vue'
+import AdminRequestFilteringPage from '@/pages/admin/AdminRequestFilteringPage.vue'
+import AdminClientsOverviewPage from '@/pages/admin/AdminClientsOverviewPage.vue'
 import AdminAgentsPage from '@/pages/admin/AdminAgentsPage.vue'
 import AdminNewRequestsPage from '@/pages/admin/AdminNewRequestsPage.vue'
 import AdminRequestDetailsPage from '@/pages/admin/AdminRequestDetailsPage.vue'
 import AdminContractBuilderPage from '@/pages/admin/AdminContractBuilderPage.vue'
 import AdminAssignmentsPage from '@/pages/admin/AdminAssignmentsPage.vue'
+import AdminAssignmentDetailsPage from '@/pages/admin/AdminAssignmentDetailsPage.vue'
 import StaffRequestsPage from '@/pages/admin/StaffRequestsPage.vue'
 import StaffRequestDetailsPage from '@/pages/admin/StaffRequestDetailsPage.vue'
 
@@ -73,8 +76,11 @@ const router = createRouter({
         { path: 'staff', name: 'admin-staff', component: AdminStaffPage },
         { path: 'banks', name: 'admin-banks', component: AdminBanksPage, meta: { allowedRoles: ['admin'] } },
         { path: 'categorization', name: 'admin-categorization', component: AdminCategorizationPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'request-filtration', name: 'admin-request-filtration', component: AdminRequestFilteringPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'clients-overview', name: 'admin-clients-overview', component: AdminClientsOverviewPage, meta: { allowedRoles: ['admin'] } },
         { path: 'agents', name: 'admin-agents', component: AdminAgentsPage },
         { path: 'assignments', name: 'admin-assignments', component: AdminAssignmentsPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'assignments/:id', name: 'admin-assignment-details', component: AdminAssignmentDetailsPage, meta: { allowedRoles: ['admin'] } },
         { path: 'assigned-requests', name: 'staff-requests', component: StaffRequestsPage },
         { path: 'assigned-requests/:id', name: 'staff-request-details', component: StaffRequestDetailsPage },
         { path: 'requests/new', name: 'admin-new-requests', component: AdminNewRequestsPage },

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 type StaffForm = {
   id: number | null
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: 'save'): void
   (e: 'reset'): void
 }>()
+const { t } = useI18n()
 
 const form = computed({
   get: () => props.modelValue,
@@ -56,87 +58,87 @@ function firstError(field: string) {
   <section class="admin-panel admin-reveal-up admin-reveal-delay-1">
     <div class="admin-panel__head">
       <div>
-        <span class="admin-panel__eyebrow">{{ isEditing ? 'Edit staff' : 'Create staff' }}</span>
-        <h2>Staff account setup</h2>
+        <span class="admin-panel__eyebrow">{{ isEditing ? t('adminStaffBuilder.eyebrow.edit') : t('adminStaffBuilder.eyebrow.create') }}</span>
+        <h2>{{ t('adminStaffBuilder.title') }}</h2>
       </div>
       <button type="button" class="admin-panel__action" @click="$emit('reset')">
-        {{ isEditing ? 'Cancel edit' : 'Clear' }}
+        {{ isEditing ? t('adminStaffBuilder.actions.cancelEdit') : t('adminStaffBuilder.actions.clear') }}
       </button>
     </div>
 
     <div class="admin-form-grid admin-form-grid--2">
       <label class="admin-form-field">
-        <span>Full name</span>
+        <span>{{ t('adminStaffBuilder.fields.fullName') }}</span>
         <input
           :value="form.name"
           type="text"
           class="admin-form-input"
           :class="{ 'has-error': firstError('name') }"
-          placeholder="Enter staff full name"
+          :placeholder="t('adminStaffBuilder.placeholders.fullName')"
           @input="updateField('name', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('name')" class="admin-form-error">{{ firstError('name') }}</small>
       </label>
 
       <label class="admin-form-field">
-        <span>Email address</span>
+        <span>{{ t('adminStaffBuilder.fields.email') }}</span>
         <input
           :value="form.email"
           type="email"
           class="admin-form-input"
           :class="{ 'has-error': firstError('email') }"
-          placeholder="staff@example.com"
+          :placeholder="t('adminStaffBuilder.placeholders.email')"
           @input="updateField('email', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('email')" class="admin-form-error">{{ firstError('email') }}</small>
       </label>
 
       <label class="admin-form-field">
-        <span>Phone</span>
+        <span>{{ t('adminStaffBuilder.fields.phone') }}</span>
         <input
           :value="form.phone"
           type="text"
           class="admin-form-input"
           :class="{ 'has-error': firstError('phone') }"
-          placeholder="Optional phone number"
+          :placeholder="t('adminStaffBuilder.placeholders.phone')"
           @input="updateField('phone', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('phone')" class="admin-form-error">{{ firstError('phone') }}</small>
       </label>
 
       <label class="admin-form-field">
-        <span>Account type</span>
+        <span>{{ t('adminStaffBuilder.fields.accountType') }}</span>
         <input value="staff" type="text" class="admin-form-input" disabled />
-        <small class="admin-form-help">Staff users share the admin workspace but can be limited by permissions.</small>
+        <small class="admin-form-help">{{ t('adminStaffBuilder.help.accountType') }}</small>
       </label>
 
       <label class="admin-form-field">
-        <span>{{ isEditing ? 'New password' : 'Password' }}</span>
+        <span>{{ isEditing ? t('adminStaffBuilder.fields.newPassword') : t('adminStaffBuilder.fields.password') }}</span>
         <input
           :value="form.password"
           type="password"
           class="admin-form-input"
           :class="{ 'has-error': firstError('password') }"
-          :placeholder="isEditing ? 'Leave blank to keep current password' : 'Minimum 8 characters'"
+          :placeholder="isEditing ? t('adminStaffBuilder.placeholders.newPassword') : t('adminStaffBuilder.placeholders.password')"
           @input="updateField('password', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('password')" class="admin-form-error">{{ firstError('password') }}</small>
       </label>
 
       <label class="admin-form-field">
-        <span>{{ isEditing ? 'Confirm new password' : 'Confirm password' }}</span>
+        <span>{{ isEditing ? t('adminStaffBuilder.fields.confirmNewPassword') : t('adminStaffBuilder.fields.confirmPassword') }}</span>
         <input
           :value="form.password_confirmation"
           type="password"
           class="admin-form-input"
           :class="{ 'has-error': firstError('password_confirmation') }"
-          placeholder="Repeat password"
+          :placeholder="t('adminStaffBuilder.placeholders.confirmPassword')"
           @input="updateField('password_confirmation', ($event.target as HTMLInputElement).value)"
         />
       </label>
 
       <div class="admin-form-field admin-form-field--full">
-        <span>Direct permissions</span>
+        <span>{{ t('adminStaffBuilder.fields.directPermissions') }}</span>
         <div class="admin-permission-grid">
           <label v-for="permission in availablePermissions" :key="permission" class="admin-check-card">
             <input
@@ -146,7 +148,7 @@ function firstError(field: string) {
             />
             <div>
               <strong>{{ permission }}</strong>
-              <span>Grant this permission directly to the staff member.</span>
+              <span>{{ t('adminStaffBuilder.help.directPermission') }}</span>
             </div>
           </label>
         </div>
@@ -161,8 +163,8 @@ function firstError(field: string) {
             @change="updateField('is_active', ($event.target as HTMLInputElement).checked)"
           />
           <div>
-            <strong>Active account</strong>
-            <span>Inactive staff can no longer use the admin workspace.</span>
+            <strong>{{ t('adminStaffBuilder.switches.activeTitle') }}</strong>
+            <span>{{ t('adminStaffBuilder.switches.activeDesc') }}</span>
           </div>
         </label>
       </div>
@@ -170,10 +172,10 @@ function firstError(field: string) {
 
     <div class="admin-form-actions">
       <button type="button" class="admin-primary-btn" :disabled="isSaving" @click="$emit('save')">
-        {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update staff' : 'Create staff' }}
+        {{ isSaving ? (isEditing ? t('adminStaffBuilder.actions.updating') : t('adminStaffBuilder.actions.saving')) : isEditing ? t('adminStaffBuilder.actions.updateStaff') : t('adminStaffBuilder.actions.createStaff') }}
       </button>
       <button type="button" class="admin-secondary-btn" @click="$emit('reset')">
-        {{ isEditing ? 'Cancel edit' : 'Reset' }}
+        {{ isEditing ? t('adminStaffBuilder.actions.cancelEdit') : t('adminStaffBuilder.actions.reset') }}
       </button>
     </div>
   </section>

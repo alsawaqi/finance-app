@@ -13,6 +13,9 @@ class FinanceRequestShareholder extends Model
     protected $fillable = [
         'finance_request_id',
         'shareholder_name',
+        'phone_country_code',
+        'phone_number',
+        'id_number',
         'id_file_name',
         'id_file_path',
         'disk',

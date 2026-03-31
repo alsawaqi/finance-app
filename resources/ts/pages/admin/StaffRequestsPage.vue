@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { getStaffRequests, type StaffWorkspaceRequestSummary } from '@/services/staffWorkspace'
 import { countryNameFromCode } from '@/utils/countries'
 import { intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
@@ -10,6 +11,7 @@ const errorMessage = ref('')
 const search = ref('')
 const workflowStage = ref('')
 const requests = ref<StaffWorkspaceRequestSummary[]>([])
+const { t } = useI18n()
 
 const availableStages = computed(() => ['document_collection', 'awaiting_additional_documents', 'processing', 'completed'])
 
@@ -24,7 +26,7 @@ async function load() {
     })
     requests.value = data.requests ?? []
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to load assigned requests.'
+    errorMessage.value = error?.response?.data?.message || t('staffRequests.errors.loadFailed')
   } finally {
     loading.value = false
   }
@@ -37,62 +39,62 @@ onMounted(load)
   <section class="admin-page-shell">
     <div class="page-topbar">
       <div>
-        <p class="eyebrow">Staff workspace</p>
-        <h1>Assigned Requests</h1>
-        <p class="subtext">View every request currently assigned to you, track progress, and open the request workspace for comments and follow-up.</p>
+        <p class="eyebrow">{{ t('staffRequests.hero.eyebrow') }}</p>
+        <h1>{{ t('staffRequests.hero.title') }}</h1>
+        <p class="subtext">{{ t('staffRequests.hero.subtitle') }}</p>
       </div>
       <div class="actions-row">
-        <button class="ghost-btn" type="button" @click="load">Refresh</button>
+        <button class="ghost-btn" type="button" @click="load">{{ t('staffRequests.actions.refresh') }}</button>
       </div>
     </div>
 
     <article class="panel-card">
       <div class="panel-head">
         <div>
-          <h2>Filters</h2>
-          <p class="subtext">Narrow the queue by request reference, client, or current workflow stage.</p>
+          <h2>{{ t('staffRequests.filters.title') }}</h2>
+          <p class="subtext">{{ t('staffRequests.filters.subtitle') }}</p>
         </div>
       </div>
 
       <div class="filter-bar">
         <div class="field-block">
-          <span>Search</span>
-          <input v-model="search" type="text" class="admin-input" placeholder="Request reference, approval reference, client name or email" />
+          <span>{{ t('staffRequests.filters.search') }}</span>
+          <input v-model="search" type="text" class="admin-input" :placeholder="t('staffRequests.filters.searchPlaceholder')" />
         </div>
         <div class="field-block">
-          <span>Stage</span>
+          <span>{{ t('staffRequests.filters.stage') }}</span>
           <select v-model="workflowStage" class="admin-select">
-            <option value="">All stages</option>
+            <option value="">{{ t('staffRequests.filters.allStages') }}</option>
             <option v-for="stage in availableStages" :key="stage" :value="stage">{{ stage }}</option>
           </select>
         </div>
         <div class="filter-actions">
-          <button class="primary-btn" type="button" @click="load">Apply filters</button>
+          <button class="primary-btn" type="button" @click="load">{{ t('staffRequests.actions.applyFilters') }}</button>
         </div>
       </div>
     </article>
 
     <article class="panel-card">
       <div class="panel-head">
-        <h2>Assigned request queue</h2>
-        <span class="count-pill">{{ requests.length }} requests</span>
+        <h2>{{ t('staffRequests.table.title') }}</h2>
+        <span class="count-pill">{{ t('staffRequests.table.count', { count: requests.length }) }}</span>
       </div>
 
-      <p v-if="loading" class="empty-state">Loading assigned requests…</p>
+      <p v-if="loading" class="empty-state">{{ t('staffRequests.states.loading') }}</p>
       <p v-else-if="errorMessage" class="error-state">{{ errorMessage }}</p>
-      <p v-else-if="!requests.length" class="empty-state">No requests are currently assigned to your workspace.</p>
+      <p v-else-if="!requests.length" class="empty-state">{{ t('staffRequests.states.empty') }}</p>
 
       <div v-else class="table-wrap">
         <table class="request-table">
           <thead>
             <tr>
-              <th>Request</th>
-              <th>Client</th>
-              <th>Country</th>
-              <th>Finance Type</th>
-              <th>Comments</th>
-              <th>Last Activity</th>
-              <th>Stage</th>
+              <th>{{ t('staffRequests.table.request') }}</th>
+              <th>{{ t('staffRequests.table.client') }}</th>
+              <th>{{ t('staffRequests.table.country') }}</th>
+              <th>{{ t('staffRequests.table.financeType') }}</th>
+              <th>{{ t('staffRequests.table.comments') }}</th>
+              <th>{{ t('staffRequests.table.lastActivity') }}</th>
+              <th>{{ t('staffRequests.table.stage') }}</th>
               <th></th>
             </tr>
           </thead>
@@ -100,11 +102,11 @@ onMounted(load)
             <tr v-for="item in requests" :key="item.id">
               <td>
                 <strong>{{ item.reference_number }}</strong>
-                <div class="muted-small">{{ item.approval_reference_number || 'Awaiting approval ref' }}</div>
+                <div class="muted-small">{{ item.approval_reference_number || t('staffRequests.states.awaitingApprovalRef') }}</div>
               </td>
               <td>
-                <strong>{{ intakeFullName(item.intake_details_json, item.client?.name || 'Client') }}</strong>
-                <div class="muted-small">{{ item.client?.email || '—' }}</div>
+                <strong>{{ intakeFullName(item.intake_details_json, item.client?.name || t('staffRequests.states.clientFallback')) }}</strong>
+                <div class="muted-small">{{ item.client?.email || t('staffRequests.states.emptyValue') }}</div>
               </td>
               <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json)) }}</td>
               <td>
@@ -112,10 +114,10 @@ onMounted(load)
                 <div class="muted-small">{{ intakeRequestedAmount(item.intake_details_json) }}</div>
               </td>
               <td>{{ item.comments_count || 0 }}</td>
-              <td>{{ item.latest_activity_at ? new Date(item.latest_activity_at).toLocaleString() : '—' }}</td>
+              <td>{{ item.latest_activity_at ? new Date(item.latest_activity_at).toLocaleString() : t('staffRequests.states.emptyValue') }}</td>
               <td><span class="status-badge">{{ item.workflow_stage }}</span></td>
               <td>
-                <RouterLink :to="{ name: 'staff-request-details', params: { id: item.id } }" class="primary-btn small-btn">View</RouterLink>
+                <RouterLink :to="{ name: 'staff-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('staffRequests.actions.view') }}</RouterLink>
               </td>
             </tr>
           </tbody>

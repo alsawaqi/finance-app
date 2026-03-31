@@ -40,6 +40,13 @@
 
 .financer-home .main_header_menu .nav-outer {
   display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.financer-home .main_header_menu .nav-outer::-webkit-scrollbar {
+  display: none;
 }
 
 .financer-home .main-menu .navigation {
@@ -47,6 +54,9 @@
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
+  gap: 2px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .financer-home .sticky_header .main_header_menu {
@@ -61,6 +71,9 @@
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
+  gap: 2px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .financer-home .sticky_header {
@@ -78,6 +91,10 @@
   display: block;
   padding: 2px 0;
   cursor: pointer;
+}
+
+.financer-home .main-menu .navigation > li {
+  flex: 0 0 auto;
 }
 
 .financer-home .main-menu .navigation > li {
@@ -163,6 +180,12 @@
 
   .financer-home .main-menu .navigation > li > a {
     font-size: 14px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .financer-home .main_header_menu .main-menu .navigation > li > a {
+    font-size: 15px;
   }
 }
 
@@ -272,5 +295,290 @@
 @media (max-width: 767px) {
   .financer-home .home-testimonial-track {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* --- Shared responsive + RTL refresh --- */
+.financer-home,
+.financer-home .boxed_wrapper,
+.financer-home .container,
+.financer-home .row,
+.financer-home .main_header_inner,
+.financer-home .header_right_content {
+  min-width: 0;
+}
+
+.financer-home .main_header_inner {
+  gap: 24px;
+}
+
+financer-home .header_right_content 
+
+.financer-home .main_header_logo img {
+  max-width: 180px;
+  height: auto;
+}
+
+.financer-home .main-menu .navigation > li > a,
+.financer-home .main-menu .navigation > li > span,
+.financer-home .main-menu .navigation > li > .router-link-active {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.financer-home .main-menu .navigation > li > ul,
+.financer-home .main-menu .navigation > li > .megamenu,
+.financer-home .main-menu .navigation li > ul > li > ul {
+  text-align: left;
+}
+
+.financer-home .page-title .content-box,
+.financer-home .about_page_banner .banner_content,
+.financer-home .feature_content_block,
+.financer-home .feature_image_block,
+.financer-home .why_choose_block_two,
+.financer-home .service_block_one,
+.financer-home .project_block_one,
+.financer-home .news_block_one,
+.financer-home .testimonial_block_one,
+.financer-home .faq_content,
+.financer-home .contact-info,
+.financer-home .footer_widget,
+.financer-home .feature_image,
+.financer-home .content_block_one,
+.financer-home .content_block_two {
+  min-width: 0;
+}
+
+html[dir='rtl'] .financer-home {
+  direction: rtl;
+}
+
+html[dir='rtl'] .financer-home,
+html[dir='rtl'] .financer-home h1,
+html[dir='rtl'] .financer-home h2,
+html[dir='rtl'] .financer-home h3,
+html[dir='rtl'] .financer-home h4,
+html[dir='rtl'] .financer-home h5,
+html[dir='rtl'] .financer-home h6,
+html[dir='rtl'] .financer-home p,
+html[dir='rtl'] .financer-home li,
+html[dir='rtl'] .financer-home a,
+html[dir='rtl'] .financer-home span {
+  font-family: 'Tajawal', 'Inter', Tahoma, Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+html[dir='rtl'] .financer-home .main_header_inner,
+html[dir='rtl'] .financer-home .sticky_header .main_header_inner,
+html[dir='rtl'] .financer-home .header_right_content,
+html[dir='rtl'] .financer-home .main_header_menu,
+html[dir='rtl'] .financer-home .main-menu .navigation,
+html[dir='rtl'] .financer-home .contact-info ul,
+html[dir='rtl'] .financer-home .social-links {
+  direction: rtl;
+}
+
+html[dir='rtl'] .financer-home .main_header_logo,
+html[dir='rtl'] .financer-home .header_right_content,
+html[dir='rtl'] .financer-home .header-language-switcher,
+html[dir='rtl'] .financer-home .page-title .content-box,
+html[dir='rtl'] .financer-home .about_page_banner .banner_content,
+html[dir='rtl'] .financer-home .feature_content_block,
+html[dir='rtl'] .financer-home .faq_content,
+html[dir='rtl'] .financer-home .section_title,
+html[dir='rtl'] .financer-home .contact-info,
+html[dir='rtl'] .financer-home .footer_widget {
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .section_title.centred,
+html[dir='rtl'] .financer-home .banner_content.centred,
+html[dir='rtl'] .financer-home .content-box.centred,
+html[dir='rtl'] .financer-home .social-links.centred {
+  text-align: center;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation > li > ul,
+html[dir='rtl'] .financer-home .main-menu .navigation > li > .megamenu {
+  left: auto;
+  right: 0;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation li > ul > li > ul {
+  left: auto;
+  right: 100%;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .menu-box {
+  right: 0;
+  left: auto;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li > a {
+  padding-right: 24px;
+  padding-left: 60px;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li ul li > a {
+  padding-right: 44px;
+  padding-left: 24px;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li.dropdown .dropdown-btn {
+  right: auto;
+  left: 10px;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li.dropdown .dropdown-btn i,
+html[dir='rtl'] .financer-home .link_btn i,
+html[dir='rtl'] .financer-home .btn_style_one i,
+html[dir='rtl'] .financer-home .theme-btn i,
+html[dir='rtl'] .financer-home .fa-angle-right {
+  transform: scaleX(-1);
+}
+
+html[dir='rtl'] .financer-home .accordion_box .acc-btn,
+html[dir='rtl'] .financer-home .faq-section .accordion-box .block .acc-btn,
+html[dir='rtl'] .financer-home .feature_content_block .accordion_box .acc-btn {
+  text-align: right;
+}
+html[dir='rtl'] .financer-home .main_header_inner,
+html[dir='rtl'] .financer-home .header_right_content {
+  flex-direction: row-reverse;
+}
+
+html[dir='rtl'] .financer-home .main_header_menu {
+  justify-content: center;
+}
+
+html[dir='rtl'] .financer-home .main_header_menu .nav-outer {
+  direction: rtl;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation {
+  justify-content: flex-start;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation > li {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation > li > a {
+  font-size: 14px;
+}
+
+html[dir='rtl'] .financer-home .main_header_logo,
+html[dir='rtl'] .financer-home .header_right_content,
+html[dir='rtl'] .financer-home .header-language-switcher,
+html[dir='rtl'] .financer-home .page-title .content-box,
+html[dir='rtl'] .financer-home .about_page_banner .banner_content,
+html[dir='rtl'] .financer-home .feature_content_block,
+html[dir='rtl'] .financer-home .faq_content,
+html[dir='rtl'] .financer-home .section_title,
+html[dir='rtl'] .financer-home .contact-info,
+html[dir='rtl'] .financer-home .footer_widget {
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .section_title.centred,
+html[dir='rtl'] .financer-home .banner_content.centred,
+html[dir='rtl'] .financer-home .content-box.centred,
+html[dir='rtl'] .financer-home .social-links.centred {
+  text-align: center;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation > li > ul,
+html[dir='rtl'] .financer-home .main-menu .navigation > li > .megamenu {
+  left: auto;
+  right: 0;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation li > ul > li > ul {
+  left: auto;
+  right: 100%;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .main-menu .navigation > li > a,
+html[dir='rtl'] .financer-home .main-menu .navigation > li > span,
+html[dir='rtl'] .financer-home .main-menu .navigation > li > .router-link-active {
+  justify-content: center;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .menu-box {
+  right: 0;
+  left: auto;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li > a {
+  padding-right: 24px;
+  padding-left: 60px;
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li ul li > a {
+  padding-right: 44px;
+  padding-left: 24px;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li.dropdown .dropdown-btn {
+  right: auto;
+  left: 10px;
+}
+
+html[dir='rtl'] .financer-home .mobile-menu .navigation li.dropdown .dropdown-btn i,
+html[dir='rtl'] .financer-home .link_btn i,
+html[dir='rtl'] .financer-home .btn_style_one i,
+html[dir='rtl'] .financer-home .theme-btn i,
+html[dir='rtl'] .financer-home .fa-angle-right {
+  transform: scaleX(-1);
+}
+
+html[dir='rtl'] .financer-home .accordion_box .acc-btn,
+html[dir='rtl'] .financer-home .faq-section .accordion-box .block .acc-btn,
+html[dir='rtl'] .financer-home .feature_content_block .accordion_box .acc-btn {
+  text-align: right;
+}
+
+html[dir='rtl'] .financer-home .home-testimonial-track,
+html[dir='rtl'] .financer-home .row {
+  direction: rtl;
+}
+
+@media (max-width: 1199px) {
+  .financer-home .main_header_inner {
+    gap: 12px;
+  }
+
+  .financer-home .header_right_content {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 991px) {
+  .financer-home .header_right_content {
+    display: none;
+  }
+
+  .financer-home .main_header_logo img {
+    max-width: 150px;
+  }
+}
+
+@media (max-width: 767px) {
+  .financer-home .page-title .content-box h1,
+  .financer-home .about_page_banner .banner_content h1,
+  .financer-home .section_title h2 {
+    line-height: 1.25;
   }
 }

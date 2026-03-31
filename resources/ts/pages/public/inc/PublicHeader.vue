@@ -3,13 +3,11 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { useAppLocale } from '@/composables/useAppLocale'
-import type { AppLocale } from '@/i18n'
+import AppLocaleSelect from './AppLocaleSelect.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
 const { t } = useI18n()
-const { currentLocale, localeOptions, changeLocale } = useAppLocale()
 
 if (!auth.initialized) {
   auth.init()
@@ -21,12 +19,6 @@ const isDashboardActive = computed(() => route.path.startsWith('/dashboard') || 
 
 function isActive(path: string) {
   return route.path === path
-}
-
-function onLocaleChange(event: Event) {
-  const target = event.target as HTMLSelectElement | null
-  if (!target) return
-  changeLocale(target.value as AppLocale)
 }
 
 defineProps<{
@@ -78,8 +70,8 @@ defineEmits<{
                     <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
-                      <li><a href="#" @click.prevent>Services Two</a></li>
-                      <li><a href="#" @click.prevent>Service Details</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.servicesTwo') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.serviceDetails') }}</a></li>
                     </ul>
                   </li>
 
@@ -87,24 +79,24 @@ defineEmits<{
                     <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
-                      <li><a href="#" @click.prevent>Project Details</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.projectDetails') }}</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
                     <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Faq's</a></li>
-                      <li><a href="#" @click.prevent>Error Page</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.faq') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.errorPage') }}</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
                     <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Blog Grid</a></li>
-                      <li><a href="#" @click.prevent>Blog Standard</a></li>
-                      <li><a href="#" @click.prevent>Blog Details</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogGrid') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogStandard') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogDetails') }}</a></li>
                     </ul>
                   </li>
 
@@ -116,24 +108,7 @@ defineEmits<{
 
           <div class="header_right_content auth-header-actions-wrap">
             <div class="header-language-switcher">
-              <label class="visually-hidden" for="public-language-switcher">{{ t('common.languageLabel') }}</label>
-              <div class="language-select-shell">
-                <span class="language-select-icon"><i class="fa-solid fa-earth-asia"></i></span>
-                <select
-                  id="public-language-switcher"
-                  class="language-select"
-                  :value="currentLocale"
-                  @change="onLocaleChange"
-                >
-                  <option
-                    v-for="option in localeOptions"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </select>
-              </div>
+              <AppLocaleSelect id="public-language-switcher" mode="public" />
             </div>
 
             <button class="search-toggler" @click="$emit('open-search')">
@@ -199,8 +174,8 @@ defineEmits<{
                     <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
-                      <li><a href="#" @click.prevent>Services Two</a></li>
-                      <li><a href="#" @click.prevent>Service Details</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.servicesTwo') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.serviceDetails') }}</a></li>
                     </ul>
                   </li>
 
@@ -208,24 +183,24 @@ defineEmits<{
                     <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
                     <ul>
                       <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
-                      <li><a href="#" @click.prevent>Project Details</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.projectDetails') }}</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
                     <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Faq's</a></li>
-                      <li><a href="#" @click.prevent>Error Page</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.faq') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.errorPage') }}</a></li>
                     </ul>
                   </li>
 
                   <li class="dropdown">
                     <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
                     <ul>
-                      <li><a href="#" @click.prevent>Blog Grid</a></li>
-                      <li><a href="#" @click.prevent>Blog Standard</a></li>
-                      <li><a href="#" @click.prevent>Blog Details</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogGrid') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogStandard') }}</a></li>
+                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogDetails') }}</a></li>
                     </ul>
                   </li>
 
@@ -237,24 +212,7 @@ defineEmits<{
 
           <div class="header_right_content auth-header-actions-wrap">
             <div class="header-language-switcher">
-              <label class="visually-hidden" for="public-language-switcher-sticky">{{ t('common.languageLabel') }}</label>
-              <div class="language-select-shell">
-                <span class="language-select-icon"><i class="fa-solid fa-earth-asia"></i></span>
-                <select
-                  id="public-language-switcher-sticky"
-                  class="language-select"
-                  :value="currentLocale"
-                  @change="onLocaleChange"
-                >
-                  <option
-                    v-for="option in localeOptions"
-                    :key="`sticky-${option.value}`"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </select>
-              </div>
+              <AppLocaleSelect id="public-language-switcher-sticky" mode="public" />
             </div>
 
             <button class="search-toggler" @click="$emit('open-search')">
@@ -305,24 +263,7 @@ defineEmits<{
         </div>
 
         <div class="mobile-language-switcher">
-          <label class="visually-hidden" for="mobile-language-switcher">{{ t('common.languageLabel') }}</label>
-          <div class="language-select-shell mobile-language-select-shell">
-            <span class="language-select-icon"><i class="fa-solid fa-earth-asia"></i></span>
-            <select
-              id="mobile-language-switcher"
-              class="language-select"
-              :value="currentLocale"
-              @change="onLocaleChange"
-            >
-              <option
-                v-for="option in localeOptions"
-                :key="`mobile-${option.value}`"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
-          </div>
+          <AppLocaleSelect id="mobile-language-switcher" mode="mobile" />
         </div>
 
         <div class="mobile-auth-actions" v-if="!isAuthenticated">
@@ -379,8 +320,8 @@ defineEmits<{
               </div>
               <ul :style="{ display: mobileDropdowns.services ? 'block' : 'none' }">
                 <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
-                <li><a href="#" @click.prevent>Services Two</a></li>
-                <li><a href="#" @click.prevent>Service Details</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.servicesTwo') }}</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.serviceDetails') }}</a></li>
               </ul>
             </li>
 
@@ -391,7 +332,7 @@ defineEmits<{
               </div>
               <ul :style="{ display: mobileDropdowns.project ? 'block' : 'none' }">
                 <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
-                <li><a href="#" @click.prevent>Project Details</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.projectDetails') }}</a></li>
               </ul>
             </li>
 
@@ -401,8 +342,8 @@ defineEmits<{
                 <i class="fa fa-angle-right"></i>
               </div>
               <ul :style="{ display: mobileDropdowns.pages ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>Faq's</a></li>
-                <li><a href="#" @click.prevent>Error Page</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.faq') }}</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.errorPage') }}</a></li>
               </ul>
             </li>
 
@@ -412,9 +353,9 @@ defineEmits<{
                 <i class="fa fa-angle-right"></i>
               </div>
               <ul :style="{ display: mobileDropdowns.news ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>Blog Grid</a></li>
-                <li><a href="#" @click.prevent>Blog Standard</a></li>
-                <li><a href="#" @click.prevent>Blog Details</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.blogGrid') }}</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.blogStandard') }}</a></li>
+                <li><a href="#" @click.prevent>{{ t('publicHeader.blogDetails') }}</a></li>
               </ul>
             </li>
 
@@ -455,49 +396,11 @@ defineEmits<{
   align-items: center;
 }
 
-.language-select-shell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-width: 158px;
-  height: 48px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-  overflow: hidden;
-}
-
-.language-select-icon {
-  position: absolute;
-  left: 16px;
-  color: #475569;
-  pointer-events: none;
-  font-size: 14px;
-}
-
-.language-select {
-  width: 100%;
-  height: 100%;
-  padding: 0 38px 0 42px;
-  border: none;
-  background: transparent;
-  color: #0f172a;
-  font-size: 14px;
-  font-weight: 700;
-  outline: none;
-  appearance: none;
-  cursor: pointer;
-}
 
 .mobile-language-switcher {
   padding: 16px 0 6px;
 }
 
-.mobile-language-select-shell {
-  min-width: 100%;
-  border-radius: 16px;
-}
 
 .auth-header-actions {
   display: flex;
@@ -590,32 +493,150 @@ defineEmits<{
   box-shadow: 0 12px 24px rgba(37, 99, 235, 0.20);
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+ .auth-header-actions-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.header-language-switcher {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.mobile-language-switcher {
+  padding: 16px 0 6px;
+}
+
+.auth-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  margin-left: 0;
+  flex: 0 0 auto;
+}
+
+.auth-btn {
+  min-width: 108px;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.25s ease;
   white-space: nowrap;
-  border: 0;
 }
 
-:global(html[dir='rtl']) .language-select-icon,
-:global(body[dir='rtl']) .language-select-icon {
-  left: auto;
-  right: 16px;
+.auth-btn-login {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
 }
 
-:global(html[dir='rtl']) .language-select,
-:global(body[dir='rtl']) .language-select {
-  padding: 0 42px 0 38px;
+.auth-btn-login:hover,
+.auth-btn-login.active {
+  color: #6d28d9;
+  border-color: rgba(109, 40, 217, 0.24);
+  box-shadow: 0 10px 24px rgba(109, 40, 217, 0.10);
+  transform: translateY(-1px);
+}
+
+.auth-btn-register {
+  color: #ffffff;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  border: 1px solid transparent;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22);
+}
+
+.auth-btn-register:hover,
+.auth-btn-register.active {
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.28);
+}
+
+.mobile-auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 18px 0 22px;
+}
+
+.mobile-auth-btn {
+  min-height: 48px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.25s ease;
+}
+
+.mobile-auth-btn-login {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.mobile-auth-btn-login.active,
+.mobile-auth-btn-login:hover {
+  background: rgba(109, 40, 217, 0.12);
+  color: #6d28d9;
+}
+
+.mobile-auth-btn-register {
+  color: #ffffff;
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+}
+
+.mobile-auth-btn-register.active,
+.mobile-auth-btn-register:hover {
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.20);
+}
+
+:global(html[dir='rtl']) .auth-header-actions-wrap,
+:global(body[dir='rtl']) .auth-header-actions-wrap,
+:global(html[dir='rtl']) .auth-header-actions,
+:global(body[dir='rtl']) .auth-header-actions {
+  direction: rtl;
+}
+
+:global(html[dir='rtl']) .auth-header-actions,
+:global(body[dir='rtl']) .auth-header-actions {
+  margin-right: 0;
+}
+
+:global(html[dir='rtl']) .mobile-auth-actions,
+:global(body[dir='rtl']) .mobile-auth-actions {
+  direction: rtl;
 }
 
 @media (max-width: 1199px) {
   .header-language-switcher {
     display: none;
+  }
+}
+
+@media (max-width: 991px) {
+  .auth-header-actions-wrap {
+    display: none;
+  }
+}
+
+@media (min-width: 992px) {
+  .auth-header-actions-wrap {
+    white-space: nowrap;
   }
 }
 
@@ -625,7 +646,9 @@ defineEmits<{
   }
 
   .auth-header-actions {
-    margin-left: 0;
+    margin-right: 0;
   }
 }
+
+ 
 </style>

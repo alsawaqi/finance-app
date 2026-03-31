@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 type Stat = {
   value: string
   label: string
@@ -12,6 +14,8 @@ defineProps<{
   stats: Stat[]
   image: string
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -45,13 +49,13 @@ defineProps<{
       </div>
 
       <div class="auth-floating-card auth-floating-card--top auth-reveal-float">
-        <span class="auth-floating-card__label">Smart onboarding</span>
-        <strong>Fast. Secure. Professional.</strong>
+        <span class="auth-floating-card__label">{{ t('authShowcase.smartOnboarding') }}</span>
+        <strong>{{ t('authShowcase.fastSecureProfessional') }}</strong>
       </div>
 
       <div class="auth-floating-card auth-floating-card--bottom auth-reveal-float auth-reveal-float-delay">
-        <span class="auth-floating-card__label">Trusted workflow</span>
-        <strong>Built for clients, staff, and admins.</strong>
+        <span class="auth-floating-card__label">{{ t('authShowcase.trustedWorkflow') }}</span>
+        <strong>{{ t('authShowcase.builtForAllRoles') }}</strong>
       </div>
     </div>
   </div>

@@ -1,11 +1,10 @@
 <template>
   <div class="client-page-grid">
     <section class="client-hero-card client-reveal-up">
-      <span class="client-eyebrow">New Request</span>
-      <h1 class="client-hero-title">Create a request with a guided flow.</h1>
+      <span class="client-eyebrow">{{ t('clientNewRequest.hero.eyebrow') }}</span>
+      <h1 class="client-hero-title">{{ t('clientNewRequest.hero.title') }}</h1>
       <p class="client-hero-text">
-        Start the request wizard to answer the configured questions, add your basic details, attach initial files,
-        and send everything to the admin review stage.
+        {{ t('clientNewRequest.hero.subtitle') }}
       </p>
     </section>
 
@@ -13,22 +12,28 @@
       <article class="client-content-card client-content-card--full client-start-card">
         <div class="client-card-head">
           <div>
-            <h3>Create a Request with a Guided Flow</h3>
+            <h3>{{ t('clientNewRequest.card.title') }}</h3>
             <p class="client-subtext">
-              Keep this first screen simple. When you are ready, tap start and continue in the step-by-step wizard.
+              {{ t('clientNewRequest.card.subtitle') }}
             </p>
           </div>
-          <span class="client-badge client-badge--purple">2 Steps</span>
+          <span class="client-badge client-badge--purple">{{ t('clientNewRequest.card.stepsBadge') }}</span>
         </div>
 
         <div class="client-empty-note">
-          You will first answer the request questions prepared by the admin, then add your basic details and initial attachments before submitting.
+          {{ t('clientNewRequest.card.note') }}
         </div>
 
         <div class="client-inline-actions">
-          <RouterLink :to="{ name: 'client-request-wizard' }" class="client-btn-primary">Start</RouterLink>
+          <RouterLink :to="{ name: 'client-request-wizard' }" class="client-btn-primary">{{ t('clientNewRequest.card.start') }}</RouterLink>
         </div>
       </article>
     </section>
   </div>
 </template>
+
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+</script>

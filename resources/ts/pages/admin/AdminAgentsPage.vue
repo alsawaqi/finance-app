@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+import { useI18n } from 'vue-i18n'
 import AdminAgentBuilderForm from './inc/AdminAgentBuilderForm.vue'
 import AdminAgentLibraryTable from './inc/AdminAgentLibraryTable.vue'
 import type { AgentItem, AgentPayload } from '@/services/agents'
@@ -30,6 +31,7 @@ const successMessage = ref('')
 const fieldErrors = ref<Record<string, string[]>>({})
 
 const form = ref<AgentForm>(createDefaultForm())
+const { t } = useI18n()
 
 const isEditing = computed(() => form.value.id !== null)
 const activeBanks = computed(() => banks.value.filter((bank) => bank.is_active))
@@ -40,10 +42,10 @@ const stats = computed(() => {
   const withoutBank = rows.value.filter((item) => !item.bank_id).length
 
   return [
-    { label: 'Total agents', value: String(total), tone: 'emerald' },
-    { label: 'Active agents', value: String(active), tone: 'blue' },
-    { label: 'Banks linked', value: String(linkedBanks), tone: 'violet' },
-    { label: 'Without bank', value: String(withoutBank), tone: 'amber' },
+    { label: t('adminAgentsPage.stats.totalAgents'), value: String(total), tone: 'emerald' },
+    { label: t('adminAgentsPage.stats.activeAgents'), value: String(active), tone: 'blue' },
+    { label: t('adminAgentsPage.stats.banksLinked'), value: String(linkedBanks), tone: 'violet' },
+    { label: t('adminAgentsPage.stats.withoutBank'), value: String(withoutBank), tone: 'amber' },
   ]
 })
 
@@ -84,7 +86,7 @@ async function fetchRows() {
     const { data } = await listAgents()
     rows.value = data.data
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to load agents right now.')
+    formError.value = extractErrorMessage(error, t('adminAgentsPage.errors.loadFailed'))
   } finally {
     isLoading.value = false
   }
@@ -97,7 +99,7 @@ async function fetchBanks() {
     const { data } = await listBanks()
     banks.value = data.data
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to load banks right now.')
+    formError.value = extractErrorMessage(error, t('adminAgentsPage.errors.loadBanksFailed'))
   } finally {
     isLoadingBanks.value = false
   }
@@ -133,10 +135,10 @@ async function saveRow() {
     resetForm()
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      formError.value = error.response?.data?.message ?? 'Unable to save the agent.'
+      formError.value = error.response?.data?.message ?? t('adminAgentsPage.errors.saveFailed')
       fieldErrors.value = error.response?.data?.errors ?? {}
     } else {
-      formError.value = 'Unable to save the agent.'
+      formError.value = t('adminAgentsPage.errors.saveFailed')
     }
   } finally {
     isSaving.value = false
@@ -168,7 +170,7 @@ async function toggleRow(row: AgentItem) {
     successMessage.value = data.message
     rows.value = rows.value.map((item) => (item.id === row.id ? data.data : item))
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to update agent status right now.')
+    formError.value = extractErrorMessage(error, t('adminAgentsPage.errors.toggleFailed'))
   }
 }
 
@@ -185,20 +187,19 @@ function extractErrorMessage(error: unknown, fallback: string) {
   <div class="admin-question-page">
     <section class="admin-hero admin-reveal-up">
       <div class="admin-hero__content">
-        <span class="admin-hero__eyebrow">Agent Management</span>
-        <h2>Create the external contacts you will later use in request communications.</h2>
+        <span class="admin-hero__eyebrow">{{ t('adminAgentsPage.hero.eyebrow') }}</span>
+        <h2>{{ t('adminAgentsPage.hero.title') }}</h2>
         <p>
-          Agents are stored separately from users. Link each agent to a bank so staff can later filter
-          contacts by bank before sending emails about finance requests.
+          {{ t('adminAgentsPage.hero.subtitle') }}
         </p>
       </div>
 
       <div class="admin-hero__actions">
         <button type="button" class="admin-primary-btn" :disabled="isSaving || isLoadingBanks" @click="saveRow">
-          {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update agent' : 'Create agent' }}
+          {{ isSaving ? (isEditing ? t('adminAgentsPage.actions.updating') : t('adminAgentsPage.actions.saving')) : isEditing ? t('adminAgentsPage.actions.updateAgent') : t('adminAgentsPage.actions.createAgent') }}
         </button>
         <button type="button" class="admin-secondary-btn" @click="resetForm">
-          {{ isEditing ? 'Cancel edit' : 'Reset form' }}
+          {{ isEditing ? t('adminAgentsPage.actions.cancelEdit') : t('adminAgentsPage.actions.resetForm') }}
         </button>
       </div>
     </section>
@@ -227,30 +228,30 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
         <div class="admin-panel__head">
           <div>
-            <span class="admin-panel__eyebrow">Why agents matter</span>
-            <h2>External workflow contacts</h2>
+            <span class="admin-panel__eyebrow">{{ t('adminAgentsPage.notes.eyebrow') }}</span>
+            <h2>{{ t('adminAgentsPage.notes.title') }}</h2>
           </div>
         </div>
 
         <div class="admin-question-preview__notes">
           <article class="admin-question-preview__note">
-            <span>Request email flow</span>
-            <strong>Agents will be linked later when the team sends request-related emails.</strong>
+            <span>{{ t('adminAgentsPage.notes.emailFlowLabel') }}</span>
+            <strong>{{ t('adminAgentsPage.notes.emailFlowValue') }}</strong>
           </article>
           <article class="admin-question-preview__note">
-            <span>Bank linkage</span>
-            <strong>{{ activeBanks.length }} active banks are currently available for agent mapping.</strong>
+            <span>{{ t('adminAgentsPage.notes.bankLinkageLabel') }}</span>
+            <strong>{{ t('adminAgentsPage.notes.bankLinkageValue', { count: activeBanks.length }) }}</strong>
           </article>
           <article class="admin-question-preview__note">
-            <span>Availability</span>
-            <strong>Inactive agents remain stored but can be hidden from active workflows.</strong>
+            <span>{{ t('adminAgentsPage.notes.availabilityLabel') }}</span>
+            <strong>{{ t('adminAgentsPage.notes.availabilityValue') }}</strong>
           </article>
         </div>
 
         <div class="admin-pill-list">
-          <span class="admin-chip admin-chip--violet">agent table is separate from users</span>
-          <span class="admin-chip admin-chip--blue">bank-linked contacts</span>
-          <span class="admin-chip admin-chip--emerald">ready for request-email integration</span>
+          <span class="admin-chip admin-chip--violet">{{ t('adminAgentsPage.chips.separateTable') }}</span>
+          <span class="admin-chip admin-chip--blue">{{ t('adminAgentsPage.chips.bankLinked') }}</span>
+          <span class="admin-chip admin-chip--emerald">{{ t('adminAgentsPage.chips.readyForIntegration') }}</span>
         </div>
       </section>
     </div>

@@ -38,6 +38,9 @@ export type RequiredDocumentChecklistItem = {
   is_required: boolean
   status: string
   is_uploaded: boolean
+  can_client_upload?: boolean
+  is_change_requested?: boolean
+  rejection_reason?: string | null
   upload?: {
     id: number
     file_name: string
@@ -100,6 +103,16 @@ export type StaffWorkspaceRequestDetails = StaffWorkspaceRequestSummary & {
     file_name: string
     file_path: string
     category: string
+    created_at?: string | null
+  }>
+    shareholders?: Array<{
+    id: number
+    shareholder_name: string
+    phone_country_code?: string | null
+    phone_number?: string | null
+    id_number?: string | null
+    id_file_name: string
+    id_file_path: string
     created_at?: string | null
   }>
   answers?: Array<{
@@ -183,6 +196,20 @@ export async function addStaffComment(
   }
 }
 
+
+export async function requestRequiredDocumentChange(
+  id: string | number,
+  stepId: string | number,
+  payload: { reason: string },
+) {
+  const { data } = await api.post(`/api/staff/requests/${id}/required-documents/${stepId}/request-change`, payload)
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+  }
+}
+
 export async function requestAdditionalDocument(
   id: string | number,
   payload: { title: string; reason?: string | null },
@@ -198,4 +225,11 @@ export async function requestAdditionalDocument(
 export async function getStaffAgents(params?: { bank_id?: number | null }) {
   const { data } = await api.get('/api/staff/agents', { params })
   return data as { banks: BankOption[]; agents: AgentOption[] }
+}
+export function staffAttachmentDownloadUrl(requestId: string | number, attachmentId: string | number) {
+  return `/api/admin/requests/${requestId}/attachments/${attachmentId}/download`
+}
+
+export function staffShareholderIdDownloadUrl(requestId: string | number, shareholderId: string | number) {
+  return `/api/admin/requests/${requestId}/shareholders/${shareholderId}/id-file/download`
 }

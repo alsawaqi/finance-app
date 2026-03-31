@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import './inc/admin-theme.css'
 import AdminSidebar from './inc/AdminSidebar.vue'
 import AdminTopbar from './inc/AdminTopbar.vue'
 
 const route = useRoute()
 const sidebarOpen = ref(false)
+const { t } = useI18n()
 
 function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
@@ -32,7 +34,7 @@ watch(
       v-if="sidebarOpen"
       type="button"
       class="admin-shell__overlay"
-      aria-label="Close sidebar"
+      :aria-label="t('adminSidebar.closeSidebar')"
       @click="closeSidebar"
     ></button>
 

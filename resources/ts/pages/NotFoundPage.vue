@@ -8,11 +8,11 @@
             <div class="error_image_box float-bob-x">
                 <img src="../../../public/financer/assets/images/resource/error_image.png" alt="">
             </div>
-            <h2><span>Oops!</span> That Page Can Not be Found.</h2>
+            <h2><span>{{ t('notFound.oops') }}</span> {{ t('notFound.title') }}</h2>
             <div class="error_btn_box">
               
-                <RouterLink to="/" class="btn_style_two"><span>Go Back</span></RouterLink>
-                <RouterLink to="/" class="btn_style_two"><span>Back to Homepage</span></RouterLink>
+                <RouterLink to="/" class="btn_style_two"><span>{{ t('notFound.goBack') }}</span></RouterLink>
+                <RouterLink to="/" class="btn_style_two"><span>{{ t('notFound.backToHomepage') }}</span></RouterLink>
             </div>
         </div>
     </div>
@@ -25,5 +25,7 @@
   </template>
   
   <script setup lang="ts">
+  import { useI18n } from 'vue-i18n'
   import PublicPageShell from './public/inc/PublicPageShell.vue'
+  const { t } = useI18n()
   </script>

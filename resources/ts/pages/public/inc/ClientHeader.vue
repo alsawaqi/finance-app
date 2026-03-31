@@ -225,7 +225,7 @@ defineEmits<{
           <h4>Client Help Desk</h4>
           <ul>
             <li>Track requests, sign contracts, and upload documents only when requested.</li>
-            <li><a href="tel:+96800000000">+968 0000 0000</a></li>
+            <li><a href="tel:+96600000000">+966 0000 0000</a></li>
             <li><a href="mailto:support@example.com">support@example.com</a></li>
           </ul>
         </div>

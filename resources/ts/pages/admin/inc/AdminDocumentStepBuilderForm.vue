@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 type StepForm = {
   id: number | null
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: 'save'): void
   (e: 'reset'): void
 }>()
+const { t } = useI18n()
 
 const form = computed({
   get: () => props.modelValue,
@@ -47,85 +49,85 @@ function firstError(field: string) {
   <section class="document-step-panel">
     <div class="document-step-panel__head">
       <div>
-        <span class="document-step-panel__eyebrow">{{ isEditing ? 'Edit step' : 'Create step' }}</span>
-        <h2>Document upload step</h2>
+        <span class="document-step-panel__eyebrow">{{ isEditing ? t('adminDocumentStepBuilder.eyebrow.edit') : t('adminDocumentStepBuilder.eyebrow.create') }}</span>
+        <h2>{{ t('adminDocumentStepBuilder.title') }}</h2>
       </div>
       <button type="button" class="document-step-ghost-btn" @click="$emit('reset')">
-        {{ isEditing ? 'Cancel edit' : 'Clear' }}
+        {{ isEditing ? t('adminDocumentStepBuilder.actions.cancelEdit') : t('adminDocumentStepBuilder.actions.clear') }}
       </button>
     </div>
 
     <div class="document-step-form-grid document-step-form-grid--2">
       <label class="document-step-field">
-        <span>Code</span>
+        <span>{{ t('adminDocumentStepBuilder.fields.code') }}</span>
         <input
           :value="form.code"
           type="text"
           class="document-step-input"
           :class="{ 'has-error': firstError('code') }"
-          placeholder="Optional auto code, e.g. DOC-ID-001"
+          :placeholder="t('adminDocumentStepBuilder.placeholders.code')"
           @input="updateField('code', ($event.target as HTMLInputElement).value)"
         />
-        <small class="document-step-help">Leave blank to auto-generate a code after save.</small>
+        <small class="document-step-help">{{ t('adminDocumentStepBuilder.help.autoCode') }}</small>
         <small v-if="firstError('code')" class="document-step-error">{{ firstError('code') }}</small>
       </label>
 
       <label class="document-step-field">
-        <span>Name</span>
+        <span>{{ t('adminDocumentStepBuilder.fields.name') }}</span>
         <input
           :value="form.name"
           type="text"
           class="document-step-input"
           :class="{ 'has-error': firstError('name') }"
-          placeholder="National ID, Salary Certificate, Bank Statement"
+          :placeholder="t('adminDocumentStepBuilder.placeholders.name')"
           @input="updateField('name', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('name')" class="document-step-error">{{ firstError('name') }}</small>
       </label>
 
       <label class="document-step-field document-step-field--full">
-        <span>Description</span>
+        <span>{{ t('adminDocumentStepBuilder.fields.description') }}</span>
         <textarea
           :value="form.description"
           rows="4"
           class="document-step-textarea"
           :class="{ 'has-error': firstError('description') }"
-          placeholder="Explain exactly what the client should upload for this document step"
+          :placeholder="t('adminDocumentStepBuilder.placeholders.description')"
           @input="updateField('description', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
         <small v-if="firstError('description')" class="document-step-error">{{ firstError('description') }}</small>
       </label>
 
       <label class="document-step-field document-step-field--full">
-        <span>Allowed file types</span>
+        <span>{{ t('adminDocumentStepBuilder.fields.allowedFileTypes') }}</span>
         <textarea
           :value="form.allowed_file_types_text"
           rows="4"
           class="document-step-textarea"
           :class="{ 'has-error': firstError('allowed_file_types_json') }"
-          placeholder="One type per line, for example:\npdf\njpg\npng"
+          :placeholder="t('adminDocumentStepBuilder.placeholders.allowedFileTypes')"
           @input="updateField('allowed_file_types_text', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
-        <small class="document-step-help">These are stored in <code>allowed_file_types_json</code>.</small>
+        <small class="document-step-help">{{ t('adminDocumentStepBuilder.help.allowedFileTypes') }}</small>
         <small v-if="firstError('allowed_file_types_json')" class="document-step-error">{{ firstError('allowed_file_types_json') }}</small>
       </label>
 
       <label class="document-step-field">
-        <span>Max file size (MB)</span>
+        <span>{{ t('adminDocumentStepBuilder.fields.maxFileSizeMb') }}</span>
         <input
           :value="form.max_file_size_mb ?? ''"
           type="number"
           min="1"
           class="document-step-input"
           :class="{ 'has-error': firstError('max_file_size_mb') }"
-          placeholder="10"
+          :placeholder="t('adminDocumentStepBuilder.placeholders.maxFileSizeMb')"
           @input="updateField('max_file_size_mb', ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null)"
         />
         <small v-if="firstError('max_file_size_mb')" class="document-step-error">{{ firstError('max_file_size_mb') }}</small>
       </label>
 
       <label class="document-step-field">
-        <span>Sort order</span>
+        <span>{{ t('adminDocumentStepBuilder.fields.sortOrder') }}</span>
         <input
           :value="form.sort_order"
           type="number"
@@ -145,8 +147,8 @@ function firstError(field: string) {
             @change="updateField('is_required', ($event.target as HTMLInputElement).checked)"
           />
           <div>
-            <strong>Required step</strong>
-            <span>The client must upload this document to continue.</span>
+            <strong>{{ t('adminDocumentStepBuilder.switches.requiredTitle') }}</strong>
+            <span>{{ t('adminDocumentStepBuilder.switches.requiredDesc') }}</span>
           </div>
         </label>
 
@@ -157,8 +159,8 @@ function firstError(field: string) {
             @change="updateField('is_active', ($event.target as HTMLInputElement).checked)"
           />
           <div>
-            <strong>Active</strong>
-            <span>Show this step when requests reach the document stage.</span>
+            <strong>{{ t('adminDocumentStepBuilder.switches.activeTitle') }}</strong>
+            <span>{{ t('adminDocumentStepBuilder.switches.activeDesc') }}</span>
           </div>
         </label>
       </div>
@@ -166,10 +168,10 @@ function firstError(field: string) {
 
     <div class="document-step-actions">
       <button type="button" class="document-step-primary-btn" :disabled="isSaving" @click="$emit('save')">
-        {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update step' : 'Save step' }}
+        {{ isSaving ? (isEditing ? t('adminDocumentStepBuilder.actions.updating') : t('adminDocumentStepBuilder.actions.saving')) : isEditing ? t('adminDocumentStepBuilder.actions.updateStep') : t('adminDocumentStepBuilder.actions.saveStep') }}
       </button>
       <button type="button" class="document-step-secondary-btn" @click="$emit('reset')">
-        {{ isEditing ? 'Cancel edit' : 'Reset' }}
+        {{ isEditing ? t('adminDocumentStepBuilder.actions.cancelEdit') : t('adminDocumentStepBuilder.actions.reset') }}
       </button>
     </div>
   </section>

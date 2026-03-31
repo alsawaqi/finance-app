@@ -2,28 +2,33 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../../stores/auth'
+import { useI18n } from 'vue-i18n'
+import AppLocaleSelect from '../public/inc/AppLocaleSelect.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useI18n()
 
-const navItems = [
+
+const navItems = computed(() => [
   {
-    label: 'Dashboard',
+    label: t('clientHeader.dashboard'),
     to: { name: 'client-dashboard' },
     matches: ['client-dashboard'],
   },
   {
-    label: 'New Request',
+    label: t('clientHeader.newRequest'),
     to: { name: 'client-new-request' },
     matches: ['client-new-request', 'client-request-wizard'],
   },
   {
-    label: 'My Requests',
+    label: t('clientHeader.myRequests'),
     to: { name: 'client-requests' },
     matches: ['client-requests', 'client-request-details', 'client-request-sign', 'client-request-documents'],
   },
-]
+])
+
 
 const userName = computed(() => auth.user?.name || 'Abdallah')
 const userInitials = computed(() => {
@@ -94,24 +99,30 @@ defineEmits<{
           </div>
 
           <div class="header_right_content client-header-right">
+            <AppLocaleSelect
+              id="client-language-switcher"
+              mode="client"
+              class="client-locale-select"
+            />
+
             <button class="search-toggler" @click="$emit('open-search')">
               <i class="icon-50"></i>
             </button>
 
             <RouterLink :to="{ name: 'client-new-request' }" class="btn_style_one client-header-cta">
-              <span>Create Request</span>
+              <span>{{ t('clientHeader.createRequest') }}</span>
             </RouterLink>
 
             <button type="button" class="client-header-logout" @click="handleLogout">
               <i class="fas fa-sign-out-alt"></i>
-              <span>Logout</span>
+              <span>{{ t('clientHeader.logout') }}</span>
             </button>
 
             <div class="client-user-chip">
               <div class="client-user-chip__avatar">{{ userInitials }}</div>
               <div class="client-user-chip__text">
                 <strong>{{ userName }}</strong>
-                <span>Client Portal</span>
+                <span>{{ t('clientHeader.clientPortal') }}</span>
               </div>
             </div>
           </div>
@@ -147,24 +158,30 @@ defineEmits<{
           </div>
 
           <div class="header_right_content client-header-right">
+            <AppLocaleSelect
+              id="client-language-switcher-sticky"
+              mode="client"
+              class="client-locale-select"
+            />
+
             <button class="search-toggler" @click="$emit('open-search')">
               <i class="icon-50"></i>
             </button>
 
             <RouterLink :to="{ name: 'client-new-request' }" class="btn_style_one client-header-cta">
-              <span>Create Request</span>
+              <span>{{ t('clientHeader.createRequest') }}</span>
             </RouterLink>
 
             <button type="button" class="client-header-logout" @click="handleLogout">
               <i class="fas fa-sign-out-alt"></i>
-              <span>Logout</span>
+              <span>{{ t('clientHeader.logout') }}</span>
             </button>
 
             <div class="client-user-chip client-user-chip--compact">
               <div class="client-user-chip__avatar">{{ userInitials }}</div>
               <div class="client-user-chip__text">
                 <strong>{{ userName }}</strong>
-                <span>Client Portal</span>
+                <span>{{ t('clientHeader.clientPortal') }}</span>
               </div>
             </div>
           </div>
@@ -189,7 +206,7 @@ defineEmits<{
             class="mobile-client-cta"
             @click="$emit('close-mobile-menu')"
           >
-            Create Request
+            {{ t('clientHeader.createRequest') }}
           </RouterLink>
 
           <button
@@ -197,17 +214,24 @@ defineEmits<{
             class="mobile-client-logout"
             @click="handleLogout"
           >
-            Logout
+            {{ t('clientHeader.logout') }}
           </button>
 
           <div class="mobile-client-user">
             <div class="client-user-chip__avatar">{{ userInitials }}</div>
             <div>
               <strong>{{ userName }}</strong>
-              <span>Client Portal</span>
+              <span>{{ t('clientHeader.clientPortal') }}</span>
             </div>
           </div>
         </div>
+
+
+        <AppLocaleSelect
+          id="client-language-switcher-mobile"
+          mode="mobile"
+          class="mobile-client-locale"
+        />
 
         <div class="menu-outer">
           <ul class="navigation clearfix">
@@ -222,10 +246,10 @@ defineEmits<{
         </div>
 
         <div class="contact-info">
-          <h4>Client Help Desk</h4>
+          <h4>{{ t('clientHeader.helpDesk') }}</h4>
           <ul>
-            <li>Track requests, sign contracts, and upload documents only when requested.</li>
-            <li><a href="tel:+96800000000">+968 0000 0000</a></li>
+            <li>{{ t('clientHeader.helpDeskText') }}</li>
+            <li><a href="tel:+96800000000">+966 0000 0000</a></li>
             <li><a href="mailto:support@example.com">support@example.com</a></li>
           </ul>
         </div>

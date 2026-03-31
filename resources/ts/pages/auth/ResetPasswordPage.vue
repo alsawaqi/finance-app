@@ -1,16 +1,18 @@
 <template>
     <div style="padding: 24px;">
-      <h1>Login Page</h1>
-      <p>Sample login screen only for SPA wiring.</p>
+      <h1>{{ t('authPlaceholder.reset.title') }}</h1>
+      <p>{{ t('authPlaceholder.reset.subtitle') }}</p>
   
       <nav style="display: flex; gap: 12px; margin-top: 16px;">
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/dashboard">Client Dashboard</RouterLink>
-        <RouterLink to="/admin">Admin Dashboard</RouterLink>
-        <RouterLink to="/staff">Staff Dashboard</RouterLink>
+        <RouterLink to="/">{{ t('authPlaceholder.links.home') }}</RouterLink>
+        <RouterLink to="/dashboard">{{ t('authPlaceholder.links.clientDashboard') }}</RouterLink>
+        <RouterLink to="/admin">{{ t('authPlaceholder.links.adminDashboard') }}</RouterLink>
+        <RouterLink to="/staff">{{ t('authPlaceholder.links.staffDashboard') }}</RouterLink>
       </nav>
     </div>
   </template>
   
   <script setup lang="ts">
+  import { useI18n } from 'vue-i18n'
+  const { t } = useI18n()
   </script>

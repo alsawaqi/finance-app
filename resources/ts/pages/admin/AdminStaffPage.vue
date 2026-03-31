@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+import { useI18n } from 'vue-i18n'
 import AdminStaffBuilderForm from './inc/AdminStaffBuilderForm.vue'
 import AdminStaffLibraryTable from './inc/AdminStaffLibraryTable.vue'
 import type { StaffUserItem, StaffUserPayload } from '@/services/staffUsers'
@@ -27,6 +28,7 @@ const fieldErrors = ref<Record<string, string[]>>({})
 
 const form = ref<StaffForm>(createDefaultForm())
 const isEditing = computed(() => form.value.id !== null)
+const { t } = useI18n()
 
 const stats = computed(() => {
   const total = rows.value.length
@@ -35,10 +37,10 @@ const stats = computed(() => {
   const loggedIn = rows.value.filter((item) => !!item.last_login_at).length
 
   return [
-    { label: 'Total staff', value: String(total), tone: 'violet' },
-    { label: 'Active staff', value: String(active), tone: 'emerald' },
-    { label: 'With direct permissions', value: String(withDirectPermissions), tone: 'blue' },
-    { label: 'Logged in at least once', value: String(loggedIn), tone: 'amber' },
+    { label: t('adminStaffPage.stats.totalStaff'), value: String(total), tone: 'violet' },
+    { label: t('adminStaffPage.stats.activeStaff'), value: String(active), tone: 'emerald' },
+    { label: t('adminStaffPage.stats.withDirectPermissions'), value: String(withDirectPermissions), tone: 'blue' },
+    { label: t('adminStaffPage.stats.loggedInAtLeastOnce'), value: String(loggedIn), tone: 'amber' },
   ]
 })
 
@@ -74,7 +76,7 @@ async function fetchRows() {
     rows.value = data.data
     availablePermissions.value = data.meta.available_permissions ?? []
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to load staff accounts right now.')
+    formError.value = extractErrorMessage(error, t('adminStaffPage.errors.loadFailed'))
   } finally {
     isLoading.value = false
   }
@@ -119,10 +121,10 @@ async function saveRow() {
     resetForm()
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      formError.value = error.response?.data?.message ?? 'Unable to save the staff account.'
+      formError.value = error.response?.data?.message ?? t('adminStaffPage.errors.saveFailed')
       fieldErrors.value = error.response?.data?.errors ?? {}
     } else {
-      formError.value = 'Unable to save the staff account.'
+      formError.value = t('adminStaffPage.errors.saveFailed')
     }
   } finally {
     isSaving.value = false
@@ -153,7 +155,7 @@ async function toggleRow(row: StaffUserItem) {
     successMessage.value = data.message
     rows.value = rows.value.map((item) => (item.id === row.id ? data.data : item))
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to update staff status right now.')
+    formError.value = extractErrorMessage(error, t('adminStaffPage.errors.toggleFailed'))
   }
 }
 
@@ -170,20 +172,19 @@ function extractErrorMessage(error: unknown, fallback: string) {
   <div class="admin-question-page">
     <section class="admin-hero admin-reveal-up">
       <div class="admin-hero__content">
-        <span class="admin-hero__eyebrow">Staff Management</span>
-        <h2>Create internal staff accounts and control what they can access.</h2>
+        <span class="admin-hero__eyebrow">{{ t('adminStaffPage.hero.eyebrow') }}</span>
+        <h2>{{ t('adminStaffPage.hero.title') }}</h2>
         <p>
-          Staff members use the admin workspace, but you can grant direct permissions for setup pages,
-          request operations, and later page-level visibility.
+          {{ t('adminStaffPage.hero.subtitle') }}
         </p>
       </div>
 
       <div class="admin-hero__actions">
         <button type="button" class="admin-primary-btn" :disabled="isSaving" @click="saveRow">
-          {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update staff' : 'Create staff' }}
+          {{ isSaving ? (isEditing ? t('adminStaffPage.actions.updating') : t('adminStaffPage.actions.saving')) : isEditing ? t('adminStaffPage.actions.updateStaff') : t('adminStaffPage.actions.createStaff') }}
         </button>
         <button type="button" class="admin-secondary-btn" @click="resetForm">
-          {{ isEditing ? 'Cancel edit' : 'Reset form' }}
+          {{ isEditing ? t('adminStaffPage.actions.cancelEdit') : t('adminStaffPage.actions.resetForm') }}
         </button>
       </div>
     </section>
@@ -212,30 +213,30 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
         <div class="admin-panel__head">
           <div>
-            <span class="admin-panel__eyebrow">Permission notes</span>
-            <h2>How staff access works</h2>
+            <span class="admin-panel__eyebrow">{{ t('adminStaffPage.notes.eyebrow') }}</span>
+            <h2>{{ t('adminStaffPage.notes.title') }}</h2>
           </div>
         </div>
 
         <div class="admin-question-preview__notes">
           <article class="admin-question-preview__note">
-            <span>Shared workspace</span>
-            <strong>Staff sign into the same admin area as admins.</strong>
+            <span>{{ t('adminStaffPage.notes.sharedWorkspaceLabel') }}</span>
+            <strong>{{ t('adminStaffPage.notes.sharedWorkspaceValue') }}</strong>
           </article>
           <article class="admin-question-preview__note">
-            <span>Role</span>
-            <strong>Each account is automatically assigned the <code>staff</code> role.</strong>
+            <span>{{ t('adminStaffPage.notes.roleLabel') }}</span>
+            <strong>{{ t('adminStaffPage.notes.roleValue') }}</strong>
           </article>
           <article class="admin-question-preview__note">
-            <span>Direct permissions</span>
-            <strong>Extra permissions can be added per user for setup and management pages.</strong>
+            <span>{{ t('adminStaffPage.notes.directPermissionsLabel') }}</span>
+            <strong>{{ t('adminStaffPage.notes.directPermissionsValue') }}</strong>
           </article>
         </div>
 
         <div class="admin-pill-list">
-          <span class="admin-chip admin-chip--violet">admin + staff share dashboard</span>
-          <span class="admin-chip admin-chip--blue">permissions for page visibility later</span>
-          <span class="admin-chip admin-chip--emerald">inactive staff cannot continue operations</span>
+          <span class="admin-chip admin-chip--violet">{{ t('adminStaffPage.chips.sharedDashboard') }}</span>
+          <span class="admin-chip admin-chip--blue">{{ t('adminStaffPage.chips.visibilityPermissions') }}</span>
+          <span class="admin-chip admin-chip--emerald">{{ t('adminStaffPage.chips.inactiveCannotOperate') }}</span>
         </div>
       </section>
     </div>

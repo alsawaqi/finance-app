@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { QuestionType } from '@/services/requestQuestions'
 
 type QuestionForm = {
@@ -30,6 +31,7 @@ const emit = defineEmits<{
   (e: 'save'): void
   (e: 'reset'): void
 }>()
+const { t } = useI18n()
 
 const form = computed({
   get: () => props.modelValue,
@@ -52,31 +54,31 @@ function firstError(field: string) {
   <section class="admin-panel admin-reveal-up admin-reveal-delay-1">
     <div class="admin-panel__head">
       <div>
-        <span class="admin-panel__eyebrow">{{ isEditing ? 'Edit question' : 'Create question' }}</span>
-        <h2>Request question setup</h2>
+        <span class="admin-panel__eyebrow">{{ isEditing ? t('adminQuestionBuilder.eyebrow.edit') : t('adminQuestionBuilder.eyebrow.create') }}</span>
+        <h2>{{ t('adminQuestionBuilder.title') }}</h2>
       </div>
       <button type="button" class="admin-panel__action" @click="$emit('reset')">
-        {{ isEditing ? 'Cancel edit' : 'Clear' }}
+        {{ isEditing ? t('adminQuestionBuilder.actions.cancelEdit') : t('adminQuestionBuilder.actions.clear') }}
       </button>
     </div>
 
     <div class="admin-form-grid admin-form-grid--2">
       <label class="admin-form-field">
-        <span>Question code</span>
+        <span>{{ t('adminQuestionBuilder.fields.questionCode') }}</span>
         <input
           :value="form.code"
           type="text"
           class="admin-form-input"
           :class="{ 'has-error': firstError('code') }"
-          placeholder="RQ-QUESTION-001"
+          :placeholder="t('adminQuestionBuilder.placeholders.questionCode')"
           @input="updateField('code', ($event.target as HTMLInputElement).value)"
         />
-        <small class="admin-form-help">Leave blank to auto-generate after save.</small>
+        <small class="admin-form-help">{{ t('adminQuestionBuilder.help.autoCode') }}</small>
         <small v-if="firstError('code')" class="admin-form-error">{{ firstError('code') }}</small>
       </label>
 
       <label class="admin-form-field">
-        <span>Question type</span>
+        <span>{{ t('adminQuestionBuilder.fields.questionType') }}</span>
         <select
           :value="form.question_type"
           class="admin-form-select"
@@ -95,73 +97,73 @@ function firstError(field: string) {
       </label>
 
       <label class="admin-form-field admin-form-field--full">
-        <span>Question text</span>
+        <span>{{ t('adminQuestionBuilder.fields.questionText') }}</span>
         <textarea
           :value="form.question_text"
           rows="3"
           class="admin-form-textarea"
           :class="{ 'has-error': firstError('question_text') }"
-          placeholder="Enter the exact question that the client should answer"
+          :placeholder="t('adminQuestionBuilder.placeholders.questionText')"
           @input="updateField('question_text', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
         <small v-if="firstError('question_text')" class="admin-form-error">{{ firstError('question_text') }}</small>
       </label>
 
       <label class="admin-form-field admin-form-field--full">
-        <span>Placeholder</span>
+        <span>{{ t('adminQuestionBuilder.fields.placeholder') }}</span>
         <input
           :value="form.placeholder"
           type="text"
           class="admin-form-input"
           :class="{ 'has-error': firstError('placeholder') }"
-          placeholder="Helpful placeholder for the client input"
+          :placeholder="t('adminQuestionBuilder.placeholders.placeholder')"
           @input="updateField('placeholder', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('placeholder')" class="admin-form-error">{{ firstError('placeholder') }}</small>
       </label>
 
       <label v-if="showOptions" class="admin-form-field admin-form-field--full">
-        <span>Options list</span>
+        <span>{{ t('adminQuestionBuilder.fields.optionsList') }}</span>
         <textarea
           :value="form.options_text"
           rows="5"
           class="admin-form-textarea"
           :class="{ 'has-error': firstError('options_json') }"
-          placeholder="One option per line, for example:\nSalaried\nSelf employed\nRetired"
+          :placeholder="t('adminQuestionBuilder.placeholders.optionsList')"
           @input="updateField('options_text', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
-        <small class="admin-form-help">These lines are saved into <code>options_json</code>.</small>
+        <small class="admin-form-help">{{ t('adminQuestionBuilder.help.optionsJson') }}</small>
         <small v-if="firstError('options_json')" class="admin-form-error">{{ firstError('options_json') }}</small>
       </label>
 
       <label class="admin-form-field admin-form-field--full">
-        <span>Help text</span>
+        <span>{{ t('adminQuestionBuilder.fields.helpText') }}</span>
         <textarea
           :value="form.help_text"
           rows="3"
           class="admin-form-textarea"
           :class="{ 'has-error': firstError('help_text') }"
-          placeholder="Extra note shown to the client under the field"
+          :placeholder="t('adminQuestionBuilder.placeholders.helpText')"
           @input="updateField('help_text', ($event.target as HTMLTextAreaElement).value)"
         ></textarea>
         <small v-if="firstError('help_text')" class="admin-form-error">{{ firstError('help_text') }}</small>
       </label>
 
       <label class="admin-form-field admin-form-field--full">
-        <span>Validation rules</span>
+        <span>{{ t('adminQuestionBuilder.fields.validationRules') }}</span>
         <input
           :value="form.validation_rules"
           type="text"
           class="admin-form-input"
           :class="{ 'has-error': firstError('validation_rules') }"
-          placeholder="required|numeric|min:0"
+          :placeholder="t('adminQuestionBuilder.placeholders.validationRules')"
           @input="updateField('validation_rules', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('validation_rules')" class="admin-form-error">{{ firstError('validation_rules') }}</small>
       </label>
 
       <label class="admin-form-field">
-        <span>Sort order</span>
+        <span>{{ t('adminQuestionBuilder.fields.sortOrder') }}</span>
         <input
           :value="form.sort_order"
           type="number"
@@ -181,8 +183,8 @@ function firstError(field: string) {
             @change="updateField('is_required', ($event.target as HTMLInputElement).checked)"
           />
           <div>
-            <strong>Required</strong>
-            <span>Client must answer this question.</span>
+            <strong>{{ t('adminQuestionBuilder.switches.requiredTitle') }}</strong>
+            <span>{{ t('adminQuestionBuilder.switches.requiredDesc') }}</span>
           </div>
         </label>
 
@@ -193,8 +195,8 @@ function firstError(field: string) {
             @change="updateField('is_active', ($event.target as HTMLInputElement).checked)"
           />
           <div>
-            <strong>Active</strong>
-            <span>Show this question in the request form.</span>
+            <strong>{{ t('adminQuestionBuilder.switches.activeTitle') }}</strong>
+            <span>{{ t('adminQuestionBuilder.switches.activeDesc') }}</span>
           </div>
         </label>
       </div>
@@ -202,10 +204,10 @@ function firstError(field: string) {
 
     <div class="admin-form-actions">
       <button type="button" class="admin-primary-btn" :disabled="isSaving" @click="$emit('save')">
-        {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update question' : 'Save question' }}
+        {{ isSaving ? (isEditing ? t('adminQuestionBuilder.actions.updating') : t('adminQuestionBuilder.actions.saving')) : isEditing ? t('adminQuestionBuilder.actions.updateQuestion') : t('adminQuestionBuilder.actions.saveQuestion') }}
       </button>
       <button type="button" class="admin-secondary-btn" @click="$emit('reset')">
-        {{ isEditing ? 'Cancel edit' : 'Reset' }}
+        {{ isEditing ? t('adminQuestionBuilder.actions.cancelEdit') : t('adminQuestionBuilder.actions.reset') }}
       </button>
     </div>
   </section>

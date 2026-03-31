@@ -9,7 +9,8 @@ use App\Http\Requests\Client\SignClientContractRequest;
 use App\Models\FinanceRequest;
 use App\Models\RequestTimeline;
 use App\Support\ContractDocumentBuilder;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\ContractTemplateResolver;
+use App\Support\MpdfContractPdfRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -25,7 +26,8 @@ class ClientContractController extends Controller
             'answers.question:id,code,question_text,question_type,sort_order',
             'attachments',
             'timeline.actor:id,name',
-            'currentContract',
+            'currentContract.template',
+            'shareholders',
         ]);
 
         return response()->json([
@@ -43,10 +45,12 @@ class ClientContractController extends Controller
         abort_unless($contract && $contract->admin_signed_at, 404, 'No contract is ready for client signature.');
 
         DB::transaction(function () use ($request, $financeRequest, $client, $contract) {
-            $contract->client_signature_path = $this->storeSignatureDataUrl(
+            $signaturePath = $this->storeSignatureDataUrl(
                 (string) $request->input('signature_data_url'),
                 'contracts/signatures/client/' . $financeRequest->id . '-contract-' . $contract->id . '-client.png'
             );
+
+            $contract->client_signature_path = $signaturePath;
             $contract->client_signed_at = now();
             $contract->client_signed_by = $client->id;
             $contract->status = ContractStatus::FULLY_SIGNED;
@@ -54,7 +58,7 @@ class ClientContractController extends Controller
             $this->renderAndPersistFinalPdf($financeRequest, $contract);
             $contract->save();
 
-            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::READY_FOR_PROCESSING;
+            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::CONTRACT;
             $financeRequest->latest_activity_at = now();
             $financeRequest->save();
 
@@ -63,7 +67,7 @@ class ClientContractController extends Controller
                 'actor_user_id' => $client->id,
                 'event_type' => 'contract.client_signed',
                 'event_title' => 'Contract signed by client',
-                'event_description' => 'The client reviewed the contract PDF and submitted the final signature.',
+                'event_description' => 'The client reviewed the Arabic contract template preview and submitted the final signature.',
                 'metadata_json' => [
                     'contract_id' => $contract->id,
                     'contract_status' => $contract->status->value,
@@ -74,7 +78,7 @@ class ClientContractController extends Controller
 
         return response()->json([
             'message' => 'Contract signed successfully.',
-            'request' => $financeRequest->fresh(['client:id,name,email', 'currentContract']),
+            'request' => $financeRequest->fresh(['client:id,name,email', 'currentContract.template']),
         ]);
     }
 
@@ -116,23 +120,26 @@ class ClientContractController extends Controller
 
     private function renderAndPersistFinalPdf(FinanceRequest $financeRequest, $contract): void
     {
-        $terms = (array) ($contract->terms_json ?? []);
-        $html = ContractDocumentBuilder::buildHtml(
+        $bodyHtml = trim((string) $contract->contract_content);
+
+        if ($bodyHtml === '') {
+            $template = $contract->template ?: ContractTemplateResolver::resolveTemplateForRequest($financeRequest);
+            $bodyHtml = ContractTemplateResolver::renderEditableHtml($financeRequest->fresh('client'), $template);
+            $contract->contract_content = $bodyHtml;
+        }
+
+        $documentHtml = ContractDocumentBuilder::buildPdfHtml(
             $financeRequest->fresh('client'),
-            $terms,
+            $bodyHtml,
             $contract
         );
-
-        $contract->contract_content = $html;
 
         $pdfRelativePath = $contract->contract_pdf_path
             ?: 'contracts/pdfs/request-' . $financeRequest->id . '-v' . $contract->version_no . '.pdf';
 
-        $pdf = Pdf::loadHTML($html)
-            ->setPaper('a4')
-            ->setWarnings(false);
+        $binaryPdf = MpdfContractPdfRenderer::renderToString($documentHtml);
+        Storage::disk('public')->put($pdfRelativePath, $binaryPdf);
 
-        Storage::disk('public')->put($pdfRelativePath, $pdf->output());
         $contract->contract_pdf_path = $pdfRelativePath;
     }
 }

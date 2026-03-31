@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+import { useI18n } from 'vue-i18n'
 import AdminDocumentStepBuilderForm from './inc/AdminDocumentStepBuilderForm.vue'
 import AdminDocumentStepLibraryTable from './inc/AdminDocumentStepLibraryTable.vue'
 import AdminDocumentStepPreviewCard from './inc/AdminDocumentStepPreviewCard.vue'
@@ -34,6 +35,7 @@ const deletingId = ref<number | null>(null)
 const formError = ref('')
 const successMessage = ref('')
 const fieldErrors = ref<Record<string, string[]>>({})
+const { t } = useI18n()
 
 const form = ref<StepForm>(createDefaultForm())
 
@@ -52,10 +54,10 @@ const stats = computed(() => {
   const inUse = steps.value.filter((item) => item.request_document_uploads_count > 0).length
 
   return [
-    { label: 'Total steps', value: String(total) },
-    { label: 'Active steps', value: String(active) },
-    { label: 'Required steps', value: String(required) },
-    { label: 'Steps in use', value: String(inUse) },
+    { label: t('adminDocumentUploadStepsPage.stats.totalSteps'), value: String(total) },
+    { label: t('adminDocumentUploadStepsPage.stats.activeSteps'), value: String(active) },
+    { label: t('adminDocumentUploadStepsPage.stats.requiredSteps'), value: String(required) },
+    { label: t('adminDocumentUploadStepsPage.stats.stepsInUse'), value: String(inUse) },
   ]
 })
 
@@ -112,7 +114,7 @@ async function fetchSteps() {
       form.value.sort_order = steps.value.length + 1
     }
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to load document upload steps right now.')
+    formError.value = extractErrorMessage(error, t('adminDocumentUploadStepsPage.errors.loadFailed'))
   } finally {
     isLoading.value = false
   }
@@ -135,10 +137,10 @@ async function saveStep() {
     resetForm()
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      formError.value = error.response?.data?.message ?? 'Unable to save the document upload step.'
+      formError.value = error.response?.data?.message ?? t('adminDocumentUploadStepsPage.errors.saveFailed')
       fieldErrors.value = error.response?.data?.errors ?? {}
     } else {
-      formError.value = 'Unable to save the document upload step.'
+      formError.value = t('adminDocumentUploadStepsPage.errors.saveFailed')
     }
   } finally {
     isSaving.value = false
@@ -175,7 +177,7 @@ async function toggleStep(row: DocumentUploadStepItem) {
 }
 
 async function destroyStep(row: DocumentUploadStepItem) {
-  const confirmed = window.confirm(`Delete "${row.name}"? This cannot be undone.`)
+  const confirmed = window.confirm(t('adminDocumentUploadStepsPage.confirm.deleteStep', { name: row.name }))
   if (!confirmed) return
 
   clearMessages()
@@ -190,7 +192,7 @@ async function destroyStep(row: DocumentUploadStepItem) {
       resetForm()
     }
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to delete document upload step right now.')
+    formError.value = extractErrorMessage(error, t('adminDocumentUploadStepsPage.errors.deleteFailed'))
   } finally {
     deletingId.value = null
   }
@@ -219,7 +221,7 @@ async function reorderSteps(orderedIds: number[]) {
     successMessage.value = data.message
   } catch (error) {
     steps.value = previous
-    formError.value = extractErrorMessage(error, 'Unable to reorder document upload steps right now.')
+    formError.value = extractErrorMessage(error, t('adminDocumentUploadStepsPage.errors.reorderFailed'))
   } finally {
     isReordering.value = false
   }
@@ -238,21 +240,19 @@ function extractErrorMessage(error: unknown, fallback: string) {
   <div class="document-step-page">
     <section class="document-step-hero">
       <div>
-        <span class="document-step-hero__eyebrow">Admin Setup · Documents</span>
-        <h1>Manage request document upload steps</h1>
+        <span class="document-step-hero__eyebrow">{{ t('adminDocumentUploadStepsPage.hero.eyebrow') }}</span>
+        <h1>{{ t('adminDocumentUploadStepsPage.hero.title') }}</h1>
         <p>
-          Create the required upload checklist clients will see only after their request reaches the
-          document stage. This page is fully wired to Laravel CRUD including list, create, update,
-          delete, active toggle, and drag-and-drop reorder.
+          {{ t('adminDocumentUploadStepsPage.hero.subtitle') }}
         </p>
       </div>
 
       <div class="document-step-hero__actions">
         <button type="button" class="document-step-primary-btn" :disabled="isSaving" @click="saveStep">
-          {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update step' : 'Save step' }}
+          {{ isSaving ? (isEditing ? t('adminDocumentUploadStepsPage.actions.updating') : t('adminDocumentUploadStepsPage.actions.saving')) : isEditing ? t('adminDocumentUploadStepsPage.actions.updateStep') : t('adminDocumentUploadStepsPage.actions.saveStep') }}
         </button>
         <button type="button" class="document-step-secondary-btn" @click="resetForm">
-          {{ isEditing ? 'Cancel edit' : 'Reset form' }}
+          {{ isEditing ? t('adminDocumentUploadStepsPage.actions.cancelEdit') : t('adminDocumentUploadStepsPage.actions.resetForm') }}
         </button>
       </div>
     </section>

@@ -9,6 +9,7 @@ use App\Http\Requests\Client\SignClientContractRequest;
 use App\Models\FinanceRequest;
 use App\Models\RequestTimeline;
 use App\Support\ContractDocumentBuilder;
+use App\Support\ContractTemplateResolver;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +25,8 @@ class ClientContractController extends Controller
             'client:id,name,email,phone',
             'answers.question:id,code,question_text,question_type,sort_order',
             'attachments',
-            'currentContract',
+            'timeline.actor:id,name',
+            'currentContract.template',
             'shareholders',
         ]);
 
@@ -65,7 +67,7 @@ class ClientContractController extends Controller
                 'actor_user_id' => $client->id,
                 'event_type' => 'contract.client_signed',
                 'event_title' => 'Contract signed by client',
-                'event_description' => 'The client reviewed the contract PDF and submitted the final signature.',
+                'event_description' => 'The client reviewed the Arabic contract template preview and submitted the final signature.',
                 'metadata_json' => [
                     'contract_id' => $contract->id,
                     'contract_status' => $contract->status->value,
@@ -76,7 +78,7 @@ class ClientContractController extends Controller
 
         return response()->json([
             'message' => 'Contract signed successfully.',
-            'request' => $financeRequest->fresh(['client:id,name,email', 'currentContract']),
+            'request' => $financeRequest->fresh(['client:id,name,email', 'currentContract.template']),
         ]);
     }
 
@@ -118,23 +120,24 @@ class ClientContractController extends Controller
 
     private function renderAndPersistFinalPdf(FinanceRequest $financeRequest, $contract): void
     {
-        $terms = (array) ($contract->terms_json ?? []);
-        $html = ContractDocumentBuilder::buildHtml(
+        $bodyHtml = trim((string) $contract->contract_content);
+
+        if ($bodyHtml === '') {
+            $template = $contract->template ?: ContractTemplateResolver::resolveTemplateForRequest($financeRequest);
+            $bodyHtml = ContractTemplateResolver::renderEditableHtml($financeRequest->fresh('client'), $template);
+            $contract->contract_content = $bodyHtml;
+        }
+
+        $documentHtml = ContractDocumentBuilder::buildPdfHtml(
             $financeRequest->fresh('client'),
-            $terms,
+            $bodyHtml,
             $contract
         );
-
-        $contract->contract_content = $html;
 
         $pdfRelativePath = $contract->contract_pdf_path
             ?: 'contracts/pdfs/request-' . $financeRequest->id . '-v' . $contract->version_no . '.pdf';
 
-        $pdf = Pdf::loadHTML($html)
-            ->setPaper('a4')
-            ->setWarnings(false);
-
-        Storage::disk('public')->put($pdfRelativePath, $pdf->output());
+        Storage::disk('public')->put($pdfRelativePath, MpdfContractPdfRenderer::render($documentHtml));
         $contract->contract_pdf_path = $pdfRelativePath;
     }
 }

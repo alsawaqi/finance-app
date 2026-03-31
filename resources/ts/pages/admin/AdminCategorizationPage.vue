@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getAdminCategorization, type CategorizedAgent, type CategorizedClient, type CategorizedStaff } from '@/services/adminCategorization'
 
 const loading = ref(true)
@@ -21,12 +22,13 @@ const stageBreakdown = ref<Record<string, number>>({})
 const agents = ref<CategorizedAgent[]>([])
 const staff = ref<CategorizedStaff[]>([])
 const clients = ref<CategorizedClient[]>([])
+const { t } = useI18n()
 
 const statCards = computed(() => [
-  { label: 'Total Requests', value: summary.value.total_requests, tone: 'emerald' },
-  { label: 'Clients', value: summary.value.total_clients, tone: 'blue' },
-  { label: 'Staff', value: summary.value.total_staff, tone: 'violet' },
-  { label: 'Agents', value: summary.value.total_agents, tone: 'amber' },
+  { label: t('adminCategorizationPage.stats.totalRequests'), value: summary.value.total_requests, tone: 'emerald' },
+  { label: t('adminCategorizationPage.stats.clients'), value: summary.value.total_clients, tone: 'blue' },
+  { label: t('adminCategorizationPage.stats.staff'), value: summary.value.total_staff, tone: 'violet' },
+  { label: t('adminCategorizationPage.stats.agents'), value: summary.value.total_agents, tone: 'amber' },
 ])
 
 const topStatuses = computed(() => Object.entries(statusBreakdown.value).sort((a, b) => b[1] - a[1]).slice(0, 6))
@@ -48,14 +50,14 @@ async function load() {
     staff.value = data.staff ?? []
     clients.value = data.clients ?? []
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to load categorization data.'
+    errorMessage.value = error?.response?.data?.message || t('adminCategorizationPage.errors.loadFailed')
   } finally {
     loading.value = false
   }
 }
 
 function dateText(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : '—'
+  return value ? new Date(value).toLocaleString() : t('adminCategorizationPage.states.emptyValue')
 }
 
 onMounted(load)
@@ -65,14 +67,14 @@ onMounted(load)
   <section class="admin-page-shell admin-catalog-page">
     <div class="page-topbar">
       <div>
-        <p class="eyebrow">Admin categorization</p>
-        <h1>Relationship & Workload Catalog</h1>
+        <p class="eyebrow">{{ t('adminCategorizationPage.hero.eyebrow') }}</p>
+        <h1>{{ t('adminCategorizationPage.hero.title') }}</h1>
         <p class="subtext">
-          Review how requests are distributed across agents, staff members, and registered clients without opening each record one by one.
+          {{ t('adminCategorizationPage.hero.subtitle') }}
         </p>
       </div>
       <div class="actions-row">
-        <button class="ghost-btn" type="button" @click="load">Refresh</button>
+        <button class="ghost-btn" type="button" @click="load">{{ t('adminCategorizationPage.actions.refresh') }}</button>
       </div>
     </div>
 
@@ -86,23 +88,23 @@ onMounted(load)
     <div class="catalog-top-grid">
       <article class="panel-card catalog-highlight-card">
         <div class="panel-head">
-          <h2>Operational highlights</h2>
+          <h2>{{ t('adminCategorizationPage.sections.operationalHighlights') }}</h2>
         </div>
         <div class="catalog-mini-stats">
           <div>
-            <span>Submitted</span>
+            <span>{{ t('adminCategorizationPage.kpi.submitted') }}</span>
             <strong>{{ summary.submitted_requests }}</strong>
           </div>
           <div>
-            <span>Active</span>
+            <span>{{ t('adminCategorizationPage.kpi.active') }}</span>
             <strong>{{ summary.active_requests }}</strong>
           </div>
           <div>
-            <span>Completed</span>
+            <span>{{ t('adminCategorizationPage.kpi.completed') }}</span>
             <strong>{{ summary.completed_requests }}</strong>
           </div>
           <div>
-            <span>Additional docs</span>
+            <span>{{ t('adminCategorizationPage.kpi.additionalDocs') }}</span>
             <strong>{{ summary.with_additional_document_requests }}</strong>
           </div>
         </div>
@@ -110,19 +112,19 @@ onMounted(load)
 
       <article class="panel-card catalog-highlight-card">
         <div class="panel-head">
-          <h2>Quick signals</h2>
+          <h2>{{ t('adminCategorizationPage.sections.quickSignals') }}</h2>
         </div>
         <div class="catalog-mini-stats">
           <div>
-            <span>Agents with traffic</span>
+            <span>{{ t('adminCategorizationPage.kpi.agentsWithTraffic') }}</span>
             <strong>{{ agentsWithTraffic }}</strong>
           </div>
           <div>
-            <span>Staff with workload</span>
+            <span>{{ t('adminCategorizationPage.kpi.staffWithWorkload') }}</span>
             <strong>{{ staffWithAssignments }}</strong>
           </div>
           <div>
-            <span>Clients needing action</span>
+            <span>{{ t('adminCategorizationPage.kpi.clientsNeedingAction') }}</span>
             <strong>{{ clientsNeedingAction }}</strong>
           </div>
         </div>
@@ -130,7 +132,7 @@ onMounted(load)
 
       <article class="panel-card catalog-breakdown-card">
         <div class="panel-head">
-          <h2>Request status mix</h2>
+          <h2>{{ t('adminCategorizationPage.sections.requestStatusMix') }}</h2>
         </div>
         <div class="catalog-chip-grid">
           <span v-for="entry in topStatuses" :key="entry[0]" class="soft-tag">{{ entry[0] }} · {{ entry[1] }}</span>
@@ -139,7 +141,7 @@ onMounted(load)
 
       <article class="panel-card catalog-breakdown-card">
         <div class="panel-head">
-          <h2>Workflow stage mix</h2>
+          <h2>{{ t('adminCategorizationPage.sections.workflowStageMix') }}</h2>
         </div>
         <div class="catalog-chip-grid">
           <span v-for="entry in topStages" :key="entry[0]" class="soft-tag">{{ entry[0] }} · {{ entry[1] }}</span>
@@ -147,19 +149,19 @@ onMounted(load)
       </article>
     </div>
 
-    <div v-if="loading" class="panel-card empty-state">Loading categorization data…</div>
+    <div v-if="loading" class="panel-card empty-state">{{ t('adminCategorizationPage.states.loading') }}</div>
     <div v-else-if="errorMessage" class="panel-card error-state">{{ errorMessage }}</div>
 
     <div v-else class="panel-card catalog-panel">
       <div class="catalog-tabbar">
         <button type="button" class="catalog-tab" :class="{ 'is-active': activeTab === 'agents' }" @click="activeTab = 'agents'">
-          Agents
+          {{ t('adminCategorizationPage.tabs.agents') }}
         </button>
         <button type="button" class="catalog-tab" :class="{ 'is-active': activeTab === 'staff' }" @click="activeTab = 'staff'">
-          Staff
+          {{ t('adminCategorizationPage.tabs.staff') }}
         </button>
         <button type="button" class="catalog-tab" :class="{ 'is-active': activeTab === 'clients' }" @click="activeTab = 'clients'">
-          Clients
+          {{ t('adminCategorizationPage.tabs.clients') }}
         </button>
       </div>
 
@@ -167,20 +169,20 @@ onMounted(load)
         <table class="request-table">
           <thead>
             <tr>
-              <th>Agent</th>
-              <th>Bank</th>
-              <th>Email Records</th>
-              <th>Requests Touched</th>
-              <th>Last Contact</th>
+              <th>{{ t('adminCategorizationPage.tables.agents.agent') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.agents.bank') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.agents.emailRecords') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.agents.requestsTouched') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.agents.lastContact') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="agent in agents" :key="agent.id">
               <td>
                 <strong>{{ agent.name }}</strong>
-                <div class="muted-small">{{ agent.email || 'No email saved' }}</div>
+                <div class="muted-small">{{ agent.email || t('adminCategorizationPage.states.noEmailSaved') }}</div>
               </td>
-              <td>{{ agent.bank_name || 'No bank linked' }}</td>
+              <td>{{ agent.bank_name || t('adminCategorizationPage.states.noBankLinked') }}</td>
               <td>{{ agent.emails_count }}</td>
               <td>{{ agent.requests_count }}</td>
               <td>{{ dateText(agent.last_contact_at) }}</td>
@@ -193,12 +195,12 @@ onMounted(load)
         <table class="request-table">
           <thead>
             <tr>
-              <th>Staff</th>
-              <th>Active Assignments</th>
-              <th>Lead Requests</th>
-              <th>Comments</th>
-              <th>Permissions</th>
-              <th>Last Assignment</th>
+              <th>{{ t('adminCategorizationPage.tables.staff.staff') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.staff.activeAssignments') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.staff.leadRequests') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.staff.comments') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.staff.permissions') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.staff.lastAssignment') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -213,7 +215,7 @@ onMounted(load)
               <td>
                 <div class="catalog-inline-chips">
                   <span v-for="permission in member.permission_names.slice(0, 3)" :key="permission" class="soft-tag">{{ permission }}</span>
-                  <span v-if="member.permission_names.length > 3" class="muted-small">+{{ member.permission_names.length - 3 }} more</span>
+                  <span v-if="member.permission_names.length > 3" class="muted-small">+{{ member.permission_names.length - 3 }} {{ t('adminCategorizationPage.states.more') }}</span>
                 </div>
               </td>
               <td>{{ dateText(member.last_assigned_at) }}</td>
@@ -226,12 +228,12 @@ onMounted(load)
         <table class="request-table">
           <thead>
             <tr>
-              <th>Client</th>
-              <th>Total Requests</th>
-              <th>Active Requests</th>
-              <th>Needs Action</th>
-              <th>Last Request</th>
-              <th>Last Login</th>
+              <th>{{ t('adminCategorizationPage.tables.clients.client') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.clients.totalRequests') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.clients.activeRequests') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.clients.needsAction') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.clients.lastRequest') }}</th>
+              <th>{{ t('adminCategorizationPage.tables.clients.lastLogin') }}</th>
             </tr>
           </thead>
           <tbody>

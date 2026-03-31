@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { RequestQuestionItem } from '@/services/requestQuestions'
 
 const props = defineProps<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
 const localRows = ref<RequestQuestionItem[]>([])
 const draggingId = ref<number | null>(null)
 const dragOverId = ref<number | null>(null)
+const { t } = useI18n()
 
 watch(
   () => props.rows,
@@ -65,26 +67,26 @@ function handleDrop(targetId: number) {
   <section class="admin-panel admin-reveal-up admin-reveal-delay-3">
     <div class="admin-panel__head">
       <div>
-        <span class="admin-panel__eyebrow">Question library</span>
-        <h2>Existing request questions</h2>
+        <span class="admin-panel__eyebrow">{{ t('adminQuestionLibrary.eyebrow') }}</span>
+        <h2>{{ t('adminQuestionLibrary.title') }}</h2>
       </div>
-      <span class="admin-panel__action is-static">Drag rows to reorder</span>
+      <span class="admin-panel__action is-static">{{ t('adminQuestionLibrary.dragToReorder') }}</span>
     </div>
 
-    <div v-if="loading" class="admin-table-empty">Loading request questions...</div>
-    <div v-else-if="!localRows.length" class="admin-table-empty">No request questions have been created yet.</div>
+    <div v-if="loading" class="admin-table-empty">{{ t('adminQuestionLibrary.states.loading') }}</div>
+    <div v-else-if="!localRows.length" class="admin-table-empty">{{ t('adminQuestionLibrary.states.empty') }}</div>
     <div v-else class="admin-table-wrap" :class="{ 'is-reordering': reordering }">
       <table class="admin-table">
         <thead>
           <tr>
-            <th style="width: 54px">Sort</th>
-            <th>Code</th>
-            <th>Question</th>
-            <th>Type</th>
-            <th>Required</th>
-            <th>Options</th>
-            <th>Status</th>
-            <th>Action</th>
+            <th style="width: 54px">{{ t('adminQuestionLibrary.columns.sort') }}</th>
+            <th>{{ t('adminQuestionLibrary.columns.code') }}</th>
+            <th>{{ t('adminQuestionLibrary.columns.question') }}</th>
+            <th>{{ t('adminQuestionLibrary.columns.type') }}</th>
+            <th>{{ t('adminQuestionLibrary.columns.required') }}</th>
+            <th>{{ t('adminQuestionLibrary.columns.options') }}</th>
+            <th>{{ t('adminQuestionLibrary.columns.status') }}</th>
+            <th>{{ t('adminQuestionLibrary.columns.action') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -100,12 +102,12 @@ function handleDrop(targetId: number) {
             @dragend="draggingId = null; dragOverId = null"
           >
             <td>
-              <button type="button" class="admin-drag-handle" aria-label="Drag to reorder">
+              <button type="button" class="admin-drag-handle" :aria-label="t('adminQuestionLibrary.dragToReorder')">
                 <i class="fas fa-grip-vertical"></i>
                 <span>{{ row.sort_order }}</span>
               </button>
             </td>
-            <td>{{ row.code || '—' }}</td>
+            <td>{{ row.code || t('adminQuestionLibrary.states.emptyValue') }}</td>
             <td>
               <div class="admin-question-table__text">
                 <strong>{{ row.question_text }}</strong>
@@ -113,18 +115,18 @@ function handleDrop(targetId: number) {
               </div>
             </td>
             <td><span class="admin-status-pill">{{ row.question_type }}</span></td>
-            <td>{{ row.is_required ? 'Yes' : 'No' }}</td>
+            <td>{{ row.is_required ? t('adminQuestionLibrary.states.yes') : t('adminQuestionLibrary.states.no') }}</td>
             <td>{{ row.options_count }}</td>
             <td>
               <span class="admin-status-pill" :class="row.is_active ? 'is-success' : 'is-muted'">
-                {{ row.is_active ? 'Active' : 'Inactive' }}
+                {{ row.is_active ? t('adminQuestionLibrary.states.active') : t('adminQuestionLibrary.states.inactive') }}
               </span>
             </td>
             <td>
               <div class="admin-table-actions">
-                <button type="button" class="admin-inline-link" @click="$emit('edit', row)">Edit</button>
+                <button type="button" class="admin-inline-link" @click="$emit('edit', row)">{{ t('adminQuestionLibrary.actions.edit') }}</button>
                 <button type="button" class="admin-inline-link" @click="$emit('toggle', row)">
-                  {{ row.is_active ? 'Deactivate' : 'Activate' }}
+                  {{ row.is_active ? t('adminQuestionLibrary.actions.deactivate') : t('adminQuestionLibrary.actions.activate') }}
                 </button>
               </div>
             </td>

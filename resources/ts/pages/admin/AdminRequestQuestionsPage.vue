@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+import { useI18n } from 'vue-i18n'
 import AdminQuestionBuilderForm from './inc/AdminQuestionBuilderForm.vue'
 import AdminQuestionPreviewCard from './inc/AdminQuestionPreviewCard.vue'
 import AdminQuestionLibraryTable from './inc/AdminQuestionLibraryTable.vue'
@@ -27,18 +28,20 @@ type QuestionForm = {
   options_text: string
 }
 
-const questionTypeOptions: Array<{ value: QuestionType; label: string; helper: string }> = [
-  { value: 'text', label: 'Text', helper: 'Single line answer' },
-  { value: 'textarea', label: 'Textarea', helper: 'Longer free text answer' },
-  { value: 'select', label: 'Select', helper: 'Dropdown choices from options_json' },
-  { value: 'radio', label: 'Radio', helper: 'Single choice options' },
-  { value: 'checkbox', label: 'Checkbox', helper: 'Multi-select options' },
-  { value: 'number', label: 'Number', helper: 'Numeric answer' },
-  { value: 'date', label: 'Date', helper: 'Date picker' },
-  { value: 'email', label: 'Email', helper: 'Email-formatted answer' },
-  { value: 'phone', label: 'Phone', helper: 'Phone number answer' },
-  { value: 'currency', label: 'Currency', helper: 'Amount / finance value' },
-]
+const { t } = useI18n()
+
+const questionTypeOptions = computed<Array<{ value: QuestionType; label: string; helper: string }>>(() => [
+  { value: 'text', label: t('adminRequestQuestionsPage.types.text.label'), helper: t('adminRequestQuestionsPage.types.text.helper') },
+  { value: 'textarea', label: t('adminRequestQuestionsPage.types.textarea.label'), helper: t('adminRequestQuestionsPage.types.textarea.helper') },
+  { value: 'select', label: t('adminRequestQuestionsPage.types.select.label'), helper: t('adminRequestQuestionsPage.types.select.helper') },
+  { value: 'radio', label: t('adminRequestQuestionsPage.types.radio.label'), helper: t('adminRequestQuestionsPage.types.radio.helper') },
+  { value: 'checkbox', label: t('adminRequestQuestionsPage.types.checkbox.label'), helper: t('adminRequestQuestionsPage.types.checkbox.helper') },
+  { value: 'number', label: t('adminRequestQuestionsPage.types.number.label'), helper: t('adminRequestQuestionsPage.types.number.helper') },
+  { value: 'date', label: t('adminRequestQuestionsPage.types.date.label'), helper: t('adminRequestQuestionsPage.types.date.helper') },
+  { value: 'email', label: t('adminRequestQuestionsPage.types.email.label'), helper: t('adminRequestQuestionsPage.types.email.helper') },
+  { value: 'phone', label: t('adminRequestQuestionsPage.types.phone.label'), helper: t('adminRequestQuestionsPage.types.phone.helper') },
+  { value: 'currency', label: t('adminRequestQuestionsPage.types.currency.label'), helper: t('adminRequestQuestionsPage.types.currency.helper') },
+])
 
 const questions = ref<RequestQuestionItem[]>([])
 const isLoading = ref(false)
@@ -68,10 +71,10 @@ const stats = computed(() => {
   const choiceBased = questions.value.filter((item) => optionDrivenTypes.includes(item.question_type)).length
 
   return [
-    { label: 'Total questions', value: String(total), tone: 'violet' },
-    { label: 'Active questions', value: String(active), tone: 'emerald' },
-    { label: 'Required fields', value: String(required), tone: 'blue' },
-    { label: 'Choice based', value: String(choiceBased), tone: 'amber' },
+    { label: t('adminRequestQuestionsPage.stats.totalQuestions'), value: String(total), tone: 'violet' },
+    { label: t('adminRequestQuestionsPage.stats.activeQuestions'), value: String(active), tone: 'emerald' },
+    { label: t('adminRequestQuestionsPage.stats.requiredFields'), value: String(required), tone: 'blue' },
+    { label: t('adminRequestQuestionsPage.stats.choiceBased'), value: String(choiceBased), tone: 'amber' },
   ]
 })
 
@@ -117,7 +120,7 @@ async function fetchQuestions() {
       form.value.sort_order = questions.value.length + 1
     }
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to load request questions right now.')
+    formError.value = extractErrorMessage(error, t('adminRequestQuestionsPage.errors.loadFailed'))
   } finally {
     isLoading.value = false
   }
@@ -160,10 +163,10 @@ async function saveQuestion() {
     resetForm()
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      formError.value = error.response?.data?.message ?? 'Unable to save the request question.'
+      formError.value = error.response?.data?.message ?? t('adminRequestQuestionsPage.errors.saveFailed')
       fieldErrors.value = error.response?.data?.errors ?? {}
     } else {
-      formError.value = 'Unable to save the request question.'
+      formError.value = t('adminRequestQuestionsPage.errors.saveFailed')
     }
   } finally {
     isSaving.value = false
@@ -197,7 +200,7 @@ async function toggleQuestion(row: RequestQuestionItem) {
     successMessage.value = data.message
     questions.value = questions.value.map((question) => (question.id === row.id ? data.data : question))
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to update question status right now.')
+    formError.value = extractErrorMessage(error, t('adminRequestQuestionsPage.errors.toggleFailed'))
   }
 }
 
@@ -224,7 +227,7 @@ async function reorderQuestions(orderedIds: number[]) {
     successMessage.value = data.message
   } catch (error) {
     questions.value = previous
-    formError.value = extractErrorMessage(error, 'Unable to reorder request questions right now.')
+    formError.value = extractErrorMessage(error, t('adminRequestQuestionsPage.errors.reorderFailed'))
   } finally {
     isReordering.value = false
   }
@@ -243,20 +246,19 @@ function extractErrorMessage(error: unknown, fallback: string) {
   <div class="admin-question-page">
     <section class="admin-hero admin-reveal-up">
       <div class="admin-hero__content">
-        <span class="admin-hero__eyebrow">Request Question Builder</span>
-        <h2>Define the request questions your clients will answer before submission.</h2>
+        <span class="admin-hero__eyebrow">{{ t('adminRequestQuestionsPage.hero.eyebrow') }}</span>
+        <h2>{{ t('adminRequestQuestionsPage.hero.title') }}</h2>
         <p>
-          This page is now wired to Laravel CRUD for the <code>request_questions</code> table, including
-          list, create, update, activate/deactivate, and drag-and-drop sort order.
+          {{ t('adminRequestQuestionsPage.hero.subtitle') }}
         </p>
       </div>
 
       <div class="admin-hero__actions">
         <button type="button" class="admin-primary-btn" :disabled="isSaving" @click="saveQuestion">
-          {{ isSaving ? (isEditing ? 'Updating...' : 'Saving...') : isEditing ? 'Update question' : 'Save question' }}
+          {{ isSaving ? (isEditing ? t('adminRequestQuestionsPage.actions.updating') : t('adminRequestQuestionsPage.actions.saving')) : isEditing ? t('adminRequestQuestionsPage.actions.updateQuestion') : t('adminRequestQuestionsPage.actions.saveQuestion') }}
         </button>
         <button type="button" class="admin-secondary-btn" @click="resetForm">
-          {{ isEditing ? 'Cancel edit' : 'Reset form' }}
+          {{ isEditing ? t('adminRequestQuestionsPage.actions.cancelEdit') : t('adminRequestQuestionsPage.actions.resetForm') }}
         </button>
       </div>
     </section>
@@ -304,8 +306,8 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <div class="admin-panel admin-reveal-up admin-reveal-delay-2">
         <div class="admin-panel__head">
           <div>
-            <span class="admin-panel__eyebrow">Question type guide</span>
-            <h2>How each field behaves on the client side</h2>
+            <span class="admin-panel__eyebrow">{{ t('adminRequestQuestionsPage.guide.eyebrow') }}</span>
+            <h2>{{ t('adminRequestQuestionsPage.guide.title') }}</h2>
           </div>
         </div>
 

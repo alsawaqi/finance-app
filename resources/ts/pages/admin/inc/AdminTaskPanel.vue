@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 type TaskItem = {
   title: string
   helper: string
@@ -8,14 +10,16 @@ type TaskItem = {
 defineProps<{
   tasks: TaskItem[]
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <section class="admin-panel admin-reveal-up admin-reveal-delay-3">
     <div class="admin-panel__head">
       <div>
-        <span class="admin-panel__eyebrow">Action center</span>
-        <h2>Priority actions</h2>
+        <span class="admin-panel__eyebrow">{{ t('adminSharedWidgets.taskPanel.eyebrow') }}</span>
+        <h2>{{ t('adminSharedWidgets.taskPanel.title') }}</h2>
       </div>
     </div>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import SignaturePad from 'signature_pad'
 import { clientContractDownloadUrl, getClientContract, signClientContract } from '@/services/clientPortal'
 import { countryNameFromCode } from '@/utils/countries'
@@ -15,6 +16,7 @@ const submitting = ref(false)
 const errorMessage = ref('')
 const financeRequest = ref<any | null>(null)
 const contract = ref<any | null>(null)
+const { t } = useI18n()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let signaturePad: SignaturePad | null = null
 
@@ -82,7 +84,7 @@ async function load() {
 
     await initSignatureSurface()
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to load the contract.'
+    errorMessage.value = error?.response?.data?.message || t('clientSign.errors.loadFailed')
   } finally {
     loading.value = false
   }
@@ -95,7 +97,7 @@ function clearSignature() {
 async function submitSignature() {
   if (!financeRequest.value) return
   if (!signaturePad || signaturePad.isEmpty()) {
-    errorMessage.value = 'Please sign before submitting.'
+    errorMessage.value = t('clientSign.errors.signFirst')
     return
   }
 
@@ -109,7 +111,7 @@ async function submitSignature() {
 
     await router.push({ name: 'client-request-details', params: { id: financeRequest.value.id } })
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to submit your signature.'
+    errorMessage.value = error?.response?.data?.message || t('clientSign.errors.submitFailed')
   } finally {
     submitting.value = false
   }
@@ -134,63 +136,50 @@ onUnmounted(() => {
   <section class="client-shell">
     <div class="hero-card">
       <div>
-        <p class="eyebrow">Client signing</p>
-        <h1>Review and Sign Contract</h1>
-        <p>Download the PDF, review the final contract terms, then sign below to continue the process.</p>
+        <p class="eyebrow">{{ t('clientSign.hero.eyebrow') }}</p>
+        <h1>{{ t('clientSign.hero.title') }}</h1>
+        <p>{{ t('clientSign.hero.subtitle') }}</p>
       </div>
       <div class="action-stack">
-        <RouterLink :to="{ name: 'client-request-details', params: { id: requestId } }" class="ghost-btn">Back to request</RouterLink>
-        <a :href="clientContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="primary-btn">Download PDF</a>
+        <RouterLink :to="{ name: 'client-request-details', params: { id: requestId } }" class="ghost-btn">{{ t('clientSign.hero.backToRequest') }}</RouterLink>
+        <a :href="clientContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="primary-btn">{{ t('clientSign.hero.downloadPdf') }}</a>
       </div>
     </div>
 
-    <p v-if="loading" class="empty-state">Loading contract…</p>
+    <p v-if="loading" class="empty-state">{{ t('clientSign.states.loading') }}</p>
     <p v-else-if="errorMessage" class="error-state">{{ errorMessage }}</p>
 
     <div v-else-if="financeRequest && contract" class="contract-grid">
       <article class="panel-card info-card">
-        <div class="panel-head"><h2>Contract summary</h2></div>
+        <div class="panel-head"><h2>{{ t('clientSign.sections.contractSummary') }}</h2></div>
         <div class="summary-grid">
-          <div class="summary-row"><span>Request Ref</span><strong>{{ financeRequest.reference_number }}</strong></div>
-          <div class="summary-row"><span>Approval Ref</span><strong>{{ financeRequest.approval_reference_number || 'Pending approval' }}</strong></div>
-          <div class="summary-row"><span>Client</span><strong>{{ intakeFullName(financeRequest.intake_details_json, financeRequest.client?.name || 'Client') }}</strong></div>
-          <div class="summary-row"><span>Country</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json)) }}</strong></div>
-          <div class="summary-row"><span>Requested amount</span><strong>{{ intakeRequestedAmount(financeRequest.intake_details_json) }}</strong></div>
-          <div class="summary-row"><span>Finance type</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json) }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.requestRef') }}</span><strong>{{ financeRequest.reference_number }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.approvalRef') }}</span><strong>{{ financeRequest.approval_reference_number || t('clientSign.states.pendingApproval') }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.client') }}</span><strong>{{ intakeFullName(financeRequest.intake_details_json, financeRequest.client?.name || t('clientSign.states.clientFallback')) }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json)) }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(financeRequest.intake_details_json) }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.financeType') }}</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json) }}</strong></div>
         </div>
       </article>
 
       <article class="panel-card terms-card">
-        <div class="panel-head"><h2>Terms overview</h2></div>
-        <div class="terms-grid">
-          <div class="term-box"><span>Commission</span><strong>{{ contract.terms_json?.commission || '—' }}</strong></div>
-          <div class="term-box"><span>Interest</span><strong>{{ contract.terms_json?.interest || '—' }}</strong></div>
-          <div class="term-box"><span>Payment period</span><strong>{{ contract.terms_json?.payment_period || '—' }}</strong></div>
-        </div>
-
-        <div class="term-list-box">
-          <span class="term-list-title">General terms</span>
-          <ol>
-            <li v-for="(item, index) in contract.terms_json?.general_terms || []" :key="`${index}-${item}`">{{ item }}</li>
-          </ol>
-        </div>
-
-        <div class="term-note" v-if="contract.terms_json?.special_terms">
-          <span>Special terms</span>
-          <p>{{ contract.terms_json?.special_terms }}</p>
+        <div class="panel-head"><h2>Contract Preview</h2></div>
+        <p class="subtext">Review the contract exactly as prepared by the admin before adding your signature.</p>
+        <div class="contract-preview-shell">
+          <div class="contract-preview-surface contract-doc" dir="rtl" v-html="contract.contract_content || '<p>Contract preview is not available yet.</p>'"></div>
         </div>
       </article>
 
       <article class="panel-card signature-card wide-card">
-        <div class="panel-head"><h2>Client Signature</h2></div>
-        <p class="subtext">By signing below, you confirm you reviewed the PDF contract and agree to proceed.</p>
+        <div class="panel-head"><h2>{{ t('clientSign.sections.clientSignature') }}</h2></div>
+        <p class="subtext">{{ t('clientSign.sections.signatureDisclaimer') }}</p>
         <div class="signature-pad-shell">
           <canvas ref="canvasRef" class="signature-canvas"></canvas>
         </div>
         <div class="signature-actions">
-          <button class="ghost-btn" type="button" @click="clearSignature">Clear signature</button>
+          <button class="ghost-btn" type="button" @click="clearSignature">{{ t('clientSign.actions.clearSignature') }}</button>
           <button class="primary-btn" type="button" :disabled="submitting" @click="submitSignature">
-            {{ submitting ? 'Submitting…' : 'Sign and submit' }}
+            {{ submitting ? t('clientSign.actions.submitting') : t('clientSign.actions.signAndSubmit') }}
           </button>
         </div>
       </article>

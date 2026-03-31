@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   getClientRequest,
   uploadClientAdditionalDocument,
@@ -14,14 +15,18 @@ const loading = ref(true)
 const errorMessage = ref('')
 const successMessage = ref('')
 const requestItem = ref<any | null>(null)
+const { t } = useI18n()
 
-const requiredFiles = reactive<Record<number, File | null>>({})
-const additionalFiles = reactive<Record<number, File | null>>({})
-const uploadingRequired = reactive<Record<number, boolean>>({})
-const uploadingAdditional = reactive<Record<number, boolean>>({})
+const uploadingRequired = ref<Record<number, boolean>>({})
+const uploadingAdditional = ref<Record<number, boolean>>({})
 
-const requiredPendingCount = computed(() => (requestItem.value?.required_documents ?? []).filter((item: any) => !item.is_uploaded).length)
-const additionalPendingCount = computed(() => (requestItem.value?.additional_document_requests ?? []).filter((item: any) => item.status !== 'uploaded').length)
+const requiredPendingCount = computed(() =>
+  (requestItem.value?.required_documents ?? []).filter((item: any) => !item.is_uploaded).length,
+)
+
+const additionalPendingCount = computed(() =>
+  (requestItem.value?.additional_document_requests ?? []).filter((item: any) => item.status !== 'uploaded').length,
+)
 
 async function load() {
   loading.value = true
@@ -31,27 +36,35 @@ async function load() {
     const data = await getClientRequest(requestId.value)
     requestItem.value = data.request ?? null
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to load request documents.'
+    errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.loadFailed')
   } finally {
     loading.value = false
   }
 }
 
-function onRequiredFileChange(stepId: number, event: Event) {
-  const input = event.target as HTMLInputElement
-  requiredFiles[stepId] = input.files?.[0] || null
+function openRequiredPicker(stepId: number) {
+  const input = document.getElementById(`required-file-${stepId}`) as HTMLInputElement | null
+  input?.click()
 }
 
-function onAdditionalFileChange(documentId: number, event: Event) {
-  const input = event.target as HTMLInputElement
-  additionalFiles[documentId] = input.files?.[0] || null
+function openAdditionalPicker(documentId: number) {
+  const input = document.getElementById(`additional-file-${documentId}`) as HTMLInputElement | null
+  input?.click()
 }
 
-async function uploadRequired(stepId: number) {
-  const file = requiredFiles[stepId]
+ 
+
+async function onRequiredFileChange(stepId: number, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+
   if (!file) return
 
-  uploadingRequired[stepId] = true
+  uploadingRequired.value = {
+    ...uploadingRequired.value,
+    [stepId]: true,
+  }
+
   errorMessage.value = ''
   successMessage.value = ''
 
@@ -60,33 +73,48 @@ async function uploadRequired(stepId: number) {
       document_upload_step_id: stepId,
       file,
     })
-    requestItem.value = data.request
-    requiredFiles[stepId] = null
-    successMessage.value = data.message || 'Required document uploaded successfully.'
+
+    successMessage.value = data.message || t('clientDocuments.success.requiredUploaded')
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to upload the required document.'
+    errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.requiredUploadFailed')
   } finally {
-    uploadingRequired[stepId] = false
+    uploadingRequired.value = {
+      ...uploadingRequired.value,
+      [stepId]: false,
+    }
+
+    input.value = ''
   }
 }
 
-async function uploadAdditional(documentId: number) {
-  const file = additionalFiles[documentId]
+ 
+ async function onAdditionalFileChange(documentId: number, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+
   if (!file) return
 
-  uploadingAdditional[documentId] = true
+  uploadingAdditional.value = {
+    ...uploadingAdditional.value,
+    [documentId]: true,
+  }
+
   errorMessage.value = ''
   successMessage.value = ''
 
   try {
     const data = await uploadClientAdditionalDocument(requestId.value, documentId, { file })
-    requestItem.value = data.request
-    additionalFiles[documentId] = null
-    successMessage.value = data.message || 'Additional document uploaded successfully.'
+
+    successMessage.value = data.message || t('clientDocuments.success.additionalUploaded')
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to upload the additional document.'
+    errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.additionalUploadFailed')
   } finally {
-    uploadingAdditional[documentId] = false
+    uploadingAdditional.value = {
+      ...uploadingAdditional.value,
+      [documentId]: false,
+    }
+
+    input.value = ''
   }
 }
 
@@ -97,32 +125,34 @@ onMounted(load)
   <section class="client-shell client-request-detail-shell">
     <div class="hero-card">
       <div>
-        <p class="eyebrow">Request documents</p>
-        <h1>Document Uploads</h1>
-        <p>Required checklist items and extra requested files are grouped separately so the page stays clear and easy to follow.</p>
+        <p class="eyebrow">{{ t('clientDocuments.hero.eyebrow') }}</p>
+        <h1>{{ t('clientDocuments.hero.title') }}</h1>
+        <p>{{ t('clientDocuments.hero.subtitle') }}</p>
       </div>
       <div class="action-stack">
-        <RouterLink :to="{ name: 'client-request-details', params: { id: requestId } }" class="ghost-btn">Back to request</RouterLink>
+        <RouterLink :to="{ name: 'client-request-details', params: { id: requestId } }" class="ghost-btn">
+          {{ t('clientDocuments.hero.backToRequest') }}
+        </RouterLink>
       </div>
     </div>
 
-    <p v-if="loading" class="empty-state">Loading request documents…</p>
+    <p v-if="loading" class="empty-state">{{ t('clientDocuments.states.loading') }}</p>
     <p v-else-if="errorMessage && !requestItem" class="error-state">{{ errorMessage }}</p>
     <p v-if="successMessage" class="success-state">{{ successMessage }}</p>
 
     <template v-else-if="requestItem">
       <div class="client-status-chip-grid client-status-chip-grid--summary">
         <div class="client-status-chip-card">
-          <strong>{{ requestItem.workflow_stage || '—' }}</strong>
-          <span>Current stage</span>
+          <strong>{{ requestItem.workflow_stage || t('clientDocuments.states.emptyValue') }}</strong>
+          <span>{{ t('clientDocuments.summary.currentStage') }}</span>
         </div>
         <div class="client-status-chip-card">
           <strong>{{ requiredPendingCount }}</strong>
-          <span>Required items pending</span>
+          <span>{{ t('clientDocuments.summary.requiredPending') }}</span>
         </div>
         <div class="client-status-chip-card">
           <strong>{{ additionalPendingCount }}</strong>
-          <span>Additional items pending</span>
+          <span>{{ t('clientDocuments.summary.additionalPending') }}</span>
         </div>
       </div>
 
@@ -130,85 +160,143 @@ onMounted(load)
         <details class="client-accordion-card" open>
           <summary>
             <div>
-              <h2>Required documents</h2>
-              <p>All required checklist items must be uploaded before the request can move forward.</p>
+              <h2>{{ t('clientDocuments.sections.requiredTitle') }}</h2>
+              <p>{{ t('clientDocuments.sections.requiredSubtitle') }}</p>
             </div>
           </summary>
+
           <div class="client-accordion-card__body">
             <div v-if="!requestItem?.can_upload_documents" class="client-empty-state client-empty-state--inner">
-              <h3>Document upload not available yet</h3>
-              <p class="client-muted">This request has not reached the client document upload stage yet.</p>
+              <h3>{{ t('clientDocuments.states.uploadUnavailableTitle') }}</h3>
+              <p class="client-muted">{{ t('clientDocuments.states.uploadUnavailableBody') }}</p>
             </div>
 
             <div v-else-if="requestItem?.required_documents?.length" class="client-doc-grid">
-              <article v-for="item in requestItem.required_documents" :key="item.document_upload_step_id" class="client-doc-card">
+              <article
+                v-for="item in requestItem.required_documents"
+                :key="item.document_upload_step_id"
+                class="client-doc-card"
+              >
                 <div class="client-card-head">
                   <div>
                     <h3>{{ item.name }}</h3>
-                    <p class="client-subtext">{{ item.code || 'Required checklist item' }}</p>
+                    <p class="client-subtext">{{ item.code || t('clientDocuments.states.requiredChecklistItem') }}</p>
                   </div>
-                  <span class="client-badge" :class="item.is_uploaded ? 'client-badge--green' : 'client-badge--amber'">
-                    {{ item.is_uploaded ? 'Uploaded' : 'Pending' }}
+
+                  <span
+                    class="client-badge"
+                    :class="item.is_change_requested ? 'client-badge--amber' : item.is_uploaded ? 'client-badge--green' : 'client-badge--amber'"
+                  >
+                    {{
+                      item.is_change_requested
+                        ? t('clientDocuments.states.changeRequested')
+                        : item.is_uploaded
+                          ? t('clientDocuments.states.uploaded')
+                          : t('clientDocuments.states.pending')
+                    }}
                   </span>
                 </div>
 
-                <p v-if="item.upload?.file_name" class="client-subtext">Latest file: {{ item.upload.file_name }}</p>
+                <p v-if="item.upload?.file_name" class="client-subtext">
+                  {{ t('clientDocuments.states.latestFile') }}: {{ item.upload.file_name }}
+                </p>
 
-                <div class="client-inline-actions client-inline-actions--stackable">
-                  <input type="file" class="client-form-control" @change="onRequiredFileChange(item.document_upload_step_id, $event)" />
+                <p v-if="item.rejection_reason" class="client-form-error">{{ item.rejection_reason }}</p>
+
+                <p v-if="item.is_uploaded && !item.can_client_upload" class="client-subtext">
+                  {{ t('clientDocuments.states.lockedAfterUpload') }}
+                </p>
+
+                <div v-if="item.can_client_upload" class="client-inline-actions client-inline-actions--stackable">
+                  <input
+                    :id="`required-file-${item.document_upload_step_id}`"
+                    type="file"
+                    class="sr-only"
+                    @change="onRequiredFileChange(item.document_upload_step_id, $event)"
+                  />
+
                   <button
                     type="button"
                     class="client-btn-primary"
-                    :disabled="uploadingRequired[item.document_upload_step_id] || !requiredFiles[item.document_upload_step_id]"
-                    @click="uploadRequired(item.document_upload_step_id)"
+                    :disabled="uploadingRequired[item.document_upload_step_id]"
+                    @click="openRequiredPicker(item.document_upload_step_id)"
                   >
-                    {{ uploadingRequired[item.document_upload_step_id] ? 'Uploading…' : 'Upload File' }}
+                    {{
+                      uploadingRequired[item.document_upload_step_id]
+                        ? t('clientDocuments.actions.uploading')
+                        : item.is_change_requested
+                          ? t('clientDocuments.actions.uploadCorrected')
+                          : t('clientDocuments.actions.uploadFile')
+                    }}
                   </button>
                 </div>
               </article>
             </div>
 
-            <p v-else class="client-empty-state">No required documents are configured for this request yet.</p>
+            <p v-else class="client-empty-state">{{ t('clientDocuments.states.noRequiredConfigured') }}</p>
           </div>
         </details>
 
         <details class="client-accordion-card" open>
           <summary>
             <div>
-              <h2>Additional requested documents</h2>
-              <p>These appear only when staff specifically requests more documents during follow-up.</p>
+              <h2>{{ t('clientDocuments.sections.additionalTitle') }}</h2>
+              <p>{{ t('clientDocuments.sections.additionalSubtitle') }}</p>
             </div>
           </summary>
+
           <div class="client-accordion-card__body">
             <div v-if="requestItem?.additional_document_requests?.length" class="client-doc-grid">
-              <article v-for="item in requestItem.additional_document_requests" :key="item.id" class="client-doc-card">
+              <article
+                v-for="item in requestItem.additional_document_requests"
+                :key="item.id"
+                class="client-doc-card"
+              >
                 <div class="client-card-head">
                   <div>
                     <h3>{{ item.title }}</h3>
-                    <p class="client-subtext">{{ item.reason || 'No reason added.' }}</p>
+                    <p class="client-subtext">{{ item.reason || t('clientDocuments.states.noReasonAdded') }}</p>
                   </div>
-                  <span class="client-badge" :class="item.status === 'uploaded' ? 'client-badge--green' : 'client-badge--amber'">
+
+                  <span
+                    class="client-badge"
+                    :class="item.status === 'uploaded' ? 'client-badge--green' : 'client-badge--amber'"
+                  >
                     {{ item.status }}
                   </span>
                 </div>
 
-                <p v-if="item.file_name" class="client-subtext">Latest file: {{ item.file_name }}</p>
+                <p v-if="item.file_name" class="client-subtext">
+                  {{ t('clientDocuments.states.latestFile') }}: {{ item.file_name }}
+                </p>
+
                 <p v-if="item.rejection_reason" class="client-form-error">{{ item.rejection_reason }}</p>
 
                 <div class="client-inline-actions client-inline-actions--stackable">
-                  <input type="file" class="client-form-control" @change="onAdditionalFileChange(item.id, $event)" />
+                  <input
+                    :id="`additional-file-${item.id}`"
+                    type="file"
+                    class="sr-only"
+                    @change="onAdditionalFileChange(item.id, $event)"
+                  />
+
                   <button
                     type="button"
                     class="client-btn-primary"
-                    :disabled="uploadingAdditional[item.id] || !additionalFiles[item.id]"
-                    @click="uploadAdditional(item.id)"
+                    :disabled="uploadingAdditional[item.id]"
+                    @click="openAdditionalPicker(item.id)"
                   >
-                    {{ uploadingAdditional[item.id] ? 'Uploading…' : 'Upload File' }}
+                    {{
+                      uploadingAdditional[item.id]
+                        ? t('clientDocuments.actions.uploading')
+                        : t('clientDocuments.actions.uploadFile')
+                    }}
                   </button>
                 </div>
               </article>
             </div>
-            <p v-else class="client-empty-state">No additional documents have been requested yet.</p>
+
+            <p v-else class="client-empty-state">{{ t('clientDocuments.states.noAdditionalRequested') }}</p>
           </div>
         </details>
       </div>

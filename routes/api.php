@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\Admin\AdminAssignmentController;
 use App\Http\Controllers\Api\Admin\AdminCategorizationController;
 use App\Http\Controllers\Api\Admin\AdminContractController;
 use App\Http\Controllers\Api\Admin\AdminFinanceRequestController;
+use App\Http\Controllers\Api\Admin\AdminRequestFilteringController;
+use App\Http\Controllers\Api\Admin\RequestFileDownloadController;
 use App\Http\Controllers\Api\Admin\BankController;
 use App\Http\Controllers\Api\Admin\AgentController;
 use App\Http\Controllers\Api\Admin\DocumentUploadStepController;
@@ -72,12 +74,19 @@ Route::prefix('admin')
         Route::get('/requests/{financeRequest}/contract', [AdminContractController::class, 'show']);
         Route::post('/requests/{financeRequest}/contract', [AdminContractController::class, 'storeAndSend']);
         Route::get('/requests/{financeRequest}/contract/download', [AdminContractController::class, 'downloadPdf']);
+        Route::get('/requests/{financeRequest}/attachments/{attachment}/download', [RequestFileDownloadController::class, 'attachment']);
+        Route::get('/requests/{financeRequest}/shareholders/{shareholder}/id-file/download', [RequestFileDownloadController::class, 'shareholderId']);
+        Route::get('/requests/{financeRequest}/required-documents/{requestDocumentUpload}/download', [RequestFileDownloadController::class, 'requiredDocument']);
+        Route::get('/requests/{financeRequest}/additional-documents/{additionalDocument}/download', [RequestFileDownloadController::class, 'additionalDocument']);
     });
 
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'role:admin'])
     ->group(function () {
         Route::get('/categorization', AdminCategorizationController::class);
+        Route::get('/request-filters', [AdminRequestFilteringController::class, 'requests']);
+        Route::get('/clients-overview', [AdminRequestFilteringController::class, 'clients']);
+        Route::get('/clients-overview/{client}/requests', [AdminRequestFilteringController::class, 'clientRequests']);
         Route::post('/banks', [BankController::class, 'store']);
         Route::put('/banks/{bank}', [BankController::class, 'update']);
         Route::patch('/banks/{bank}/toggle-active', [BankController::class, 'toggleActive']);
@@ -125,6 +134,7 @@ Route::prefix('staff')
         Route::get('/requests', [StaffRequestWorkspaceController::class, 'index']);
         Route::get('/requests/{financeRequest}', [StaffRequestWorkspaceController::class, 'show']);
         Route::post('/requests/{financeRequest}/comments', [StaffRequestWorkspaceController::class, 'storeComment']);
+        Route::post('/requests/{financeRequest}/required-documents/{documentUploadStep}/request-change', [StaffRequestWorkspaceController::class, 'requestRequiredDocumentChange']);
         Route::post('/requests/{financeRequest}/additional-documents', [StaffRequestWorkspaceController::class, 'storeAdditionalDocument']);
         Route::get('/agents', [StaffRequestWorkspaceController::class, 'agents']);
     });

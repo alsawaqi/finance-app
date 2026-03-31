@@ -33,15 +33,19 @@ class FinanceRequestDocumentChecklistService
         return $requiredSteps->map(function (DocumentUploadStep $step) use ($latestUploadsByStep) {
             $latestUpload = $latestUploadsByStep->get($step->id);
             $status = $latestUpload?->status?->value ?? (string) ($latestUpload?->status ?? 'pending');
-            $isSatisfied = $latestUpload !== null && $status !== RequestDocumentUploadStatus::REJECTED->value;
+            $isRejected = $status === RequestDocumentUploadStatus::REJECTED->value;
+            $isSatisfied = $latestUpload !== null && ! $isRejected;
 
             return [
                 'document_upload_step_id' => $step->id,
                 'code' => $step->code,
                 'name' => $step->name,
                 'is_required' => true,
-                'status' => $isSatisfied ? 'uploaded' : 'pending',
+                'status' => $status,
                 'is_uploaded' => $isSatisfied,
+                'can_client_upload' => $latestUpload === null || $isRejected,
+                'is_change_requested' => $isRejected,
+                'rejection_reason' => $latestUpload?->rejection_reason,
                 'upload' => $latestUpload,
             ];
         });

@@ -71,6 +71,7 @@ export type FinanceRequestDetail = AdminRequestListItem & {
     version_no: number
     status: string
     terms_json?: Record<string, unknown> | null
+    contract_content?: string | null
     admin_signed_at?: string | null
     client_signed_at?: string | null
     contract_pdf_path?: string | null
@@ -94,17 +95,24 @@ export async function approveAdminRequest(id: number | string, payload: { approv
 
 export async function getAdminContract(id: number | string) {
   const { data } = await api.get(`/api/admin/requests/${id}/contract`)
-  return data
+  return data as {
+    request: FinanceRequestDetail
+    contract?: FinanceRequestDetail['current_contract']
+    contract_template?: {
+      id: number
+      name: string
+      slug: string
+      version_no?: number | null
+    } | null
+    draft_contract_html?: string
+  }
 }
 
 export async function saveAdminContract(
   id: number | string,
   payload: {
-    commission: string
-    interest: string
-    payment_period: string
-    general_terms: string[]
-    special_terms?: string
+    contract_template_slug: string
+    contract_body_html: string
     signature_data_url: string
   },
 ) {
@@ -116,6 +124,21 @@ export function adminContractDownloadUrl(id: number | string) {
   return `/api/admin/requests/${id}/contract/download`
 }
 
+export function adminRequestAttachmentDownloadUrl(id: number | string, attachmentId: number | string) {
+  return `/api/admin/requests/${id}/attachments/${attachmentId}/download`
+}
+
+export function adminRequestShareholderIdDownloadUrl(id: number | string, shareholderId: number | string) {
+  return `/api/admin/requests/${id}/shareholders/${shareholderId}/id-file/download`
+}
+
+export function adminRequiredDocumentDownloadUrl(id: number | string, uploadId: number | string) {
+  return `/api/admin/requests/${id}/required-documents/${uploadId}/download`
+}
+
+export function adminAdditionalDocumentDownloadUrl(id: number | string, additionalDocumentId: number | string) {
+  return `/api/admin/requests/${id}/additional-documents/${additionalDocumentId}/download`
+}
 
 export type AssignmentReadyRequest = AdminRequestListItem & {
   latest_assignment_at?: string | null

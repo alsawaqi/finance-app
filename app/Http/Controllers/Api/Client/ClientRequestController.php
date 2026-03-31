@@ -13,11 +13,11 @@ use App\Http\Requests\Client\UploadAdditionalDocumentRequest;
 use App\Http\Requests\Client\UploadRequiredDocumentRequest;
 use App\Models\DocumentUploadStep;
 use App\Models\FinanceRequest;
+use App\Models\RequestDocumentUpload;
 use App\Models\FinanceRequestShareholder;
 use App\Models\RequestAdditionalDocument;
 use App\Models\RequestAnswer;
 use App\Models\RequestAttachment;
-use App\Models\RequestDocumentUpload;
 use App\Models\RequestQuestion;
 use App\Models\RequestTimeline;
 use App\Services\FinanceRequestDocumentChecklistService;
@@ -80,147 +80,190 @@ class ClientRequestController extends Controller
         ]);
     }
 
-    public function store(StoreClientFinanceRequestRequest $request): JsonResponse
-    {
-        $user = $request->user();
-        $validated = $request->validated();
-        $details = Arr::get($validated, 'details', []);
-        $answers = collect(Arr::get($validated, 'answers', []));
-        $shareholders = array_values((array) Arr::get($validated, 'shareholders', []));
-        $now = now();
+   public function store(StoreClientFinanceRequestRequest $request): JsonResponse
+{
+    $user = $request->user();
+    $validated = $request->validated();
+    $details = Arr::get($validated, 'details', []);
+    $answers = collect(Arr::get($validated, 'answers', []));
+    $shareholders = array_values((array) Arr::get($validated, 'shareholders', []));
+    $now = now();
 
-        $financeRequest = DB::transaction(function () use ($request, $user, $details, $answers, $shareholders, $now) {
-            $fullName = trim((string) Arr::get($details, 'full_name', Arr::get($details, 'name', '')));
-            $countryCode = trim((string) Arr::get($details, 'country_code', Arr::get($details, 'country', '')));
-            $requestedAmount = (float) Arr::get($details, 'requested_amount', 0);
-            $applicantType = (string) Arr::get($details, 'finance_type', 'individual');
-            $companyName = trim((string) Arr::get($details, 'company_name', '')) ?: null;
-            $notes = Arr::get($details, 'notes');
+    $financeRequest = DB::transaction(function () use ($request, $user, $details, $answers, $shareholders, $now) {
+        $applicantType = (string) Arr::get($details, 'finance_type', 'individual');
+        $applicantName = $this->resolveApplicantName($user);
+        $country = trim((string) Arr::get($details, 'country', ''));
+        $requestedAmount = (float) Arr::get($details, 'requested_amount', 0);
+        $companyName = trim((string) Arr::get($details, 'company_name', '')) ?: null;
+        $email = trim((string) Arr::get($details, 'email', ''));
+        $phoneCountryCode = trim((string) Arr::get($details, 'phone_country_code', ''));
+        $phoneNumber = trim((string) Arr::get($details, 'phone_number', ''));
+        $unifiedNumber = trim((string) Arr::get($details, 'unified_number', ''));
+        $nationalAddressNumber = trim((string) Arr::get($details, 'national_address_number', ''));
+        $companyCrNumber = trim((string) Arr::get($details, 'company_cr_number', ''));
+        $address = trim((string) Arr::get($details, 'address', ''));
+        $notes = Arr::get($details, 'notes');
 
-            $financeRequest = FinanceRequest::create([
-                'reference_number' => 'TMP-' . Str::upper(Str::random(12)),
-                'user_id' => $user->id,
-                'applicant_type' => $applicantType,
-                'company_name' => $companyName,
-                'status' => FinanceRequestStatus::SUBMITTED,
-                'workflow_stage' => FinanceRequestWorkflowStage::REVIEW,
-                'priority' => FinanceRequestPriority::NORMAL,
-                'submitted_at' => $now,
-                'latest_activity_at' => $now,
-                'intake_details_json' => [
-                    'full_name' => $fullName,
-                    'country_code' => $countryCode,
+        $financeRequest = FinanceRequest::create([
+            'reference_number' => 'TMP-' . Str::upper(Str::random(12)),
+            'user_id' => $user->id,
+            'applicant_type' => $applicantType,
+            'company_name' => $companyName,
+            'status' => FinanceRequestStatus::SUBMITTED,
+            'workflow_stage' => FinanceRequestWorkflowStage::REVIEW,
+            'priority' => FinanceRequestPriority::NORMAL,
+            'submitted_at' => $now,
+            'latest_activity_at' => $now,
+            'intake_details_json' => [
+                    'applicant_name' => $applicantName,
+                    'full_name' => $applicantName,
+                    'name' => $applicantName,
+                    'country' => $country,
+                    'country_code' => $country,
                     'requested_amount' => $requestedAmount,
                     'finance_type' => $applicantType,
                     'company_name' => $companyName,
+                    'email' => $email,
+                    'phone_country_code' => $phoneCountryCode,
+                    'phone_number' => $phoneNumber,
+                    'unified_number' => $unifiedNumber,
+                    'national_address_number' => $nationalAddressNumber,
+                    'company_cr_number' => $companyCrNumber,
+                    'address' => $address,
                     'notes' => $notes,
-                    'name' => $fullName,
-                    'country' => $countryCode,
                 ],
-            ]);
+        ]);
 
-            $financeRequest->forceFill([
-                'reference_number' => $this->buildReferenceNumber($financeRequest),
-            ])->save();
+        $financeRequest->forceFill([
+            'reference_number' => $this->buildReferenceNumber($financeRequest),
+        ])->save();
 
-            foreach ($answers as $answer) {
-                $questionId = (int) Arr::get($answer, 'question_id');
-                $value = Arr::get($answer, 'value');
+        foreach ($answers as $answer) {
+            $questionId = (int) Arr::get($answer, 'question_id');
+            $value = Arr::get($answer, 'value');
 
-                [$answerText, $answerValueJson] = $this->normalizeAnswerPayload($value);
+            [$answerText, $answerValueJson] = $this->normalizeAnswerPayload($value);
 
-                RequestAnswer::create([
-                    'finance_request_id' => $financeRequest->id,
-                    'question_id' => $questionId,
-                    'answer_text' => $answerText,
-                    'answer_value_json' => $answerValueJson,
-                    'answered_by' => $user->id,
-                ]);
-            }
-
-            $storedAttachments = [];
-            foreach ($request->file('attachments', []) as $file) {
-                $path = $file->store('request-attachments/initial-submission', 'public');
-
-                $storedAttachments[] = RequestAttachment::create([
-                    'finance_request_id' => $financeRequest->id,
-                    'category' => 'initial_submission',
-                    'file_name' => $file->getClientOriginalName(),
-                    'file_path' => $path,
-                    'disk' => 'public',
-                    'mime_type' => $file->getClientMimeType(),
-                    'file_extension' => $file->getClientOriginalExtension(),
-                    'file_size' => $file->getSize(),
-                    'uploaded_by' => $user->id,
-                ]);
-            }
-
-            if ($applicantType === 'company' && $request->hasFile('company_cr')) {
-                $companyCr = $request->file('company_cr');
-                $path = $companyCr->store('request-attachments/company-cr', 'public');
-
-                $storedAttachments[] = RequestAttachment::create([
-                    'finance_request_id' => $financeRequest->id,
-                    'category' => 'company_cr',
-                    'file_name' => $companyCr->getClientOriginalName(),
-                    'file_path' => $path,
-                    'disk' => 'public',
-                    'mime_type' => $companyCr->getClientMimeType(),
-                    'file_extension' => $companyCr->getClientOriginalExtension(),
-                    'file_size' => $companyCr->getSize(),
-                    'uploaded_by' => $user->id,
-                ]);
-            }
-
-            $storedShareholders = [];
-            foreach ($shareholders as $index => $shareholder) {
-                if (! $request->hasFile("shareholders.$index.id_file")) {
-                    continue;
-                }
-
-                $idFile = $request->file("shareholders.$index.id_file");
-                $path = $idFile->store('request-shareholders', 'public');
-
-                $storedShareholders[] = FinanceRequestShareholder::create([
-                    'finance_request_id' => $financeRequest->id,
-                    'shareholder_name' => trim((string) ($shareholder['name'] ?? '')),
-                    'id_file_name' => $idFile->getClientOriginalName(),
-                    'id_file_path' => $path,
-                    'disk' => 'public',
-                    'mime_type' => $idFile->getClientMimeType(),
-                    'file_extension' => $idFile->getClientOriginalExtension(),
-                    'file_size' => $idFile->getSize(),
-                    'sort_order' => $index + 1,
-                ]);
-            }
-
-            RequestTimeline::create([
+            RequestAnswer::create([
                 'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $user->id,
-                'event_type' => 'request_submitted',
-                'event_title' => 'Request submitted',
-                'event_description' => 'Client submitted a new finance request and it is now waiting for admin review.',
-                'metadata_json' => [
-                    'reference_number' => $financeRequest->reference_number,
-                    'answer_count' => $answers->count(),
-                    'attachment_count' => count($storedAttachments),
-                    'shareholder_count' => count($storedShareholders),
-                    'applicant_type' => $applicantType,
-                    'requested_amount' => $requestedAmount,
-                    'country_code' => $countryCode,
-                    'company_name' => $companyName,
-                ],
-                'created_at' => $now,
+                'question_id' => $questionId,
+                'answer_text' => $answerText,
+                'answer_value_json' => $answerValueJson,
+                'answered_by' => $user->id,
             ]);
+        }
 
-            return $financeRequest->fresh(['answers.question', 'attachments', 'shareholders', 'additionalDocuments', 'currentContract']);
-        });
+        $storedAttachments = [];
 
-        return response()->json([
-            'message' => 'Request submitted successfully.',
-            'request' => $this->transformRequestDetails($financeRequest),
-        ], 201);
-    }
+        foreach ($request->file('attachments', []) as $file) {
+            $path = $file->store('request-attachments/initial-submission', 'public');
+
+            $storedAttachments[] = RequestAttachment::create([
+                'finance_request_id' => $financeRequest->id,
+                'category' => 'initial_submission',
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'disk' => 'public',
+                'mime_type' => $file->getClientMimeType(),
+                'file_extension' => $file->getClientOriginalExtension(),
+                'file_size' => $file->getSize(),
+                'uploaded_by' => $user->id,
+            ]);
+        }
+
+        if ($request->hasFile('national_address_attachment')) {
+            $nationalAddressFile = $request->file('national_address_attachment');
+            $path = $nationalAddressFile->store('request-attachments/national-address', 'public');
+
+            $storedAttachments[] = RequestAttachment::create([
+                'finance_request_id' => $financeRequest->id,
+                'category' => 'national_address',
+                'file_name' => $nationalAddressFile->getClientOriginalName(),
+                'file_path' => $path,
+                'disk' => 'public',
+                'mime_type' => $nationalAddressFile->getClientMimeType(),
+                'file_extension' => $nationalAddressFile->getClientOriginalExtension(),
+                'file_size' => $nationalAddressFile->getSize(),
+                'uploaded_by' => $user->id,
+            ]);
+        }
+
+        if ($applicantType === 'company' && $request->hasFile('company_cr')) {
+            $companyCr = $request->file('company_cr');
+            $path = $companyCr->store('request-attachments/company-cr', 'public');
+
+            $storedAttachments[] = RequestAttachment::create([
+                'finance_request_id' => $financeRequest->id,
+                'category' => 'company_cr',
+                'file_name' => $companyCr->getClientOriginalName(),
+                'file_path' => $path,
+                'disk' => 'public',
+                'mime_type' => $companyCr->getClientMimeType(),
+                'file_extension' => $companyCr->getClientOriginalExtension(),
+                'file_size' => $companyCr->getSize(),
+                'uploaded_by' => $user->id,
+            ]);
+        }
+
+        $storedShareholders = [];
+        foreach ($shareholders as $index => $shareholder) {
+            if (! $request->hasFile("shareholders.$index.id_file")) {
+                continue;
+            }
+
+            $idFile = $request->file("shareholders.$index.id_file");
+            $path = $idFile->store('request-shareholders', 'public');
+
+            $storedShareholders[] = FinanceRequestShareholder::create([
+                'finance_request_id' => $financeRequest->id,
+                'shareholder_name' => trim((string) ($shareholder['name'] ?? '')),
+                'phone_country_code' => trim((string) ($shareholder['phone_country_code'] ?? '')),
+                'phone_number' => trim((string) ($shareholder['phone_number'] ?? '')),
+                'id_number' => trim((string) ($shareholder['id_number'] ?? '')),
+                'id_file_name' => $idFile->getClientOriginalName(),
+                'id_file_path' => $path,
+                'disk' => 'public',
+                'mime_type' => $idFile->getClientMimeType(),
+                'file_extension' => $idFile->getClientOriginalExtension(),
+                'file_size' => $idFile->getSize(),
+                'sort_order' => $index + 1,
+            ]);
+        }
+
+        RequestTimeline::create([
+            'finance_request_id' => $financeRequest->id,
+            'actor_user_id' => $user->id,
+            'event_type' => 'request_submitted',
+            'event_title' => 'Request submitted',
+            'event_description' => 'Client submitted a new finance request and it is now waiting for admin review.',
+            'metadata_json' => [
+                'reference_number' => $financeRequest->reference_number,
+                'answer_count' => $answers->count(),
+                'attachment_count' => count($storedAttachments),
+                'shareholder_count' => count($storedShareholders),
+                'applicant_type' => $applicantType,
+                'requested_amount' => $requestedAmount,
+                'country' => $country,
+                'company_name' => $companyName,
+                'email' => $email,
+                'phone_country_code' => $phoneCountryCode,
+                'phone_number' => $phoneNumber,
+                'unified_number' => $unifiedNumber,
+                'national_address_number' => $nationalAddressNumber,
+                'company_cr_number' => $companyCrNumber,
+                'address' => $address,
+            ],
+            'created_at' => $now,
+        ]);
+
+        return $financeRequest->fresh(['answers.question', 'attachments', 'shareholders', 'additionalDocuments', 'currentContract']);
+    });
+
+    return response()->json([
+        'message' => 'Request submitted successfully.',
+        'request' => $this->transformRequestDetails($financeRequest),
+    ], 201);
+}
 
     public function show(Request $request, FinanceRequest $financeRequest): JsonResponse
     {
@@ -244,14 +287,34 @@ class ClientRequestController extends Controller
     {
         $this->authorizeClient($financeRequest, $request->user()->id);
 
+        $stage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+        abort_unless(in_array($stage, [
+            FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+            FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+            FinanceRequestWorkflowStage::PROCESSING->value,
+        ], true), 422, 'This request is not currently accepting document uploads.');
+
         $step = DocumentUploadStep::query()
             ->whereKey((int) $request->integer('document_upload_step_id'))
             ->where('is_active', true)
+            ->where('is_required', true)
             ->firstOrFail();
+
+        $latestUpload = RequestDocumentUpload::query()
+            ->where('finance_request_id', $financeRequest->id)
+            ->where('document_upload_step_id', $step->id)
+            ->latest('id')
+            ->first();
+
+        $latestStatus = $latestUpload?->status?->value ?? (string) ($latestUpload?->status ?? 'pending');
+
+        if ($latestUpload && $latestStatus !== RequestDocumentUploadStatus::REJECTED->value) {
+            abort(422, 'This required document is already locked after upload. A new version can only be uploaded after staff requests a change.');
+        }
 
         $file = $request->file('file');
 
-        DB::transaction(function () use ($request, $financeRequest, $step, $file) {
+        DB::transaction(function () use ($request, $financeRequest, $step, $file, $latestUpload) {
             $path = $file->store('request-documents/required', 'public');
 
             RequestDocumentUpload::create([
@@ -277,6 +340,8 @@ class ClientRequestController extends Controller
                 'metadata_json' => [
                     'document_upload_step_id' => $step->id,
                     'document_name' => $step->name,
+                    'is_resubmission' => $latestUpload !== null,
+                    'previous_upload_id' => $latestUpload?->id,
                 ],
                 'created_at' => now(),
             ]);
@@ -357,6 +422,15 @@ class ClientRequestController extends Controller
             $financeRequest->id
         );
     }
+
+    private function resolveApplicantName($user): string
+{
+    $firstName = trim((string) ($user->first_name ?? ''));
+    $lastName = trim((string) ($user->last_name ?? ''));
+    $fullName = trim($firstName . ' ' . $lastName);
+
+    return $fullName !== '' ? $fullName : trim((string) ($user->name ?? ''));
+}
 
     private function normalizeAnswerPayload(mixed $value): array
     {
@@ -473,18 +547,21 @@ class ClientRequestController extends Controller
                 'file_size' => $attachment->file_size,
                 'uploaded_at' => optional($attachment->created_at)->toISOString(),
             ])->values(),
-            'shareholders' => $financeRequest->shareholders->map(fn (FinanceRequestShareholder $shareholder) => [
-                'id' => $shareholder->id,
-                'shareholder_name' => $shareholder->shareholder_name,
-                'id_file_name' => $shareholder->id_file_name,
-                'id_file_path' => $shareholder->id_file_path,
-                'disk' => $shareholder->disk,
-                'mime_type' => $shareholder->mime_type,
-                'file_extension' => $shareholder->file_extension,
-                'file_size' => $shareholder->file_size,
-                'sort_order' => $shareholder->sort_order,
-                'uploaded_at' => optional($shareholder->created_at)->toISOString(),
-            ])->values(),
+           'shareholders' => $financeRequest->shareholders->map(fn (FinanceRequestShareholder $shareholder) => [
+                        'id' => $shareholder->id,
+                        'shareholder_name' => $shareholder->shareholder_name,
+                        'phone_country_code' => $shareholder->phone_country_code,
+                        'phone_number' => $shareholder->phone_number,
+                        'id_number' => $shareholder->id_number,
+                        'id_file_name' => $shareholder->id_file_name,
+                        'id_file_path' => $shareholder->id_file_path,
+                        'disk' => $shareholder->disk,
+                        'mime_type' => $shareholder->mime_type,
+                        'file_extension' => $shareholder->file_extension,
+                        'file_size' => $shareholder->file_size,
+                        'sort_order' => $shareholder->sort_order,
+                        'uploaded_at' => optional($shareholder->created_at)->toISOString(),
+                    ])->values(),
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($financeRequest)->map(function (array $item) {
                 $upload = $item['upload'];
 
@@ -495,6 +572,9 @@ class ClientRequestController extends Controller
                     'status' => $item['status'],
                     'is_required' => $item['is_required'],
                     'is_uploaded' => $item['is_uploaded'],
+                    'can_client_upload' => $item['can_client_upload'],
+                    'is_change_requested' => $item['is_change_requested'],
+                    'rejection_reason' => $item['rejection_reason'],
                     'upload' => $upload ? [
                         'id' => $upload->id,
                         'file_name' => $upload->file_name,

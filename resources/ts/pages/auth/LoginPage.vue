@@ -4,10 +4,12 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import AuthPageShell from '../public/inc/AuthPageShell.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const form = ref({
   email: '',
@@ -50,12 +52,12 @@ async function submitLogin() {
     await router.push({ name: auth.dashboardRouteName })
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      formError.value = error.response?.data?.message ?? 'Unable to sign in right now.'
+      formError.value = error.response?.data?.message ?? t('authLogin.errors.unableToSignIn')
       fieldErrors.value = error.response?.data?.errors ?? {}
       return
     }
 
-    formError.value = 'Unable to sign in right now.'
+    formError.value = t('authLogin.errors.unableToSignIn')
   }
 }
 </script>
@@ -65,11 +67,10 @@ async function submitLogin() {
     <section class="auth-hero-section">
       <div class="container">
         <div class="auth-page-head auth-reveal-up">
-          <span class="auth-kicker">Access Portal</span>
-          <h2>Sign in</h2>
+          <span class="auth-kicker">{{ t('authLogin.hero.kicker') }}</span>
+          <h2>{{ t('authLogin.hero.title') }}</h2>
           <p>
-            Your login screen should feel like part of the same premium finance platform —
-            secure, modern, and visually consistent from the first click.
+            {{ t('authLogin.hero.subtitle') }}
           </p>
         </div>
 
@@ -82,12 +83,11 @@ async function submitLogin() {
                 <div class="auth-form-top">
                   <span class="auth-mini-badge">
                     <i class="fas fa-shield-alt"></i>
-                    Secure Login
+                    {{ t('authLogin.card.badge') }}
                   </span>
-                  <h3>Login to your account</h3>
+                  <h3>{{ t('authLogin.card.title') }}</h3>
                   <p>
-                    Enter your account details to continue. Once authenticated, you will be redirected
-                    to the correct dashboard for your account type.
+                    {{ t('authLogin.card.subtitle') }}
                   </p>
                 </div>
 
@@ -97,7 +97,7 @@ async function submitLogin() {
 
                 <form class="auth-grid" @submit.prevent="submitLogin">
                   <div class="auth-field">
-                    <label for="login-email">Email address</label>
+                    <label for="login-email">{{ t('authLogin.form.emailLabel') }}</label>
                     <div class="auth-input-wrap">
                       <i class="far fa-envelope"></i>
                       <input
@@ -106,7 +106,7 @@ async function submitLogin() {
                         type="email"
                         class="auth-input"
                         :class="{ 'auth-input--error': firstFieldError('email') }"
-                        placeholder="Enter your email"
+                        :placeholder="t('authLogin.form.emailPlaceholder')"
                         autocomplete="email"
                       />
                     </div>
@@ -114,7 +114,7 @@ async function submitLogin() {
                   </div>
 
                   <div class="auth-field">
-                    <label for="login-password">Password</label>
+                    <label for="login-password">{{ t('authLogin.form.passwordLabel') }}</label>
                     <div class="auth-input-wrap">
                       <i class="fas fa-lock"></i>
                       <input
@@ -123,7 +123,7 @@ async function submitLogin() {
                         :type="showPassword ? 'text' : 'password'"
                         class="auth-input"
                         :class="{ 'auth-input--error': firstFieldError('password') }"
-                        placeholder="Enter your password"
+                        :placeholder="t('authLogin.form.passwordPlaceholder')"
                         autocomplete="current-password"
                       />
                       <button
@@ -131,7 +131,7 @@ async function submitLogin() {
                         class="auth-password-toggle"
                         @click="showPassword = !showPassword"
                       >
-                        {{ showPassword ? 'Hide' : 'Show' }}
+                        {{ showPassword ? t('authLogin.form.hide') : t('authLogin.form.show') }}
                       </button>
                     </div>
                     <small v-if="firstFieldError('password')" class="auth-field-error">{{ firstFieldError('password') }}</small>
@@ -140,27 +140,26 @@ async function submitLogin() {
                   <div class="auth-row-between">
                     <label class="auth-check">
                       <input v-model="form.remember" type="checkbox" />
-                      <span>Keep me signed in</span>
+                      <span>{{ t('authLogin.form.keepSignedIn') }}</span>
                     </label>
 
                     <RouterLink to="/forgot-password" class="auth-link">
-                      Forgot password?
+                      {{ t('authLogin.form.forgotPassword') }}
                     </RouterLink>
                   </div>
 
                   <button type="submit" class="btn_style_one auth-submit" :disabled="isSubmitting">
-                    <span>{{ isSubmitting ? 'Signing In...' : 'Sign In' }}</span>
+                    <span>{{ isSubmitting ? t('authLogin.form.signingIn') : t('authLogin.form.signIn') }}</span>
                   </button>
                 </form>
 
                 <p class="auth-foot-note">
-                  Don’t have an account?
-                  <RouterLink to="/register" class="auth-text-link">Create one now</RouterLink>
+                  {{ t('authLogin.footer.noAccount') }}
+                  <RouterLink to="/register" class="auth-text-link">{{ t('authLogin.footer.createNow') }}</RouterLink>
                 </p>
 
                 <p class="auth-policy">
-                  By signing in, you continue into a secure finance experience built to feel smooth, trustworthy,
-                  and aligned with your public-facing brand.
+                  {{ t('authLogin.footer.policy') }}
                 </p>
               </div>
             </div>

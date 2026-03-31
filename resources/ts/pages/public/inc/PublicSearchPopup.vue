@@ -24,7 +24,7 @@
                     type="search"
                     class="form-control"
                     name="search-input"
-                    placeholder="Type your keyword and hit"
+                    :placeholder="t('publicSearchPopup.placeholder')"
                     required
                     @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
                   />
@@ -41,6 +41,10 @@
   </template>
   
   <script setup lang="ts">
+  import { useI18n } from 'vue-i18n'
+
+  const { t } = useI18n()
+
   defineProps<{
     open: boolean
     modelValue: string

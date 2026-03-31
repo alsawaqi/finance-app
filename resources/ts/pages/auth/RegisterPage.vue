@@ -4,9 +4,11 @@ import { RouterLink, useRouter } from 'vue-router'
 import axios from 'axios'
 import AuthPageShell from '../public/inc/AuthPageShell.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const form = ref({
   firstName: '',
@@ -40,12 +42,12 @@ async function submitRegister() {
   const fullName = [form.value.firstName.trim(), form.value.lastName.trim()].filter(Boolean).join(' ')
 
   if (!fullName) {
-    formError.value = 'Please enter your first name and last name.'
+    formError.value = t('authRegister.errors.fullNameRequired')
     return
   }
 
   if (!form.value.agree) {
-    formError.value = 'Please accept the terms before creating your account.'
+    formError.value = t('authRegister.errors.acceptTermsRequired')
     return
   }
 
@@ -61,12 +63,12 @@ async function submitRegister() {
     await router.push({ name: auth.dashboardRouteName })
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      formError.value = error.response?.data?.message ?? 'Unable to create your account right now.'
+      formError.value = error.response?.data?.message ?? t('authRegister.errors.unableToCreate')
       fieldErrors.value = error.response?.data?.errors ?? {}
       return
     }
 
-    formError.value = 'Unable to create your account right now.'
+    formError.value = t('authRegister.errors.unableToCreate')
   }
 }
 </script>
@@ -76,8 +78,8 @@ async function submitRegister() {
     <section class="auth-hero-section">
       <div class="container">
         <div class="auth-page-head auth-reveal-up">
-          <span class="auth-kicker">Create Your Account</span>
-          <h2>A premium registration page</h2>
+          <span class="auth-kicker">{{ t('authRegister.hero.kicker') }}</span>
+          <h2>{{ t('authRegister.hero.title') }}</h2>
         </div>
 
         <div class="row g-4 align-items-stretch">
@@ -89,12 +91,11 @@ async function submitRegister() {
                 <div class="auth-form-top">
                   <span class="auth-mini-badge">
                     <i class="fas fa-user-plus"></i>
-                    New Client Registration
+                    {{ t('authRegister.card.badge') }}
                   </span>
-                  <h3>Create your account</h3>
+                  <h3>{{ t('authRegister.card.title') }}</h3>
                   <p>
-                    Start with a professional onboarding page that feels trustworthy and high-end.
-                    New registrations create a client account and redirect to the client dashboard.
+                    {{ t('authRegister.card.subtitle') }}
                   </p>
                 </div>
 
@@ -105,7 +106,7 @@ async function submitRegister() {
                 <form class="auth-grid" @submit.prevent="submitRegister">
                   <div class="auth-grid auth-grid--2">
                     <div class="auth-field">
-                      <label for="register-first-name">First name</label>
+                      <label for="register-first-name">{{ t('authRegister.form.firstNameLabel') }}</label>
                       <div class="auth-input-wrap">
                         <i class="far fa-user"></i>
                         <input
@@ -113,14 +114,14 @@ async function submitRegister() {
                           v-model="form.firstName"
                           type="text"
                           class="auth-input"
-                          placeholder="First name"
+                          :placeholder="t('authRegister.form.firstNamePlaceholder')"
                           autocomplete="given-name"
                         />
                       </div>
                     </div>
 
                     <div class="auth-field">
-                      <label for="register-last-name">Last name</label>
+                      <label for="register-last-name">{{ t('authRegister.form.lastNameLabel') }}</label>
                       <div class="auth-input-wrap">
                         <i class="far fa-user"></i>
                         <input
@@ -128,7 +129,7 @@ async function submitRegister() {
                           v-model="form.lastName"
                           type="text"
                           class="auth-input"
-                          placeholder="Last name"
+                          :placeholder="t('authRegister.form.lastNamePlaceholder')"
                           autocomplete="family-name"
                         />
                       </div>
@@ -137,7 +138,7 @@ async function submitRegister() {
 
                   <div class="auth-grid auth-grid--2">
                     <div class="auth-field">
-                      <label for="register-email">Email address</label>
+                      <label for="register-email">{{ t('authRegister.form.emailLabel') }}</label>
                       <div class="auth-input-wrap">
                         <i class="far fa-envelope"></i>
                         <input
@@ -146,7 +147,7 @@ async function submitRegister() {
                           type="email"
                           class="auth-input"
                           :class="{ 'auth-input--error': firstFieldError('email') }"
-                          placeholder="Email address"
+                          :placeholder="t('authRegister.form.emailPlaceholder')"
                           autocomplete="email"
                         />
                       </div>
@@ -154,7 +155,7 @@ async function submitRegister() {
                     </div>
 
                     <div class="auth-field">
-                      <label for="register-phone">Phone number</label>
+                      <label for="register-phone">{{ t('authRegister.form.phoneLabel') }}</label>
                       <div class="auth-input-wrap">
                         <i class="fas fa-phone-alt"></i>
                         <input
@@ -163,7 +164,7 @@ async function submitRegister() {
                           type="tel"
                           class="auth-input"
                           :class="{ 'auth-input--error': firstFieldError('phone') }"
-                          placeholder="Phone number"
+                          :placeholder="t('authRegister.form.phonePlaceholder')"
                           autocomplete="tel"
                         />
                       </div>
@@ -173,7 +174,7 @@ async function submitRegister() {
 
                   <div class="auth-grid auth-grid--2">
                     <div class="auth-field">
-                      <label for="register-password">Password</label>
+                      <label for="register-password">{{ t('authRegister.form.passwordLabel') }}</label>
                       <div class="auth-input-wrap">
                         <i class="fas fa-lock"></i>
                         <input
@@ -182,7 +183,7 @@ async function submitRegister() {
                           :type="showPassword ? 'text' : 'password'"
                           class="auth-input"
                           :class="{ 'auth-input--error': firstFieldError('password') }"
-                          placeholder="Create password"
+                          :placeholder="t('authRegister.form.passwordPlaceholder')"
                           autocomplete="new-password"
                         />
                         <button
@@ -190,14 +191,14 @@ async function submitRegister() {
                           class="auth-password-toggle"
                           @click="showPassword = !showPassword"
                         >
-                          {{ showPassword ? 'Hide' : 'Show' }}
+                          {{ showPassword ? t('authRegister.form.hide') : t('authRegister.form.show') }}
                         </button>
                       </div>
                       <small v-if="firstFieldError('password')" class="auth-field-error">{{ firstFieldError('password') }}</small>
                     </div>
 
                     <div class="auth-field">
-                      <label for="register-confirm-password">Confirm password</label>
+                      <label for="register-confirm-password">{{ t('authRegister.form.confirmPasswordLabel') }}</label>
                       <div class="auth-input-wrap">
                         <i class="fas fa-lock"></i>
                         <input
@@ -205,7 +206,7 @@ async function submitRegister() {
                           v-model="form.confirmPassword"
                           :type="showConfirmPassword ? 'text' : 'password'"
                           class="auth-input"
-                          placeholder="Confirm password"
+                          :placeholder="t('authRegister.form.confirmPasswordPlaceholder')"
                           autocomplete="new-password"
                         />
                         <button
@@ -213,7 +214,7 @@ async function submitRegister() {
                           class="auth-password-toggle"
                           @click="showConfirmPassword = !showConfirmPassword"
                         >
-                          {{ showConfirmPassword ? 'Hide' : 'Show' }}
+                          {{ showConfirmPassword ? t('authRegister.form.hide') : t('authRegister.form.show') }}
                         </button>
                       </div>
                     </div>
@@ -222,26 +223,25 @@ async function submitRegister() {
                   <label class="auth-check">
                     <input v-model="form.agree" type="checkbox" />
                     <span>
-                      I agree to the
-                      <a href="#" class="auth-link" @click.prevent>Terms of Service</a>
-                      and
-                      <a href="#" class="auth-link" @click.prevent>Privacy Policy</a>
+                      {{ t('authRegister.form.agreePrefix') }}
+                      <a href="#" class="auth-link" @click.prevent>{{ t('authRegister.form.termsOfService') }}</a>
+                      {{ t('authRegister.form.agreeAnd') }}
+                      <a href="#" class="auth-link" @click.prevent>{{ t('authRegister.form.privacyPolicy') }}</a>
                     </span>
                   </label>
 
                   <button type="submit" class="btn_style_one auth-submit" :disabled="isSubmitting">
-                    <span>{{ isSubmitting ? 'Creating Account...' : 'Create Account' }}</span>
+                    <span>{{ isSubmitting ? t('authRegister.form.creatingAccount') : t('authRegister.form.createAccount') }}</span>
                   </button>
                 </form>
 
                 <p class="auth-foot-note">
-                  Already have an account?
-                  <RouterLink to="/login" class="auth-text-link">Sign in here</RouterLink>
+                  {{ t('authRegister.footer.haveAccount') }}
+                  <RouterLink to="/login" class="auth-text-link">{{ t('authRegister.footer.signInHere') }}</RouterLink>
                 </p>
 
                 <p class="auth-policy">
-                  This registration layout is intentionally prepared as a real onboarding page so you can move
-                  straight from account creation into the client workflow.
+                  {{ t('authRegister.footer.policy') }}
                 </p>
               </div>
             </div>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 type RequestRow = {
   code: string
   client: string
@@ -10,27 +12,29 @@ type RequestRow = {
 defineProps<{
   rows: RequestRow[]
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
     <div class="admin-panel__head">
       <div>
-        <span class="admin-panel__eyebrow">Recent items</span>
-        <h2>Latest requests</h2>
+        <span class="admin-panel__eyebrow">{{ t('adminSharedWidgets.recentRequests.eyebrow') }}</span>
+        <h2>{{ t('adminSharedWidgets.recentRequests.title') }}</h2>
       </div>
-      <button type="button" class="admin-panel__action">Open all</button>
+      <button type="button" class="admin-panel__action">{{ t('adminSharedWidgets.recentRequests.openAll') }}</button>
     </div>
 
     <div class="admin-table-wrap">
       <table class="admin-table">
         <thead>
           <tr>
-            <th>Request</th>
-            <th>Client</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Stage</th>
+            <th>{{ t('adminSharedWidgets.recentRequests.columns.request') }}</th>
+            <th>{{ t('adminSharedWidgets.recentRequests.columns.client') }}</th>
+            <th>{{ t('adminSharedWidgets.recentRequests.columns.type') }}</th>
+            <th>{{ t('adminSharedWidgets.recentRequests.columns.status') }}</th>
+            <th>{{ t('adminSharedWidgets.recentRequests.columns.stage') }}</th>
           </tr>
         </thead>
         <tbody>
