@@ -636,9 +636,9 @@ onBeforeUnmount(() => {
 
 
 <style>
-.financer-home [data-aos] {
-  opacity: 1 !important;
-  transform: none !important;
+.financer-home [data-aos].aos-init {
+  opacity: 1;
+  transform: none;
 }
 
 .financer-home .home-testimonial-track {
