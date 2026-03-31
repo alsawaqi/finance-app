@@ -636,6 +636,11 @@ onBeforeUnmount(() => {
 
 
 <style>
+.financer-home [data-aos].aos-init {
+  opacity: 1;
+  transform: none;
+}
+
 .financer-home .home-testimonial-track {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
