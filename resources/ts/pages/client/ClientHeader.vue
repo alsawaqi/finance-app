@@ -30,7 +30,7 @@ const navItems = computed(() => [
 ])
 
 
-const userName = computed(() => auth.user?.name || 'Abdallah')
+const userName = computed(() => auth.user?.name || t('clientHeader.defaultUserName'))
 const userInitials = computed(() => {
   return userName.value
     .split(' ')
@@ -71,7 +71,7 @@ defineEmits<{
           <div class="main_header_logo">
             <figure>
               <RouterLink to="/">
-                <img src="/financer/assets/images/logo.png" alt="Company Logo" />
+                <img src="/financer/assets/images/logo.png" :alt="t('clientHeader.logoAlt')" />
               </RouterLink>
             </figure>
           </div>
@@ -136,7 +136,7 @@ defineEmits<{
           <div class="main_header_logo">
             <figure>
               <RouterLink :to="{ name: 'client-dashboard' }">
-                <img src="/financer/assets/images/logo.png" alt="Company Logo" />
+                <img src="/financer/assets/images/logo.png" :alt="t('clientHeader.logoAlt')" />
               </RouterLink>
             </figure>
           </div>

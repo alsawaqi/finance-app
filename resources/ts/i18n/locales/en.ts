@@ -293,6 +293,8 @@ const en = {
     clientPortal: 'Client Portal',
     helpDesk: 'Client Help Desk',
     helpDeskText: 'Track requests, sign contracts, and upload documents only when requested.',
+    defaultUserName: 'Client User',
+    logoAlt: 'Company Logo',
   },
   clientQuestionField: {
     chooseOption: 'Choose an option',
@@ -367,6 +369,7 @@ const en = {
       noPendingActions: 'No pending client actions',
       upToDate: 'You are up to date right now.',
       noRecentRequestsYet: 'No recent requests yet',
+      unknownStatus: 'Unknown',
       emptyDate: '—',
     },
   },

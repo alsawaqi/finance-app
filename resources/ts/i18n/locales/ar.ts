@@ -293,6 +293,8 @@ const ar = {
     clientPortal: 'بوابة العميل',
     helpDesk: 'دعم العملاء',
     helpDeskText: 'تابع الطلبات ووقّع العقود وارفع المستندات فقط عند الطلب.',
+    defaultUserName: 'مستخدم العميل',
+    logoAlt: 'شعار الشركة',
   },
   clientQuestionField: {
     chooseOption: 'اختر خياراً',
@@ -367,6 +369,7 @@ const ar = {
       noPendingActions: 'لا توجد إجراءات معلقة',
       upToDate: 'كل شيء محدث حالياً.',
       noRecentRequestsYet: 'لا توجد طلبات حديثة بعد',
+      unknownStatus: 'غير معروف',
       emptyDate: '—',
     },
   },

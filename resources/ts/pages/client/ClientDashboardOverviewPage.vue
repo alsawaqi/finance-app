@@ -42,7 +42,7 @@ const kpis = computed(() => [
 const statusCards = computed(() => {
   const counts = new Map<string, number>()
   requests.value.forEach((item) => {
-    const key = item.status || 'unknown'
+    const key = item.status || t('clientDashboard.states.unknownStatus')
     counts.set(key, (counts.get(key) ?? 0) + 1)
   })
   return Array.from(counts.entries()).map(([label, value]) => ({ label, value }))
