@@ -16,8 +16,19 @@ export async function getClientContract(id: number | string) {
 }
 
 export async function signClientContract(id: number | string, payload: { signature_data_url: string }) {
-  const { data } = await api.post(`/api/client/requests/${id}/contract/sign`, payload)
-  return data
+  try {
+    const { data } = await api.post(`/api/client/requests/${id}/contract/sign`, payload)
+    return data
+  } catch (error: any) {
+    const status = Number(error?.response?.status)
+    // Backward compatibility for projects still exposing /sign.
+    if (status === 404 || status === 405) {
+      const { data } = await api.post(`/api/client/requests/${id}/sign`, payload)
+      return data
+    }
+
+    throw error
+  }
 }
 
 export async function uploadClientRequiredDocument(id: number | string, payload: { document_upload_step_id: number; file: File }) {

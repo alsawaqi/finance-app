@@ -53,6 +53,7 @@ Route::prefix('client')
         Route::post('/requests/{financeRequest}/documents', [ClientRequestController::class, 'uploadRequiredDocument']);
         Route::post('/requests/{financeRequest}/additional-documents/{additionalDocument}/upload', [ClientRequestController::class, 'uploadAdditionalDocument']);
         Route::get('/requests/{financeRequest}/contract', [ClientContractController::class, 'show']);
+        Route::post('/requests/{financeRequest}/sign', [ClientContractController::class, 'sign']);
         Route::post('/requests/{financeRequest}/contract/sign', [ClientContractController::class, 'sign']);
         Route::get('/requests/{financeRequest}/contract/download', [ClientContractController::class, 'downloadPdf']);
     });

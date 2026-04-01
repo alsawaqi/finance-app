@@ -10,7 +10,7 @@ use App\Models\FinanceRequest;
 use App\Models\RequestTimeline;
 use App\Support\ContractDocumentBuilder;
 use App\Support\ContractTemplateResolver;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\MpdfContractPdfRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -137,7 +137,7 @@ class ClientContractController extends Controller
         $pdfRelativePath = $contract->contract_pdf_path
             ?: 'contracts/pdfs/request-' . $financeRequest->id . '-v' . $contract->version_no . '.pdf';
 
-        Storage::disk('public')->put($pdfRelativePath, MpdfContractPdfRenderer::render($documentHtml));
+        Storage::disk('public')->put($pdfRelativePath, MpdfContractPdfRenderer::renderToString($documentHtml));
         $contract->contract_pdf_path = $pdfRelativePath;
     }
 }
