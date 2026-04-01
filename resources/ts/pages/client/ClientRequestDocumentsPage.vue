@@ -20,6 +20,9 @@ const { t } = useI18n()
 const uploadingRequired = ref<Record<number, boolean>>({})
 const uploadingAdditional = ref<Record<number, boolean>>({})
 
+const requiredFileInputs = ref<Record<number, HTMLInputElement | null>>({})
+const additionalFileInputs = ref<Record<number, HTMLInputElement | null>>({})
+
 const requiredPendingCount = computed(() =>
   (requestItem.value?.required_documents ?? []).filter((item: any) => !item.is_uploaded).length,
 )
@@ -42,17 +45,27 @@ async function load() {
   }
 }
 
+function setRequiredFileRef(stepId: number, el: Element | null) {
+  requiredFileInputs.value[stepId] = el as HTMLInputElement | null
+}
+
+function setAdditionalFileRef(documentId: number, el: Element | null) {
+  additionalFileInputs.value[documentId] = el as HTMLInputElement | null
+}
+
 function openRequiredPicker(stepId: number) {
-  const input = document.getElementById(`required-file-${stepId}`) as HTMLInputElement | null
-  input?.click()
+  requiredFileInputs.value[stepId]?.click()
 }
 
 function openAdditionalPicker(documentId: number) {
-  const input = document.getElementById(`additional-file-${documentId}`) as HTMLInputElement | null
-  input?.click()
+  additionalFileInputs.value[documentId]?.click()
 }
 
- 
+function applyRequestFromResponse(data: any) {
+  if (data?.request) {
+    requestItem.value = data.request
+  }
+}
 
 async function onRequiredFileChange(stepId: number, event: Event) {
   const input = event.target as HTMLInputElement
@@ -74,6 +87,7 @@ async function onRequiredFileChange(stepId: number, event: Event) {
       file,
     })
 
+    applyRequestFromResponse(data)
     successMessage.value = data.message || t('clientDocuments.success.requiredUploaded')
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.requiredUploadFailed')
@@ -87,8 +101,7 @@ async function onRequiredFileChange(stepId: number, event: Event) {
   }
 }
 
- 
- async function onAdditionalFileChange(documentId: number, event: Event) {
+async function onAdditionalFileChange(documentId: number, event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
 
@@ -105,6 +118,7 @@ async function onRequiredFileChange(stepId: number, event: Event) {
   try {
     const data = await uploadClientAdditionalDocument(requestId.value, documentId, { file })
 
+    applyRequestFromResponse(data)
     successMessage.value = data.message || t('clientDocuments.success.additionalUploaded')
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.additionalUploadFailed')
@@ -210,16 +224,17 @@ onMounted(load)
                 <div v-if="item.can_client_upload" class="client-inline-actions client-inline-actions--stackable">
                   <input
                     :id="`required-file-${item.document_upload_step_id}`"
+                    :ref="(el) => setRequiredFileRef(item.document_upload_step_id, el)"
                     type="file"
                     class="sr-only"
-                    @change="onRequiredFileChange(item.document_upload_step_id, $event)"
+                    @change.stop="onRequiredFileChange(item.document_upload_step_id, $event)"
                   />
 
                   <button
                     type="button"
                     class="client-btn-primary"
                     :disabled="uploadingRequired[item.document_upload_step_id]"
-                    @click="openRequiredPicker(item.document_upload_step_id)"
+                    @click.stop.prevent="openRequiredPicker(item.document_upload_step_id)"
                   >
                     {{
                       uploadingRequired[item.document_upload_step_id]
@@ -275,16 +290,17 @@ onMounted(load)
                 <div class="client-inline-actions client-inline-actions--stackable">
                   <input
                     :id="`additional-file-${item.id}`"
+                    :ref="(el) => setAdditionalFileRef(item.id, el)"
                     type="file"
                     class="sr-only"
-                    @change="onAdditionalFileChange(item.id, $event)"
+                    @change.stop="onAdditionalFileChange(item.id, $event)"
                   />
 
                   <button
                     type="button"
                     class="client-btn-primary"
                     :disabled="uploadingAdditional[item.id]"
-                    @click="openAdditionalPicker(item.id)"
+                    @click.stop.prevent="openAdditionalPicker(item.id)"
                   >
                     {{
                       uploadingAdditional[item.id]

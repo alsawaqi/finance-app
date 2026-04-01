@@ -66,12 +66,18 @@ onMounted(load)
     <div v-if="errorMessage" class="admin-alert admin-alert--error">{{ errorMessage }}</div>
 
     <div class="admin-question-stats-grid admin-reveal-up admin-reveal-delay-1">
-      <article v-for="card in cards" :key="card.label" class="admin-question-stat" :class="`tone-${card.tone}`">
-        <strong>{{ loading ? '…' : card.value }}</strong>
-        <span>{{ card.label }}</span>
-        <RouterLink :to="card.route" class="admin-inline-link">{{ t('adminDashboard.actions.open') }}</RouterLink>
-      </article>
-    </div>
+  <RouterLink
+    v-for="card in cards"
+    :key="card.label"
+    :to="card.route"
+    class="admin-question-stat admin-question-stat--link"
+    :class="`tone-${card.tone}`"
+  >
+    <strong>{{ loading ? '…' : card.value }}</strong>
+    <span>{{ card.label }}</span>
+    <span class="admin-inline-link">{{ t('adminDashboard.actions.open') }}</span>
+  </RouterLink>
+</div>
 
     <div class="admin-dashboard-grid">
       <article class="panel-card catalog-highlight-card">

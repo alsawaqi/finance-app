@@ -59,7 +59,7 @@ const selectedAgentIds = ref<number[]>([])
 const emailSubject = ref('')
 const emailBody = ref('')
 const mockFiles = ref<string[]>([])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const uploadedRequiredCount = computed(() => requiredDocuments.value.filter((item) => item.is_uploaded).length)
 const pendingRequiredCount = computed(() => requiredDocuments.value.filter((item) => !item.is_uploaded).length)
@@ -293,8 +293,8 @@ onMounted(load)
           <details class="admin-accordion-card">
   <summary>
     <div>
-      <h2>Initial uploaded files</h2>
-      <p>Open the original request files and download them directly from the staff workspace.</p>
+      <h2>{{ t('staffRequestDetails.sections.initialUploadedFilesTitle') }}</h2>
+      <p>{{ t('staffRequestDetails.sections.initialUploadedFilesSubtitle') }}</p>
     </div>
   </summary>
   <div class="admin-accordion-card__body">
@@ -304,18 +304,18 @@ onMounted(load)
           <strong>{{ file.file_name }}</strong>
           <span>{{ file.category }}</span>
         </div>
-        <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">Download</a>
+        <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
       </div>
     </div>
-    <p v-else class="empty-state">No initial files uploaded.</p>
+    <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInitialFilesUploaded') }}</p>
   </div>
 </details>
 
 <details class="admin-accordion-card">
   <summary>
     <div>
-      <h2>Shareholders</h2>
-      <p>Review shareholder details and download their ID files when needed.</p>
+      <h2>{{ t('staffRequestDetails.sections.shareholdersTitle') }}</h2>
+      <p>{{ t('staffRequestDetails.sections.shareholdersSubtitle') }}</p>
     </div>
   </summary>
   <div class="admin-accordion-card__body">
@@ -324,13 +324,13 @@ onMounted(load)
         <div>
           <strong>{{ shareholder.shareholder_name }}</strong>
           <span v-if="shareholder.phone_number">{{ [shareholder.phone_country_code, shareholder.phone_number].filter(Boolean).join(' ') }}</span>
-          <span v-if="shareholder.id_number">ID Number: {{ shareholder.id_number }}</span>
+          <span v-if="shareholder.id_number">{{ t('staffRequestDetails.states.idNumberLabel', { id: shareholder.id_number }) }}</span>
           <span>{{ shareholder.id_file_name }}</span>
         </div>
-        <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">Download ID file</a>
+        <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadIdFile') }}</a>
       </div>
     </div>
-    <p v-else class="empty-state">No shareholders recorded.</p>
+    <p v-else class="empty-state">{{ t('staffRequestDetails.states.noShareholdersRecorded') }}</p>
   </div>
 </details>
 
@@ -435,17 +435,17 @@ onMounted(load)
          <article class="panel-card slim-card">
   <div class="panel-head"><h2>{{ t('staffRequestDetails.sections.requestSummary') }}</h2></div>
   <div class="summary-grid">
-    <div><span>{{ t('staffRequestDetails.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json)) }}</strong></div>
+    <div><span>{{ t('staffRequestDetails.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json), locale) }}</strong></div>
     <div><span>{{ t('staffRequestDetails.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(requestItem.intake_details_json) }}</strong></div>
     <div><span>{{ t('staffRequestDetails.summary.currentContract') }}</span><strong>{{ requestItem.current_contract?.status || t('staffRequestDetails.states.emptyValue') }}</strong></div>
     <div><span>{{ t('staffRequestDetails.summary.assignments') }}</span><strong>{{ requestItem.assignments?.length || 0 }}</strong></div>
-    <div><span>Email</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
-    <div><span>Phone</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
-    <div><span>Unified Number</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
-    <div><span>National Address No.</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('staffRequestDetails.summary.email') }}</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('staffRequestDetails.summary.phone') }}</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('staffRequestDetails.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('staffRequestDetails.summary.nationalAddressNo') }}</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
   </div>
   <div class="notes-box">
-    <span>Address</span>
+    <span>{{ t('staffRequestDetails.summary.address') }}</span>
     <p>{{ intakeAddress(requestItem.intake_details_json) }}</p>
   </div>
   <div class="notes-box">

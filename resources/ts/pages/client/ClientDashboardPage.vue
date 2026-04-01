@@ -2,18 +2,22 @@
   <section class="shell">
     <div class="card hero">
       <div>
-        <p class="eyebrow">Client portal</p>
-        <h1>Client Dashboard</h1>
-        <p>Track your submitted requests, review your contract when it is ready, and continue the next action from one place.</p>
+        <p class="eyebrow">{{ t('clientDashboardLegacy.eyebrow') }}</p>
+        <h1>{{ t('clientDashboardLegacy.title') }}</h1>
+        <p>{{ t('clientDashboardLegacy.subtitle') }}</p>
       </div>
       <div class="actions">
-        <RouterLink to="/dashboard/requests" class="primary-btn">My requests</RouterLink>
+        <RouterLink to="/dashboard/requests" class="primary-btn">{{ t('clientDashboardLegacy.myRequests') }}</RouterLink>
       </div>
     </div>
   </section>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+</script>
 
 <style scoped>
 .shell { padding:28px; max-width:1200px; margin:0 auto; }

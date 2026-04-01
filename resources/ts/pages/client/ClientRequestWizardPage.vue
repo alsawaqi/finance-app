@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import ClientQuestionField from './inc/ClientQuestionField.vue'
 import { useAuthStore } from '../../stores/auth'
 import { getRequestQuestions, submitClientRequest, type ClientQuestion } from '@/services/clientRequests'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -24,48 +26,46 @@ const fieldErrors = reactive<Record<string, string>>({})
 const generalError = ref('')
 const successMessage = ref('')
 
-const countryOptions = [
-  { code: 'SA', label: 'Saudi Arabia' },
+const countryOptions = computed(() => [
+  { code: 'SA', value: 'Saudi Arabia', label: t('clientWizard.countries.sa') },
+  { code: 'OM', value: 'Oman', label: t('clientWizard.countries.om') },
+  { code: 'AE', value: 'United Arab Emirates', label: t('clientWizard.countries.ae') },
+  { code: 'KW', value: 'Kuwait', label: t('clientWizard.countries.kw') },
+  { code: 'QA', value: 'Qatar', label: t('clientWizard.countries.qa') },
+  { code: 'BH', value: 'Bahrain', label: t('clientWizard.countries.bh') },
+  { code: 'EG', value: 'Egypt', label: t('clientWizard.countries.eg') },
+  { code: 'JO', value: 'Jordan', label: t('clientWizard.countries.jo') },
+  { code: 'LB', value: 'Lebanon', label: t('clientWizard.countries.lb') },
+  { code: 'US', value: 'United States', label: t('clientWizard.countries.us') },
+  { code: 'GB', value: 'United Kingdom', label: t('clientWizard.countries.gb') },
+  { code: 'IN', value: 'India', label: t('clientWizard.countries.in') },
+  { code: 'PK', value: 'Pakistan', label: t('clientWizard.countries.pk') },
+  { code: 'BD', value: 'Bangladesh', label: t('clientWizard.countries.bd') },
+  { code: 'TR', value: 'Turkey', label: t('clientWizard.countries.tr') },
+  { code: 'DE', value: 'Germany', label: t('clientWizard.countries.de') },
+  { code: 'FR', value: 'France', label: t('clientWizard.countries.fr') },
+  { code: 'CN', value: 'China', label: t('clientWizard.countries.cn') },
+  { code: 'MY', value: 'Malaysia', label: t('clientWizard.countries.my') },
+  { code: 'SG', value: 'Singapore', label: t('clientWizard.countries.sg') },
+])
 
-  { code: 'OM', label: 'Oman' },
-  { code: 'AE', label: 'United Arab Emirates' },
-  { code: 'KW', label: 'Kuwait' },
-  { code: 'QA', label: 'Qatar' },
-  { code: 'BH', label: 'Bahrain' },
-  { code: 'EG', label: 'Egypt' },
-  { code: 'JO', label: 'Jordan' },
-  { code: 'LB', label: 'Lebanon' },
-  { code: 'US', label: 'United States' },
-  { code: 'GB', label: 'United Kingdom' },
-  { code: 'IN', label: 'India' },
-  { code: 'PK', label: 'Pakistan' },
-  { code: 'BD', label: 'Bangladesh' },
-  { code: 'TR', label: 'Turkey' },
-  { code: 'DE', label: 'Germany' },
-  { code: 'FR', label: 'France' },
-  { code: 'CN', label: 'China' },
-  { code: 'MY', label: 'Malaysia' },
-  { code: 'SG', label: 'Singapore' },
-]
-
-const phoneCodeOptions = [
-  { code: '+966', label: 'Saudi Arabia (+966)' },
-
-  { code: '+968', label: 'Oman (+968)' },
-  { code: '+971', label: 'UAE (+971)' },
-  { code: '+965', label: 'Kuwait (+965)' },
-  { code: '+974', label: 'Qatar (+974)' },
-  { code: '+973', label: 'Bahrain (+973)' },
-  { code: '+20', label: 'Egypt (+20)' },
-  { code: '+962', label: 'Jordan (+962)' },
-  { code: '+961', label: 'Lebanon (+961)' },
-  { code: '+1', label: 'US / Canada (+1)' },
-  { code: '+44', label: 'UK (+44)' },
-  { code: '+91', label: 'India (+91)' },
-  { code: '+92', label: 'Pakistan (+92)' },
-  { code: '+880', label: 'Bangladesh (+880)' },
-  { code: '+90', label: 'Turkey (+90)' },
-]
+const phoneCodeOptions = computed(() => [
+  { code: '+966', label: t('clientWizard.phoneCodes.sa') },
+  { code: '+968', label: t('clientWizard.phoneCodes.om') },
+  { code: '+971', label: t('clientWizard.phoneCodes.ae') },
+  { code: '+965', label: t('clientWizard.phoneCodes.kw') },
+  { code: '+974', label: t('clientWizard.phoneCodes.qa') },
+  { code: '+973', label: t('clientWizard.phoneCodes.bh') },
+  { code: '+20', label: t('clientWizard.phoneCodes.eg') },
+  { code: '+962', label: t('clientWizard.phoneCodes.jo') },
+  { code: '+961', label: t('clientWizard.phoneCodes.lb') },
+  { code: '+1', label: t('clientWizard.phoneCodes.usCa') },
+  { code: '+44', label: t('clientWizard.phoneCodes.gb') },
+  { code: '+91', label: t('clientWizard.phoneCodes.in') },
+  { code: '+92', label: t('clientWizard.phoneCodes.pk') },
+  { code: '+880', label: t('clientWizard.phoneCodes.bd') },
+  { code: '+90', label: t('clientWizard.phoneCodes.tr') },
+])
 
 const details = reactive({
   finance_type: 'individual' as 'individual' | 'company',
@@ -82,10 +82,10 @@ const details = reactive({
   notes: '',
 })
 
-const steps = [
-  { id: 1, title: 'Questions', text: 'Answer the request questionnaire.' },
-  { id: 2, title: 'Details', text: 'Add applicant contact details, address, and company information when required.' },
-]
+const steps = computed(() => [
+  { id: 1, title: t('clientWizard.steps.questionsTitle'), text: t('clientWizard.steps.questionsText') },
+  { id: 2, title: t('clientWizard.steps.detailsTitle'), text: t('clientWizard.steps.detailsText') },
+])
 
 const answerPayload = computed(() =>
   questions.value.map((question) => ({
@@ -164,7 +164,7 @@ function validateStepOne() {
       : value === null || value === undefined || String(value).trim() === ''
 
     if (isEmpty) {
-      fieldErrors[`question-${question.id}`] = `${question.question_text} is required.`
+      fieldErrors[`question-${question.id}`] = t('clientWizard.errors.requiredField', { field: question.question_text })
       hasError = true
     }
   }
@@ -177,94 +177,94 @@ function validateStepTwo() {
   let hasError = false
 
   if (!details.finance_type) {
-    fieldErrors['details.finance_type'] = 'Applicant type is required.'
+    fieldErrors['details.finance_type'] = t('clientWizard.errors.applicantTypeRequired')
     hasError = true
   }
 
   if (!details.country.trim()) {
-    fieldErrors['details.country'] = 'Country is required.'
+    fieldErrors['details.country'] = t('clientWizard.errors.countryCodeRequired')
     hasError = true
   }
 
   if (!String(details.requested_amount).trim()) {
-    fieldErrors['details.requested_amount'] = 'Requested amount is required.'
+    fieldErrors['details.requested_amount'] = t('clientWizard.errors.requestedAmountRequired')
     hasError = true
   }
 
   if (!details.email.trim()) {
-    fieldErrors['details.email'] = 'Email is required.'
+    fieldErrors['details.email'] = t('clientWizard.errors.emailRequired')
     hasError = true
   }
 
  if (!details.phone_number.trim()) {
-  fieldErrors['details.phone_number'] = 'Phone number is required.'
+  fieldErrors['details.phone_number'] = t('clientWizard.errors.phoneRequired')
   hasError = true
 }
 
 if (!details.unified_number.trim()) {
-  fieldErrors['details.unified_number'] = 'Unified number is required.'
+  fieldErrors['details.unified_number'] = t('clientWizard.errors.unifiedNumberRequired')
   hasError = true
 }
 
 if (!details.national_address_number.trim()) {
-  fieldErrors['details.national_address_number'] = 'National address number is required.'
+  fieldErrors['details.national_address_number'] = t('clientWizard.errors.nationalAddressNumberRequired')
   hasError = true
 }
 
 if (!details.address.trim()) {
-  fieldErrors['details.address'] = 'Address is required.'
+  fieldErrors['details.address'] = t('clientWizard.errors.addressRequired')
   hasError = true
 }
 
 if (!nationalAddressAttachment.value) {
-  fieldErrors.national_address_attachment = 'National address attachment is required.'
+  fieldErrors.national_address_attachment = t('clientWizard.errors.nationalAddressAttachmentRequired')
   hasError = true
 }
 
   if (details.finance_type === 'company') {
     if (!details.company_name.trim()) {
-      fieldErrors['details.company_name'] = 'Company name is required.'
+      fieldErrors['details.company_name'] = t('clientWizard.errors.companyNameRequired')
       hasError = true
     }
 
     if (!details.company_cr_number.trim()) {
-      fieldErrors['details.company_cr_number'] = 'Company CR number is required.'
+      fieldErrors['details.company_cr_number'] = t('clientWizard.errors.companyCrNumberRequired')
       hasError = true
     }
 
     if (!companyCr.value) {
-      fieldErrors.company_cr = 'Company CR is required.'
+      fieldErrors.company_cr = t('clientWizard.errors.companyCrRequired')
       hasError = true
     }
 
     if (shareholders.value.length === 0) {
-      fieldErrors.shareholders = 'At least one shareholder is required.'
+      fieldErrors.shareholders = t('clientWizard.errors.shareholdersRequired')
       hasError = true
     }
 
     shareholders.value.forEach((shareholder, index) => {
       if (!shareholder.name.trim()) {
-        fieldErrors[`shareholders.${index}.name`] = 'Shareholder name is required.'
+        fieldErrors[`shareholders.${index}.name`] = t('clientWizard.errors.shareholderNameRequired')
         hasError = true
       }
 
       if (!shareholder.phone_country_code.trim()) {
-        fieldErrors[`shareholders.${index}.phone_country_code`] = 'Shareholder country code is required.'
+        fieldErrors[`shareholders.${index}.phone_country_code`] = t('clientWizard.errors.shareholderPhoneCountryCodeRequired')
         hasError = true
       }
 
       if (!shareholder.phone_number.trim()) {
-        fieldErrors[`shareholders.${index}.phone_number`] = 'Shareholder phone number is required.'
+        fieldErrors[`shareholders.${index}.phone_number`] = t('clientWizard.errors.shareholderPhoneNumberRequired')
         hasError = true
       }
 
       if (!shareholder.id_number.trim()) {
-        fieldErrors[`shareholders.${index}.id_number`] = 'Shareholder ID number is required.'
+        fieldErrors[`shareholders.${index}.id_number`] = t('clientWizard.errors.shareholderIdNumberRequired')
         hasError = true
       }
 
       if (!shareholder.id_file) {
-        fieldErrors[`shareholders.${index}.id_file`] = 'Shareholder ID file is required.'
+        fieldErrors[`shareholders.${index}.id_file`] = t('clientWizard.errors.shareholderIdRequired')
         hasError = true
       }
     })
@@ -298,7 +298,7 @@ async function loadQuestions() {
       }
     })
   } catch (error: any) {
-    generalError.value = error?.response?.data?.message || 'Unable to load the request questions.'
+    generalError.value = error?.response?.data?.message || t('clientWizard.errors.loadQuestionsFailed')
   } finally {
     loading.value = false
   }
@@ -351,7 +351,7 @@ async function submitRequest() {
       }
     })
 
-    generalError.value = responseMessage || 'Unable to submit your request right now.'
+    generalError.value = responseMessage || t('clientWizard.errors.submitFailed')
   } finally {
     submitting.value = false
   }
@@ -366,10 +366,10 @@ onMounted(() => {
 <template>
   <div class="client-page-grid">
     <section class="client-hero-card client-reveal-up">
-      <span class="client-eyebrow">Request Wizard</span>
-      <h1 class="client-hero-title">Answer the guided questions, add your request details, and submit everything in one flow.</h1>
+      <span class="client-eyebrow">{{ t('clientWizard.hero.eyebrow') }}</span>
+      <h1 class="client-hero-title">{{ t('clientWizard.hero.title') }}</h1>
       <p class="client-hero-text">
-        Capture the applicant details first, then upload the required company and address files in a cleaner layout.
+        {{ t('clientWizard.hero.subtitle') }}
       </p>
 
       <div class="client-wizard-steps">
@@ -390,8 +390,8 @@ onMounted(() => {
 
     <section v-if="loading" class="client-content-card client-content-card--full client-reveal-up">
       <div class="client-empty-state">
-        <h3>Loading request wizard</h3>
-        <p class="client-muted">We are preparing the latest questions configured by the admin.</p>
+        <h3>{{ t('clientWizard.states.loadingTitle') }}</h3>
+        <p class="client-muted">{{ t('clientWizard.states.loadingText') }}</p>
       </div>
     </section>
 
@@ -399,18 +399,18 @@ onMounted(() => {
       <article class="client-content-card client-content-card--full">
         <div class="client-card-head">
           <div>
-            <h3 v-if="currentStep === 1">Step 1 · Answer the questions</h3>
-            <h3 v-else>Step 2 · Add your request details</h3>
+            <h3 v-if="currentStep === 1">{{ t('clientWizard.steps.step1Title') }}</h3>
+            <h3 v-else>{{ t('clientWizard.steps.step2Title') }}</h3>
             <p class="client-subtext">
               <template v-if="currentStep === 1">
-                Complete the configured questionnaire first.
+                {{ t('clientWizard.steps.step1Text') }}
               </template>
               <template v-else>
-                Add the applicant details, attachments, and company information when required.
+                {{ t('clientWizard.steps.step2Text') }}
               </template>
             </p>
           </div>
-          <span class="client-badge client-badge--purple">Step {{ currentStep }} of {{ totalSteps }}</span>
+          <span class="client-badge client-badge--purple">{{ t('clientWizard.steps.progress', { current: currentStep, total: totalSteps }) }}</span>
         </div>
 
         <div v-if="generalError" class="client-alert client-alert--error">{{ generalError }}</div>
@@ -418,8 +418,8 @@ onMounted(() => {
 
         <template v-if="currentStep === 1">
           <div v-if="questions.length === 0" class="client-empty-state client-empty-state--inner">
-            <h3>No active questions yet</h3>
-            <p class="client-muted">The admin has not published request questions yet. You can still continue once they are added.</p>
+            <h3>{{ t('clientWizard.states.noQuestionsTitle') }}</h3>
+            <p class="client-muted">{{ t('clientWizard.states.noQuestionsText') }}</p>
           </div>
 
           <div v-else class="client-form-stack">
@@ -434,8 +434,8 @@ onMounted(() => {
           </div>
 
           <div class="client-inline-actions">
-            <RouterLink :to="{ name: 'client-new-request' }" class="client-btn-secondary">Cancel</RouterLink>
-            <button type="button" class="client-btn-primary" @click="goNext">Continue to Details</button>
+            <RouterLink :to="{ name: 'client-new-request' }" class="client-btn-secondary">{{ t('clientWizard.actions.cancel') }}</RouterLink>
+            <button type="button" class="client-btn-primary" @click="goNext">{{ t('clientWizard.actions.continueToDetails') }}</button>
           </div>
         </template>
 
@@ -444,26 +444,26 @@ onMounted(() => {
             <div class="client-request-section">
               <div class="client-request-section__head">
                 <div>
-                  <h4>Applicant details</h4>
-                  <p class="client-subtext">Start with the applicant type, country, amount, and contact information.</p>
+                  <h4>{{ t('clientWizard.sections.applicantDetails') }}</h4>
+                  <p class="client-subtext">{{ t('clientWizard.sections.applicantDetailsText') }}</p>
                 </div>
               </div>
 
               <div class="client-form-grid">
                 <div class="client-form-group">
-                  <label class="client-form-label">Applicant Type <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.applicantType') }} <span class="client-required-mark">*</span></label>
                   <select v-model="details.finance_type" class="client-form-control">
-                    <option value="individual">Individual</option>
-                    <option value="company">Company</option>
+                    <option value="individual">{{ t('clientWizard.options.individual') }}</option>
+                    <option value="company">{{ t('clientWizard.options.company') }}</option>
                   </select>
                   <p v-if="fieldErrors['details.finance_type']" class="client-form-error">{{ fieldErrors['details.finance_type'] }}</p>
                 </div>
 
                 <div class="client-form-group">
-                  <label class="client-form-label">Country <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.country') }} <span class="client-required-mark">*</span></label>
                   <select v-model="details.country" class="client-form-control">
-                    <option value="">-- Select country --</option>
-                    <option v-for="option in countryOptions" :key="option.code" :value="option.label">
+                    <option value="">{{ t('clientWizard.placeholders.selectCountry') }}</option>
+                    <option v-for="option in countryOptions" :key="option.code" :value="option.value">
                       {{ option.label }}
                     </option>
                   </select>
@@ -471,48 +471,48 @@ onMounted(() => {
                 </div>
 
                 <div class="client-form-group">
-                  <label class="client-form-label">Requested Amount <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.requestedAmount') }} <span class="client-required-mark">*</span></label>
                   <input
                     v-model="details.requested_amount"
                     type="number"
                     min="0"
                     step="0.01"
                     class="client-form-control"
-                    placeholder="Enter requested amount"
+                    :placeholder="t('clientWizard.placeholders.requestedAmount')"
                   />
                   <p v-if="fieldErrors['details.requested_amount']" class="client-form-error">{{ fieldErrors['details.requested_amount'] }}</p>
                 </div>
 
                 <div v-if="details.finance_type === 'company'" class="client-form-group">
-                  <label class="client-form-label">Company Name <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.companyName') }} <span class="client-required-mark">*</span></label>
                   <input
                     v-model="details.company_name"
                     type="text"
                     class="client-form-control"
-                    placeholder="Enter company name"
+                    :placeholder="t('clientWizard.placeholders.companyName')"
                   />
                   <p v-if="fieldErrors['details.company_name']" class="client-form-error">{{ fieldErrors['details.company_name'] }}</p>
                 </div>
 
                 <div v-else class="client-form-group">
-                  <label class="client-form-label">Applicant Name</label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.applicantName') }}</label>
                   <input :value="applicantDisplayName" type="text" class="client-form-control" readonly />
-                  <p class="client-form-help">This name is pulled automatically from the user profile.</p>
+                  <p class="client-form-help">{{ t('clientWizard.help.applicantNameAuto') }}</p>
                 </div>
 
                 <div class="client-form-group">
-                  <label class="client-form-label">Email <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.email') }} <span class="client-required-mark">*</span></label>
                   <input
                     v-model="details.email"
                     type="email"
                     class="client-form-control"
-                    placeholder="Enter contact email"
+                    :placeholder="t('clientWizard.placeholders.contactEmail')"
                   />
                   <p v-if="fieldErrors['details.email']" class="client-form-error">{{ fieldErrors['details.email'] }}</p>
                 </div>
 
                 <div class="client-form-group">
-                  <label class="client-form-label">Phone Number <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.phoneNumber') }} <span class="client-required-mark">*</span></label>
                   <div class="client-form-split">
                     <select v-model="details.phone_country_code" class="client-form-control client-form-control--code">
                       <option v-for="option in phoneCodeOptions" :key="option.code" :value="option.code">
@@ -523,7 +523,7 @@ onMounted(() => {
                       v-model="details.phone_number"
                       type="text"
                       class="client-form-control"
-                      placeholder="Enter phone number"
+                      :placeholder="t('clientWizard.placeholders.phoneNumber')"
                     />
                   </div>
                   <p v-if="fieldErrors['details.phone_country_code']" class="client-form-error">{{ fieldErrors['details.phone_country_code'] }}</p>
@@ -531,51 +531,51 @@ onMounted(() => {
                 </div>
 
                <div class="client-form-group">
-  <label class="client-form-label">Unified Number <span class="client-required-mark">*</span></label>
+  <label class="client-form-label">{{ t('clientWizard.fields.unifiedNumber') }} <span class="client-required-mark">*</span></label>
   <input
     v-model="details.unified_number"
     type="text"
     class="client-form-control"
-    placeholder="Enter unified number"
+    :placeholder="t('clientWizard.placeholders.unifiedNumber')"
   />
   <p v-if="fieldErrors['details.unified_number']" class="client-form-error">{{ fieldErrors['details.unified_number'] }}</p>
 </div>
 
 <div class="client-form-group">
-  <label class="client-form-label">National Address Number <span class="client-required-mark">*</span></label>
+  <label class="client-form-label">{{ t('clientWizard.fields.nationalAddressNumber') }} <span class="client-required-mark">*</span></label>
   <input
     v-model="details.national_address_number"
     type="text"
     class="client-form-control"
-    placeholder="Enter national address number"
+    :placeholder="t('clientWizard.placeholders.nationalAddressNumber')"
   />
   <p v-if="fieldErrors['details.national_address_number']" class="client-form-error">{{ fieldErrors['details.national_address_number'] }}</p>
 </div>
 
 <div class="client-form-group">
-  <label class="client-form-label">National Address Attachment <span class="client-required-mark">*</span></label>
+  <label class="client-form-label">{{ t('clientWizard.fields.nationalAddressAttachment') }} <span class="client-required-mark">*</span></label>
   <input type="file" class="client-form-control" @change="handleNationalAddressAttachment" />
   <p v-if="fieldErrors.national_address_attachment" class="client-form-error">{{ fieldErrors.national_address_attachment }}</p>
 </div>
 
 <div class="client-form-group client-form-group--full">
-  <label class="client-form-label">Address <span class="client-required-mark">*</span></label>
+  <label class="client-form-label">{{ t('clientWizard.fields.address') }} <span class="client-required-mark">*</span></label>
   <textarea
     v-model="details.address"
     rows="4"
     class="client-form-control client-form-control--textarea"
-    placeholder="Enter full address"
+    :placeholder="t('clientWizard.placeholders.fullAddress')"
   ></textarea>
   <p v-if="fieldErrors['details.address']" class="client-form-error">{{ fieldErrors['details.address'] }}</p>
 </div>
 
 <div class="client-form-group client-form-group--full">
-  <label class="client-form-label">Notes</label>
+  <label class="client-form-label">{{ t('clientWizard.fields.notes') }}</label>
   <textarea
     v-model="details.notes"
     rows="4"
     class="client-form-control client-form-control--textarea"
-    placeholder="Any notes for the admin review"
+    :placeholder="t('clientWizard.placeholders.notes')"
   ></textarea>
 </div>
               </div>
@@ -584,31 +584,31 @@ onMounted(() => {
             <div class="client-request-section">
               <div class="client-request-section__head">
                 <div>
-                  <h4>Supporting files</h4>
-                  <p class="client-subtext">Keep optional files and required company files in their own section.</p>
+                  <h4>{{ t('clientWizard.sections.supportingFiles') }}</h4>
+                  <p class="client-subtext">{{ t('clientWizard.sections.supportingFilesText') }}</p>
                 </div>
               </div>
 
               <div class="client-form-grid">
                 <div class="client-form-group client-form-group--full">
-                  <label class="client-form-label">Initial Attachments</label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.initialAttachments') }}</label>
                   <input type="file" class="client-form-control" multiple @change="handleAttachments" />
-                  <p class="client-form-help">Optional initial files for the request.</p>
+                  <p class="client-form-help">{{ t('clientWizard.help.initialAttachmentsOptional') }}</p>
                 </div>
 
                 <div v-if="details.finance_type === 'company'" class="client-form-group">
-                  <label class="client-form-label">Company CR Number <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.companyCrNumber') }} <span class="client-required-mark">*</span></label>
                   <input
                     v-model="details.company_cr_number"
                     type="text"
                     class="client-form-control"
-                    placeholder="Enter company CR number"
+                    :placeholder="t('clientWizard.placeholders.companyCrNumber')"
                   />
                   <p v-if="fieldErrors['details.company_cr_number']" class="client-form-error">{{ fieldErrors['details.company_cr_number'] }}</p>
                 </div>
 
                 <div v-if="details.finance_type === 'company'" class="client-form-group client-form-group--full">
-                  <label class="client-form-label">Company CR <span class="client-required-mark">*</span></label>
+                  <label class="client-form-label">{{ t('clientWizard.fields.companyCr') }} <span class="client-required-mark">*</span></label>
                   <input type="file" class="client-form-control" @change="handleCompanyCr" />
                   <p v-if="fieldErrors.company_cr" class="client-form-error">{{ fieldErrors.company_cr }}</p>
                 </div>
@@ -618,11 +618,11 @@ onMounted(() => {
             <div v-if="details.finance_type === 'company'" class="client-request-section">
               <div class="client-request-section__head">
                 <div>
-                  <h4>Shareholders</h4>
-                  <p class="client-subtext">Each shareholder keeps their own card so the top form no longer compresses.</p>
+                  <h4>{{ t('clientWizard.sections.shareholders') }}</h4>
+                  <p class="client-subtext">{{ t('clientWizard.sections.shareholdersText') }}</p>
                 </div>
 
-                <button type="button" class="client-btn-secondary" @click="addShareholder">Add Shareholder</button>
+                <button type="button" class="client-btn-secondary" @click="addShareholder">{{ t('clientWizard.actions.addShareholder') }}</button>
               </div>
 
               <p v-if="fieldErrors.shareholders" class="client-form-error">{{ fieldErrors.shareholders }}</p>
@@ -635,27 +635,27 @@ onMounted(() => {
                 >
                   <div class="client-card-head">
                     <div>
-                      <h3>Shareholder {{ index + 1 }}</h3>
-                      <p class="client-subtext">Add the shareholder contact details, ID number, and ID attachment.</p>
+                      <h3>{{ t('clientWizard.sections.shareholderCardTitle', { index: index + 1 }) }}</h3>
+                      <p class="client-subtext">{{ t('clientWizard.sections.shareholderCardText') }}</p>
                     </div>
 
-                    <button type="button" class="client-btn-secondary" @click="removeShareholder(index)">Remove</button>
+                    <button type="button" class="client-btn-secondary" @click="removeShareholder(index)">{{ t('clientWizard.actions.remove') }}</button>
                   </div>
 
                   <div class="client-form-grid">
                     <div class="client-form-group">
-                      <label class="client-form-label">Shareholder Name <span class="client-required-mark">*</span></label>
+                      <label class="client-form-label">{{ t('clientWizard.fields.shareholderName') }} <span class="client-required-mark">*</span></label>
                       <input
                         v-model="shareholder.name"
                         type="text"
                         class="client-form-control"
-                        placeholder="Enter shareholder name"
+                        :placeholder="t('clientWizard.placeholders.shareholderName')"
                       />
                       <p v-if="fieldErrors[`shareholders.${index}.name`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.name`] }}</p>
                     </div>
 
                     <div class="client-form-group">
-                      <label class="client-form-label">Phone Number <span class="client-required-mark">*</span></label>
+                      <label class="client-form-label">{{ t('clientWizard.fields.phoneNumber') }} <span class="client-required-mark">*</span></label>
                       <div class="client-form-split">
                         <select v-model="shareholder.phone_country_code" class="client-form-control client-form-control--code">
                           <option v-for="option in phoneCodeOptions" :key="option.code" :value="option.code">
@@ -666,7 +666,7 @@ onMounted(() => {
                           v-model="shareholder.phone_number"
                           type="text"
                           class="client-form-control"
-                          placeholder="Enter shareholder phone number"
+                          :placeholder="t('clientWizard.placeholders.shareholderPhoneNumber')"
                         />
                       </div>
                       <p v-if="fieldErrors[`shareholders.${index}.phone_country_code`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.phone_country_code`] }}</p>
@@ -674,18 +674,18 @@ onMounted(() => {
                     </div>
 
                     <div class="client-form-group">
-                      <label class="client-form-label">Shareholder ID Number <span class="client-required-mark">*</span></label>
+                      <label class="client-form-label">{{ t('clientWizard.fields.shareholderIdNumber') }} <span class="client-required-mark">*</span></label>
                       <input
                         v-model="shareholder.id_number"
                         type="text"
                         class="client-form-control"
-                        placeholder="Enter shareholder ID number"
+                        :placeholder="t('clientWizard.placeholders.shareholderIdNumber')"
                       />
                       <p v-if="fieldErrors[`shareholders.${index}.id_number`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.id_number`] }}</p>
                     </div>
 
                     <div class="client-form-group">
-                      <label class="client-form-label">Shareholder ID Upload <span class="client-required-mark">*</span></label>
+                      <label class="client-form-label">{{ t('clientWizard.fields.shareholderIdUpload') }} <span class="client-required-mark">*</span></label>
                       <input type="file" class="client-form-control" @change="handleShareholderFile(index, $event)" />
                       <p v-if="fieldErrors[`shareholders.${index}.id_file`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.id_file`] }}</p>
                     </div>
@@ -696,9 +696,9 @@ onMounted(() => {
           </div>
 
           <div class="client-inline-actions">
-            <button type="button" class="client-btn-secondary" @click="goBack">Back</button>
+            <button type="button" class="client-btn-secondary" @click="goBack">{{ t('clientWizard.actions.back') }}</button>
             <button type="button" class="client-btn-primary" :disabled="submitting" @click="submitRequest">
-              {{ submitting ? 'Submitting…' : 'Submit Request' }}
+              {{ submitting ? t('clientWizard.actions.submitting') : t('clientWizard.actions.submitRequest') }}
             </button>
           </div>
         </template>

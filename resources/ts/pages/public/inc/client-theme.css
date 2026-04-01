@@ -1767,3 +1767,102 @@
 .financer-client .client-shell .contract-doc__emphasis {
   font-weight: 800;
 }
+
+
+
+/* =========================================================
+   FINAL CLIENT HEADER / GRID RTL-LTR STABILIZER
+   ========================================================= */
+
+   .financer-client .client-header-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  
+  .financer-client .client-user-chip {
+    min-width: 0;
+    max-width: 240px;
+  }
+  
+  .financer-client .client-user-chip__text {
+    min-width: 0;
+  }
+  
+  .financer-client .client-user-chip__text strong,
+  .financer-client .client-user-chip__text span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .financer-client .client-header-cta,
+  .financer-client .client-header-logout {
+    white-space: nowrap;
+  }
+  
+  html[dir='rtl'] .financer-client .client-header-right {
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+  }
+  
+  @media (max-width: 1199px) {
+    .financer-client .client-header-right {
+      display: none !important;
+    }
+  
+    .financer-client .main-menu {
+      display: none !important;
+    }
+  
+    .financer-client .mobile-nav-toggler {
+      display: block !important;
+    }
+  
+    .financer-client .main_header_menu {
+      flex: 0 0 auto;
+      justify-content: flex-end;
+    }
+  
+    html[dir='rtl'] .financer-client .main_header_menu {
+      justify-content: flex-start;
+    }
+  }
+  
+  @media (max-width: 1200px) {
+    .financer-client .client-kpi-card,
+    .financer-client .client-upload-card,
+    .financer-client .client-step-card,
+    .financer-client .client-action-card,
+    .financer-client .client-doc-card {
+      grid-column: span 6;
+    }
+  
+    .financer-client .client-request-card,
+    .financer-client .client-content-card--half,
+    .financer-client .client-detail-card,
+    .financer-client .client-status-banner,
+    .financer-client .client-sign-card,
+    .financer-client .client-timeline-card {
+      grid-column: span 12;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .financer-client .client-kpi-card,
+    .financer-client .client-request-card,
+    .financer-client .client-upload-card,
+    .financer-client .client-step-card,
+    .financer-client .client-content-card--half,
+    .financer-client .client-content-card--full,
+    .financer-client .client-action-card,
+    .financer-client .client-detail-card,
+    .financer-client .client-doc-card,
+    .financer-client .client-status-banner,
+    .financer-client .client-sign-card,
+    .financer-client .client-timeline-card {
+      grid-column: span 12;
+    }
+  }

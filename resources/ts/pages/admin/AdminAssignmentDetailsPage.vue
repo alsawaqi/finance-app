@@ -37,7 +37,7 @@ const primaryStaffId = ref<number | null>(null)
 const assignmentNotes = ref('')
 const permissionsOpen = ref<number[]>([])
 const quickView = ref<'answers' | 'comments' | 'timeline' | null>(null)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const requestId = computed(() => route.params.id as string)
 
@@ -173,7 +173,7 @@ onMounted(load)
         </article>
         <article class="admin-workspace-stat">
           <span>{{ t('adminAssignmentDetails.summary.country') }}</span>
-          <strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json)) }}</strong>
+          <strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json), locale) }}</strong>
           <small>{{ intakeFinanceType(requestItem.intake_details_json) }}</small>
         </article>
         <article class="admin-workspace-stat">
@@ -273,15 +273,15 @@ onMounted(load)
           </article>
 
           <article class="panel-card slim-card">
-  <div class="panel-head"><h2>Applicant details</h2></div>
+  <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.applicantDetails') }}</h2></div>
   <div class="summary-grid summary-grid--tight">
-    <div><span>Email</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
-    <div><span>Phone</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
-    <div><span>Unified Number</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
-    <div><span>National Address No.</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('adminAssignmentDetails.summary.email') }}</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('adminAssignmentDetails.summary.phone') }}</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('adminAssignmentDetails.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
+    <div><span>{{ t('adminAssignmentDetails.summary.nationalAddressNo') }}</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
   </div>
   <div class="notes-box">
-    <span>Address</span>
+    <span>{{ t('adminAssignmentDetails.summary.address') }}</span>
     <p>{{ intakeAddress(requestItem.intake_details_json) }}</p>
   </div>
 </article>

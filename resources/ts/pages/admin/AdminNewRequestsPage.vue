@@ -9,7 +9,7 @@ import { intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAm
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<AdminRequestListItem[]>([])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 async function load() {
   loading.value = true
@@ -73,7 +73,7 @@ onMounted(load)
                 <strong>{{ intakeFullName(item.intake_details_json, item.client?.name || t('adminNewRequests.states.clientFallback')) }}</strong>
                 <div class="muted-small">{{ item.client?.email || t('adminNewRequests.states.emptyValue') }}</div>
               </td>
-              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json)) }}</td>
+              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json), locale) }}</td>
               <td>{{ intakeRequestedAmount(item.intake_details_json) }}</td>
               <td>{{ intakeFinanceType(item.intake_details_json) }}</td>
               <td>{{ item.submitted_at ? new Date(item.submitted_at).toLocaleString() : t('adminNewRequests.states.emptyValue') }}</td>

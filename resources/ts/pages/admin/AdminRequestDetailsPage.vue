@@ -32,7 +32,7 @@ const errorMessage = ref('')
 const approving = ref(false)
 const approvalNotes = ref('')
 const quickView = ref<'answers' | 'attachments' | 'shareholders' | 'assignments' | 'comments' | 'timeline' | null>(null)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const requestId = computed(() => route.params.id as string)
 const activityCounts = computed(() => ({
@@ -179,18 +179,18 @@ onMounted(load)
             <div class="summary-grid">
   <div><span>{{ t('adminRequestDetails.summary.requestReference') }}</span><strong>{{ requestItem.reference_number }}</strong></div>
   <div><span>{{ t('adminRequestDetails.summary.approvalReference') }}</span><strong>{{ requestItem.approval_reference_number || t('adminRequestDetails.states.pendingApproval') }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json)) }}</strong></div>
+  <div><span>{{ t('adminRequestDetails.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json), locale) }}</strong></div>
   <div><span>{{ t('adminRequestDetails.summary.submitted') }}</span><strong>{{ requestItem.submitted_at ? new Date(requestItem.submitted_at).toLocaleString() : t('adminRequestDetails.states.emptyValue') }}</strong></div>
   <div><span>{{ t('adminRequestDetails.summary.applicantType') }}</span><strong>{{ requestItem.applicant_type || t('adminRequestDetails.states.individual') }}</strong></div>
   <div><span>{{ t('adminRequestDetails.summary.companyName') }}</span><strong>{{ requestItem.company_name || t('adminRequestDetails.states.emptyValue') }}</strong></div>
-  <div><span>Email</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
-  <div><span>Phone</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
-  <div><span>Unified Number</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
-  <div><span>National Address No.</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
+  <div><span>{{ t('adminRequestDetails.summary.email') }}</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
+  <div><span>{{ t('adminRequestDetails.summary.phone') }}</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
+  <div><span>{{ t('adminRequestDetails.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
+  <div><span>{{ t('adminRequestDetails.summary.nationalAddressNo') }}</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
 </div>
 
 <div class="notes-box">
-  <span>Full Address</span>
+  <span>{{ t('adminRequestDetails.summary.fullAddress') }}</span>
   <p>{{ intakeAddress(requestItem.intake_details_json) }}</p>
 </div>
 
@@ -276,7 +276,7 @@ onMounted(load)
   <div v-if="requestItem.shareholders?.length" v-for="shareholder in requestItem.shareholders" :key="shareholder.id" class="qa-item">
     <strong>{{ shareholder.shareholder_name }}</strong>
     <p v-if="shareholder.phone_number">{{ [shareholder.phone_country_code, shareholder.phone_number].filter(Boolean).join(' ') }}</p>
-    <p v-if="shareholder.id_number">ID Number: {{ shareholder.id_number }}</p>
+    <p v-if="shareholder.id_number">{{ t('adminRequestDetails.states.idNumberLabel', { id: shareholder.id_number }) }}</p>
     <p>{{ shareholder.id_file_name }}</p>
     <div class="approve-actions">
       <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.downloadIdFile') }}</a>

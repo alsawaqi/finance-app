@@ -592,6 +592,7 @@ html[dir='rtl'] .financer-home .row {
 /* Professional spacing/alignment refinements */
 .financer-home .main_header,
 .financer-home .sticky_header {
+  -webkit-backdrop-filter: saturate(145%) blur(8px);
   backdrop-filter: saturate(145%) blur(8px);
 }
 
@@ -612,3 +613,101 @@ html[dir='rtl'] .financer-home .row {
 html[dir='rtl'] .financer-home .header_right_content {
   justify-content: flex-start;
 }
+
+
+/* =========================================================
+   FINAL PUBLIC HEADER RTL/LTR STABILIZER
+   ========================================================= */
+
+   .financer-home .main_header_inner,
+   .financer-home .sticky_header .main_header_inner {
+     display: flex;
+     align-items: center;
+     gap: 16px;
+   }
+   
+   .financer-home .main_header_logo {
+     flex: 0 0 auto;
+   }
+   
+   .financer-home .main_header_menu {
+     flex: 1 1 auto;
+     min-width: 0;
+     display: flex;
+     justify-content: center;
+   }
+   
+   .financer-home .main_header_menu .nav-outer {
+     min-width: 0;
+     overflow: visible;
+   }
+   
+   .financer-home .main-menu .navigation {
+     width: auto;
+     min-width: 0;
+     max-width: 100%;
+     display: flex !important;
+     align-items: center;
+     justify-content: center;
+     flex-wrap: wrap;
+     row-gap: 8px;
+   }
+   
+   .financer-home .main-menu .navigation > li {
+     flex: 0 0 auto;
+     padding: 6px 10px;
+   }
+   
+   .financer-home .main-menu .navigation > li > a,
+   .financer-home .main-menu .navigation > li > span,
+   .financer-home .main-menu .navigation > li > .router-link-active {
+     white-space: normal;
+     text-align: center;
+   }
+   
+   .financer-home .header_right_content {
+     display: flex;
+     align-items: center;
+     justify-content: flex-end;
+     gap: 10px;
+     flex-wrap: wrap;
+     flex: 0 0 auto;
+   }
+   
+   html[dir='rtl'] .financer-home .main_header_inner,
+   html[dir='rtl'] .financer-home .sticky_header .main_header_inner {
+     flex-direction: row-reverse;
+   }
+   
+   html[dir='rtl'] .financer-home .header_right_content {
+     justify-content: flex-start;
+   }
+   
+   html[dir='rtl'] .financer-home .main_header_menu,
+   html[dir='rtl'] .financer-home .main_header_menu .nav-outer,
+   html[dir='rtl'] .financer-home .main-menu .navigation {
+     direction: rtl;
+   }
+   
+   @media (max-width: 1199px) {
+     .financer-home .header_right_content {
+       display: none !important;
+     }
+   
+     .financer-home .main-menu {
+       display: none !important;
+     }
+   
+     .financer-home .mobile-nav-toggler {
+       display: block !important;
+     }
+   
+     .financer-home .main_header_menu {
+       flex: 0 0 auto;
+       justify-content: flex-end;
+     }
+   
+     html[dir='rtl'] .financer-home .main_header_menu {
+       justify-content: flex-start;
+     }
+   }

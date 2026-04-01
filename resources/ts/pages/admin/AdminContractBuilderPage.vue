@@ -17,7 +17,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const requestId = computed(() => route.params.id as string)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -195,7 +195,7 @@ onUnmounted(() => {
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.requestRef') }}</span><strong>{{ financeRequest.reference_number }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.approvalRef') }}</span><strong>{{ financeRequest.approval_reference_number || t('adminContractBuilderPage.states.pendingApproval') }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.client') }}</span><strong>{{ intakeFullName(financeRequest.intake_details_json, financeRequest.client?.name || t('adminContractBuilderPage.states.clientFallback')) }}</strong></div>
-          <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json)) }}</strong></div>
+          <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json), locale) }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(financeRequest.intake_details_json) }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.financeType') }}</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json) }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(financeRequest.intake_details_json) }}</strong></div>

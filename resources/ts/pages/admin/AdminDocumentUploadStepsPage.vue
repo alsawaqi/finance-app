@@ -172,7 +172,7 @@ async function toggleStep(row: DocumentUploadStepItem) {
     successMessage.value = data.message
     steps.value = steps.value.map((step) => (step.id === row.id ? data.data : step))
   } catch (error) {
-    formError.value = extractErrorMessage(error, 'Unable to update document upload step status right now.')
+    formError.value = extractErrorMessage(error, t('adminDocumentUploadStepsPage.errors.toggleStatusFailed'))
   }
 }
 

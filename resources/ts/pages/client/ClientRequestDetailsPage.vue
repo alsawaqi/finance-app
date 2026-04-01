@@ -13,7 +13,7 @@ const requestId = computed(() => route.params.id as string)
 const loading = ref(true)
 const errorMessage = ref('')
 const requestItem = ref<any | null>(null)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 function answerText(answer: any) {
   if (!answer) return '—'
@@ -99,7 +99,7 @@ onMounted(load)
               <div><span>{{ t('clientRequestDetails.summary.approvalReference') }}</span><strong>{{ requestItem.approval_reference_number || t('clientRequestDetails.states.pendingApproval') }}</strong></div>
               <div><span>{{ t('clientRequestDetails.summary.applicantType') }}</span><strong>{{ requestItem.applicant_type || t('clientRequestDetails.states.individual') }}</strong></div>
               <div><span>{{ t('clientRequestDetails.summary.companyName') }}</span><strong>{{ requestItem.company_name || t('clientRequestDetails.states.emptyValue') }}</strong></div>
-              <div><span>{{ t('clientRequestDetails.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json)) }}</strong></div>
+              <div><span>{{ t('clientRequestDetails.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json), locale) }}</strong></div>
               <div><span>{{ t('clientRequestDetails.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(requestItem.intake_details_json) }}</strong></div>
               <div><span>{{ t('clientRequestDetails.summary.submitted') }}</span><strong>{{ requestItem.submitted_at ? new Date(requestItem.submitted_at).toLocaleString() : t('clientRequestDetails.states.emptyValue') }}</strong></div>
             </div>
@@ -109,7 +109,7 @@ onMounted(load)
                 <div class="panel-head"><h3>{{ t('clientRequestDetails.sections.yourAnswers') }}</h3></div>
                 <div class="qa-list compact-list" v-if="requestItem.answers?.length">
                   <div class="qa-item" v-for="answer in requestItem.answers" :key="answer.id">
-                    <strong>{{ answer.question_text || answer.question?.question_text || 'Question' }}</strong>
+                    <strong>{{ answer.question_text || answer.question?.question_text || t('clientRequestDetails.states.questionFallback') }}</strong>
                     <p>{{ answerText(answer) }}</p>
                   </div>
                 </div>

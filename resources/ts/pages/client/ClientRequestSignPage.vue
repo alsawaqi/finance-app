@@ -16,7 +16,7 @@ const submitting = ref(false)
 const errorMessage = ref('')
 const financeRequest = ref<any | null>(null)
 const contract = ref<any | null>(null)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let signaturePad: SignaturePad | null = null
 
@@ -156,17 +156,17 @@ onUnmounted(() => {
           <div class="summary-row"><span>{{ t('clientSign.summary.requestRef') }}</span><strong>{{ financeRequest.reference_number }}</strong></div>
           <div class="summary-row"><span>{{ t('clientSign.summary.approvalRef') }}</span><strong>{{ financeRequest.approval_reference_number || t('clientSign.states.pendingApproval') }}</strong></div>
           <div class="summary-row"><span>{{ t('clientSign.summary.client') }}</span><strong>{{ intakeFullName(financeRequest.intake_details_json, financeRequest.client?.name || t('clientSign.states.clientFallback')) }}</strong></div>
-          <div class="summary-row"><span>{{ t('clientSign.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json)) }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json), locale) }}</strong></div>
           <div class="summary-row"><span>{{ t('clientSign.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(financeRequest.intake_details_json) }}</strong></div>
           <div class="summary-row"><span>{{ t('clientSign.summary.financeType') }}</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json) }}</strong></div>
         </div>
       </article>
 
       <article class="panel-card terms-card">
-        <div class="panel-head"><h2>Contract Preview</h2></div>
-        <p class="subtext">Review the contract exactly as prepared by the admin before adding your signature.</p>
+        <div class="panel-head"><h2>{{ t('clientSign.sections.contractPreview') }}</h2></div>
+        <p class="subtext">{{ t('clientSign.sections.contractPreviewHint') }}</p>
         <div class="contract-preview-shell">
-          <div class="contract-preview-surface contract-doc" dir="rtl" v-html="contract.contract_content || '<p>Contract preview is not available yet.</p>'"></div>
+          <div class="contract-preview-surface contract-doc" dir="rtl" v-html="contract.contract_content || `<p>${t('clientSign.states.contractPreviewUnavailable')}</p>`"></div>
         </div>
       </article>
 

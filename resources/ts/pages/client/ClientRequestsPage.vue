@@ -10,7 +10,7 @@ import { getClientWorkflowStageMeta } from '@/utils/clientRequestStage'
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<any[]>([])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const stats = computed(() => ({
   total: requests.value.length,
@@ -103,7 +103,7 @@ onMounted(load)
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('clientRequests.states.awaitingApproval') }}</div>
               </td>
-              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json)) }}</td>
+              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json), locale) }}</td>
               <td>{{ intakeRequestedAmount(item.intake_details_json) }}</td>
               <td>
                 <span class="client-stage-badge" :class="stageMeta(item.workflow_stage).className">{{ stageMeta(item.workflow_stage).label }}</span>

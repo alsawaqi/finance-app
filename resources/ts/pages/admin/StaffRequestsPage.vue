@@ -11,7 +11,7 @@ const errorMessage = ref('')
 const search = ref('')
 const workflowStage = ref('')
 const requests = ref<StaffWorkspaceRequestSummary[]>([])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const availableStages = computed(() => ['document_collection', 'awaiting_additional_documents', 'processing', 'completed'])
 
@@ -108,7 +108,7 @@ onMounted(load)
                 <strong>{{ intakeFullName(item.intake_details_json, item.client?.name || t('staffRequests.states.clientFallback')) }}</strong>
                 <div class="muted-small">{{ item.client?.email || t('staffRequests.states.emptyValue') }}</div>
               </td>
-              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json)) }}</td>
+              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json), locale) }}</td>
               <td>
                 <div>{{ intakeFinanceType(item.intake_details_json) }}</div>
                 <div class="muted-small">{{ intakeRequestedAmount(item.intake_details_json) }}</div>

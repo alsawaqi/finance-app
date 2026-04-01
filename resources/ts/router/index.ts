@@ -41,6 +41,13 @@ import NotFoundPage from '@/pages/NotFoundPage.vue'
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(_to, _from, savedPosition) {
+    if (savedPosition) {
+      return savedPosition
+    }
+
+    return { top: 0, left: 0 }
+  },
   routes: [
     { path: '/', name: 'home', component: HomePage, meta: { layout: 'public' } },
     { path: '/about', name: 'about', component: AboutPage, meta: { layout: 'public' } },
