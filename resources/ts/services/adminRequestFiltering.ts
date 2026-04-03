@@ -66,6 +66,26 @@ export type FilteredRequestItem = {
   }>
 }
 
+export type FilterBreakdownBank = {
+  id: number
+  name: string
+  short_name?: string | null
+  agents_count: number
+  emails_count: number
+  requests_count: number
+}
+
+export type FilterBreakdownAgent = {
+  id: number
+  name: string
+  email?: string | null
+  bank_id?: number | null
+  bank_name?: string | null
+  bank_short_name?: string | null
+  emails_count: number
+  requests_count: number
+}
+
 export type ClientOverviewItem = {
   id: number
   name: string
@@ -119,7 +139,10 @@ export async function getAdminRequestFilterData(params?: {
       unique_clients: number
       unique_staff: number
       unique_agents: number
+      total_emails: number
     }
+    bank_breakdown: FilterBreakdownBank[]
+    agent_breakdown: FilterBreakdownAgent[]
     requests: FilteredRequestItem[]
   }
 }

@@ -22,6 +22,7 @@ import {
   intakeUnifiedNumber,
 } from '@/utils/requestIntake'
 import AdminQuickViewModal from './inc/AdminQuickViewModal.vue'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 
 const route = useRoute()
 
@@ -40,6 +41,12 @@ const quickView = ref<'answers' | 'comments' | 'timeline' | null>(null)
 const { t, locale } = useI18n()
 
 const requestId = computed(() => route.params.id as string)
+const requestDetailsTarget = computed(() => {
+  const returnTo = typeof route.query.return_to === 'string' ? route.query.return_to : ''
+  return returnTo && returnTo.startsWith('/admin/requests/')
+    ? returnTo
+    : { name: 'admin-request-details', params: { id: requestId.value } }
+})
 
 const activityCounts = computed(() => ({
   answers: requestItem.value?.answers?.length ?? 0,
@@ -47,6 +54,10 @@ const activityCounts = computed(() => ({
   timeline: requestItem.value?.timeline?.length ?? 0,
   assignments: requestItem.value?.assignments?.length ?? 0,
 }))
+
+function stageMeta(stage: string | null | undefined) {
+  return getRequestWorkflowStageMeta(stage)
+}
 
 function answerText(answer: any) {
   if (!answer) return t('adminAssignmentDetails.states.emptyValue')
@@ -151,7 +162,7 @@ onMounted(load)
       </div>
       <div class="actions-row">
         <RouterLink :to="{ name: 'admin-assignments' }" class="ghost-btn">{{ t('adminAssignmentDetails.hero.backToQueue') }}</RouterLink>
-        <RouterLink :to="{ name: 'admin-request-details', params: { id: requestId } }" class="ghost-btn">{{ t('adminAssignmentDetails.hero.openRequestReview') }}</RouterLink>
+        <RouterLink :to="requestDetailsTarget" class="ghost-btn">Back to request details</RouterLink>
       </div>
     </div>
 
@@ -179,7 +190,7 @@ onMounted(load)
         <article class="admin-workspace-stat">
           <span>{{ t('adminAssignmentDetails.summary.amount') }}</span>
           <strong>{{ intakeRequestedAmount(requestItem.intake_details_json) }}</strong>
-          <small>{{ requestItem.workflow_stage }}</small>
+          <small>{{ stageMeta(requestItem.workflow_stage).label }}</small>
         </article>
       </div>
 

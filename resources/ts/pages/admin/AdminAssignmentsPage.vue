@@ -7,6 +7,7 @@ import {
   type AssignmentReadyRequest,
 } from '@/services/adminRequests'
 import { intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -32,6 +33,10 @@ async function load() {
 function staffPreview(item: AssignmentReadyRequest) {
   if (!item.assignments?.length) return t('adminAssignments.states.notAssignedYet')
   return item.assignments.map((entry) => entry.staff?.name).filter(Boolean).join(', ')
+}
+
+function stageMeta(stage: string | null | undefined) {
+  return getRequestWorkflowStageMeta(stage)
 }
 
 onMounted(load)
@@ -110,7 +115,7 @@ onMounted(load)
               </td>
               <td>{{ item.current_contract?.client_signed_at ? new Date(item.current_contract.client_signed_at).toLocaleString() : t('adminAssignments.states.pending') }}</td>
               <td>
-                <span class="status-badge">{{ item.workflow_stage }}</span>
+                <span class="status-badge">{{ stageMeta(item.workflow_stage).label }}</span>
                 <div class="muted-small">{{ staffPreview(item) }}</div>
               </td>
               <td>

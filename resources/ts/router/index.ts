@@ -36,6 +36,11 @@ import AdminAssignmentsPage from '@/pages/admin/AdminAssignmentsPage.vue'
 import AdminAssignmentDetailsPage from '@/pages/admin/AdminAssignmentDetailsPage.vue'
 import StaffRequestsPage from '@/pages/admin/StaffRequestsPage.vue'
 import StaffRequestDetailsPage from '@/pages/admin/StaffRequestDetailsPage.vue'
+import AdminStaffQuestionTemplatesPage from '@/pages/admin/AdminStaffQuestionTemplatesPage.vue'
+import AdminMailSettingsPage from '@/pages/admin/AdminMailSettingsPage.vue'
+import AdminInboxPage from '@/pages/admin/AdminInboxPage.vue'
+
+import AdminFinanceRequestTypesPage from '@/pages/admin/AdminFinanceRequestTypesPage.vue'
 
 import NotFoundPage from '@/pages/NotFoundPage.vue'
 
@@ -79,6 +84,8 @@ const router = createRouter({
       children: [
         { path: '', name: 'admin-dashboard', component: AdminDashboardPage },
         { path: 'request-questions', name: 'admin-request-questions', component: AdminRequestQuestionsPage },
+        { path: 'finance-request-types', name: 'admin-finance-request-types', component: AdminFinanceRequestTypesPage, meta: { allowedRoles: ['admin'] } },
+
         { path: 'document-upload-steps', name: 'admin-document-upload-steps', component: AdminDocumentUploadStepsPage },
         { path: 'staff', name: 'admin-staff', component: AdminStaffPage },
         { path: 'banks', name: 'admin-banks', component: AdminBanksPage, meta: { allowedRoles: ['admin'] } },
@@ -93,6 +100,9 @@ const router = createRouter({
         { path: 'requests/new', name: 'admin-new-requests', component: AdminNewRequestsPage },
         { path: 'requests/:id', name: 'admin-request-details', component: AdminRequestDetailsPage },
         { path: 'requests/:id/contract', name: 'admin-request-contract', component: AdminContractBuilderPage },
+        { path: 'staff-question-templates', name: 'admin-staff-question-templates', component: AdminStaffQuestionTemplatesPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'mail-settings', name: 'admin-mail-settings', component: AdminMailSettingsPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'inbox', name: 'admin-inbox', component: AdminInboxPage },
       ],
     },
 

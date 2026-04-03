@@ -22,6 +22,7 @@ class StoreClientFinanceRequestRequest extends FormRequest
 
             'details' => ['required', 'array'],
             'details.finance_type' => ['required', 'in:individual,company'],
+           'details.finance_request_type_id' => ['required', 'integer', 'exists:finance_request_types,id'],
             'details.country' => ['required', 'string', 'max:100'],
             'details.requested_amount' => ['required', 'numeric', 'min:0'],
             'details.company_name' => ['nullable', 'string', 'max:255'],

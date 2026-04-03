@@ -8,6 +8,7 @@ import {
   type ClientOverviewItem,
   type ClientOverviewRequest,
 } from '@/services/adminRequestFiltering'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 
 const loading = ref(true)
 const detailLoading = ref(false)
@@ -19,6 +20,10 @@ const selectedClient = ref<ClientOverviewItem | null>(null)
 const selectedClientRequests = ref<ClientOverviewRequest[]>([])
 const summary = ref({ total_clients: 0, clients_with_requests: 0, clients_with_active_requests: 0 })
 const { t } = useI18n()
+
+function stageMeta(stage: string | null | undefined) {
+  return getRequestWorkflowStageMeta(stage)
+}
 
 const statCards = computed(() => [
   { label: t('adminClientsOverview.stats.clients'), value: summary.value.total_clients, tone: 'emerald' },
@@ -204,7 +209,7 @@ onMounted(load)
               <td>{{ dateText(item.latest_activity_at) }}</td>
               <td>
                 <span class="status-badge">{{ item.status }}</span>
-                <div class="muted-small">{{ item.workflow_stage }}</div>
+                <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
               <td>
                 <RouterLink :to="{ name: 'admin-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('adminClientsOverview.actions.open') }}</RouterLink>

@@ -10,6 +10,15 @@ export function me() {
       email_verified_at: string | null
       roles?: { id?: number; name: string }[]
       permission_names?: string[]
+      mailbox_settings?: {
+        sender_email?: string | null
+        sender_name?: string | null
+        smtp_username?: string | null
+        smtp_enabled?: boolean
+        smtp_verified_at?: string | null
+        has_smtp_password?: boolean
+        smtp_last_error?: string | null
+      }
     }
   }>('/api/auth/user')
 }

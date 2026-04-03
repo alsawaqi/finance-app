@@ -19,6 +19,9 @@ class User extends Authenticatable
         'email',
         'phone',
         'password',
+        'smtp_username',
+        'smtp_password',
+        'smtp_sender_name',
         'avatar_path',
         'account_type',
         'is_active',
@@ -27,6 +30,7 @@ class User extends Authenticatable
 
     protected $hidden = [
         'password',
+        'smtp_password',
         'remember_token',
     ];
 
@@ -36,6 +40,10 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'is_active' => 'boolean',
+            'smtp_enabled' => 'boolean',
+            'smtp_verified_at' => 'datetime',
+            'smtp_password' => 'encrypted',
+            'inbox_last_synced_at' => 'datetime',
             'password' => 'hashed',
             'account_type' => UserAccountType::class,
         ];
@@ -56,6 +64,46 @@ class User extends Authenticatable
         return $this->account_type === UserAccountType::CLIENT || $this->hasRole('client');
     }
 
+    public function smtpSenderEmail(): ?string
+    {
+        $candidate = trim((string) ($this->smtp_username ?: $this->email ?: ''));
+
+        return $candidate !== '' ? $candidate : null;
+    }
+
+    public function smtpSenderName(): string
+    {
+        $candidate = trim((string) ($this->smtp_sender_name ?: $this->name ?: ''));
+
+        return $candidate !== '' ? $candidate : (string) ($this->name ?: 'Finance Staff');
+    }
+
+    public function hasStoredSmtpPassword(): bool
+    {
+        return filled($this->smtp_password);
+    }
+
+    public function hasVerifiedMailboxSettings(): bool
+    {
+        return $this->smtp_enabled
+            && $this->smtp_verified_at !== null
+            && filled($this->smtpSenderEmail())
+            && $this->hasStoredSmtpPassword();
+    }
+
+    public function mailboxSettingsSummary(): array
+    {
+        return [
+            'sender_email' => $this->smtpSenderEmail(),
+            'sender_name' => $this->smtpSenderName(),
+            'smtp_username' => $this->smtp_username,
+            'smtp_enabled' => (bool) $this->smtp_enabled,
+            'smtp_verified_at' => optional($this->smtp_verified_at)?->toISOString(),
+            'has_smtp_password' => $this->hasStoredSmtpPassword(),
+            'smtp_last_error' => $this->smtp_last_error,
+        ];
+    }
+
     public function financeRequests(): HasMany
     {
         return $this->hasMany(FinanceRequest::class, 'user_id');
@@ -74,6 +122,17 @@ class User extends Authenticatable
     public function assignedByMe(): HasMany
     {
         return $this->hasMany(FinanceRequestStaffAssignment::class, 'assigned_by');
+    }
+
+
+    public function submittedUnderstudyFinanceRequests(): HasMany
+    {
+        return $this->hasMany(FinanceRequest::class, 'understudy_submitted_by');
+    }
+
+    public function reviewedUnderstudyFinanceRequests(): HasMany
+    {
+        return $this->hasMany(FinanceRequest::class, 'understudy_reviewed_by');
     }
 
     public function requestAnswers(): HasMany
@@ -119,6 +178,11 @@ class User extends Authenticatable
     public function sentRequestEmails(): HasMany
     {
         return $this->hasMany(RequestEmail::class, 'sent_by');
+    }
+
+    public function mailboxMessages(): HasMany
+    {
+        return $this->hasMany(MailboxMessage::class, 'user_id');
     }
 
     public function timelineEvents(): HasMany

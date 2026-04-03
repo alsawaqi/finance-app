@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             AdminUserSeeder::class,
             ContractTemplateSeeder::class,
+            FinanceRequestTypeSeeder::class,
         ]);
     }
 }

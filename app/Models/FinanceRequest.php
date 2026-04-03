@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\FinanceRequestPriority;
 use App\Enums\FinanceRequestStatus;
+use App\Enums\FinanceRequestUnderstudyStatus;
 use App\Enums\FinanceRequestWorkflowStage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,11 +20,19 @@ class FinanceRequest extends Model
         'approval_reference_number',
         'user_id',
         'primary_staff_id',
+        'finance_request_type_id',
         'current_contract_id',
         'applicant_type',
         'company_name',
         'status',
         'workflow_stage',
+        'understudy_status',
+        'understudy_note',
+        'understudy_submitted_by',
+        'understudy_submitted_at',
+        'understudy_reviewed_by',
+        'understudy_reviewed_at',
+        'understudy_review_note',
         'priority',
         'intake_details_json',
         'submitted_at',
@@ -40,6 +49,7 @@ class FinanceRequest extends Model
         return [
             'status' => FinanceRequestStatus::class,
             'workflow_stage' => FinanceRequestWorkflowStage::class,
+            'understudy_status' => FinanceRequestUnderstudyStatus::class,
             'priority' => FinanceRequestPriority::class,
             'intake_details_json' => 'array',
             'submitted_at' => 'datetime',
@@ -49,6 +59,8 @@ class FinanceRequest extends Model
             'cancelled_at' => 'datetime',
             'latest_assignment_at' => 'datetime',
             'latest_activity_at' => 'datetime',
+            'understudy_submitted_at' => 'datetime',
+            'understudy_reviewed_at' => 'datetime',
         ];
     }
 
@@ -60,6 +72,22 @@ class FinanceRequest extends Model
     public function primaryStaff(): BelongsTo
     {
         return $this->belongsTo(User::class, 'primary_staff_id');
+    }
+
+
+    public function understudySubmittedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'understudy_submitted_by');
+    }
+
+    public function understudyReviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'understudy_reviewed_by');
+    }
+
+    public function financeRequestType(): BelongsTo
+    {
+        return $this->belongsTo(FinanceRequestType::class, 'finance_request_type_id');
     }
 
     public function currentContract(): BelongsTo
@@ -95,6 +123,31 @@ class FinanceRequest extends Model
     public function additionalDocuments(): HasMany
     {
         return $this->hasMany(RequestAdditionalDocument::class, 'finance_request_id')->latest('id');
+    }
+
+    public function staffQuestions(): HasMany
+    {
+        return $this->hasMany(FinanceRequestStaffQuestion::class, 'finance_request_id')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    public function updateBatches(): HasMany
+    {
+        return $this->hasMany(FinanceRequestUpdateBatch::class, 'finance_request_id')->latest('id');
+    }
+
+    public function updateItems(): HasMany
+    {
+        return $this->hasMany(FinanceRequestUpdateItem::class, 'finance_request_id')->latest('id');
+    }
+
+    public function agentAssignments(): HasMany
+    {
+        return $this->hasMany(FinanceRequestAgentAssignment::class, 'finance_request_id')
+            ->orderByDesc('is_active')
+            ->orderByDesc('assigned_at')
+            ->orderByDesc('id');
     }
 
     public function contracts(): HasMany

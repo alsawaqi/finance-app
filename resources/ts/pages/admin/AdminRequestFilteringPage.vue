@@ -6,9 +6,12 @@ import {
   getAdminRequestFilterData,
   type FilterAgentOption,
   type FilterBankOption,
+  type FilterBreakdownAgent,
+  type FilterBreakdownBank,
   type FilteredRequestItem,
   type FilterStaffOption,
 } from '@/services/adminRequestFiltering'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -17,7 +20,9 @@ const statuses = ref<Array<{ value: string; label: string }>>([])
 const staffOptions = ref<FilterStaffOption[]>([])
 const bankOptions = ref<FilterBankOption[]>([])
 const agentOptions = ref<FilterAgentOption[]>([])
-const summary = ref({ total_requests: 0, unique_clients: 0, unique_staff: 0, unique_agents: 0 })
+const bankBreakdown = ref<FilterBreakdownBank[]>([])
+const agentBreakdown = ref<FilterBreakdownAgent[]>([])
+const summary = ref({ total_requests: 0, unique_clients: 0, unique_staff: 0, unique_agents: 0, total_emails: 0 })
 
 const selectedStatus = ref('')
 const selectedStaffId = ref<number | ''>('')
@@ -35,11 +40,16 @@ const filteredAgents = computed(() => {
   return agentOptions.value.filter((agent) => agent.bank_id === Number(selectedBankId.value))
 })
 
+function stageMeta(stage: string | null | undefined) {
+  return getRequestWorkflowStageMeta(stage)
+}
+
 const statCards = computed(() => [
   { label: t('adminRequestFiltering.stats.filteredRequests'), value: summary.value.total_requests, tone: 'emerald' },
   { label: t('adminRequestFiltering.stats.clientsInResult'), value: summary.value.unique_clients, tone: 'blue' },
   { label: t('adminRequestFiltering.stats.staffInResult'), value: summary.value.unique_staff, tone: 'violet' },
   { label: t('adminRequestFiltering.stats.agentsInResult'), value: summary.value.unique_agents, tone: 'amber' },
+  { label: 'Emails in result', value: summary.value.total_emails, tone: 'slate' },
 ])
 
 watch(selectedStaffId, (value) => {
@@ -82,6 +92,8 @@ async function load() {
     bankOptions.value = data.filters?.banks ?? []
     agentOptions.value = data.filters?.agents ?? []
     summary.value = data.summary ?? summary.value
+    bankBreakdown.value = data.bank_breakdown ?? []
+    agentBreakdown.value = data.agent_breakdown ?? []
     requests.value = data.requests ?? []
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminRequestFiltering.errors.loadFailed')
@@ -206,6 +218,72 @@ onMounted(load)
       </div>
     </article>
 
+    <div class="admin-dashboard-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+      <article class="panel-card">
+        <div class="panel-head">
+          <h2>Bank traffic breakdown</h2>
+          <span class="count-pill">{{ bankBreakdown.length }}</span>
+        </div>
+
+        <p v-if="!bankBreakdown.length" class="empty-state">No bank activity found for the current filter.</p>
+        <div v-else class="table-wrap">
+          <table class="request-table">
+            <thead>
+              <tr>
+                <th>Bank</th>
+                <th>Agents</th>
+                <th>Requests</th>
+                <th>Emails</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="bank in bankBreakdown.slice(0, 8)" :key="bank.id">
+                <td>
+                  <strong>{{ bank.short_name || bank.name }}</strong>
+                  <div class="muted-small">{{ bank.name }}</div>
+                </td>
+                <td>{{ bank.agents_count }}</td>
+                <td>{{ bank.requests_count }}</td>
+                <td>{{ bank.emails_count }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel-card">
+        <div class="panel-head">
+          <h2>Agent traffic breakdown</h2>
+          <span class="count-pill">{{ agentBreakdown.length }}</span>
+        </div>
+
+        <p v-if="!agentBreakdown.length" class="empty-state">No agent activity found for the current filter.</p>
+        <div v-else class="table-wrap">
+          <table class="request-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Bank</th>
+                <th>Requests</th>
+                <th>Emails</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="agent in agentBreakdown.slice(0, 8)" :key="agent.id">
+                <td>
+                  <strong>{{ agent.name }}</strong>
+                  <div class="muted-small">{{ agent.email || '—' }}</div>
+                </td>
+                <td>{{ agent.bank_short_name || agent.bank_name || '—' }}</td>
+                <td>{{ agent.requests_count }}</td>
+                <td>{{ agent.emails_count }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+
     <article class="panel-card">
       <div class="panel-head">
         <h2>{{ t('adminRequestFiltering.table.title') }}</h2>
@@ -255,7 +333,7 @@ onMounted(load)
               <td>{{ dateText(item.latest_activity_at || item.submitted_at) }}</td>
               <td>
                 <span class="status-badge">{{ item.status }}</span>
-                <div class="muted-small">{{ item.workflow_stage }}</div>
+                <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
               <td>
                 <RouterLink :to="{ name: 'admin-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('adminRequestFiltering.actions.view') }}</RouterLink>

@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   getClientRequest,
+  submitClientUpdateFile,
   uploadClientAdditionalDocument,
   uploadClientRequiredDocument,
 } from '@/services/clientPortal'
@@ -15,13 +16,15 @@ const loading = ref(true)
 const errorMessage = ref('')
 const successMessage = ref('')
 const requestItem = ref<any | null>(null)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const uploadingRequired = ref<Record<number, boolean>>({})
 const uploadingAdditional = ref<Record<number, boolean>>({})
+const uploadingUpdateFiles = ref<Record<number, boolean>>({})
 
 const requiredFileInputs = ref<Record<number, HTMLInputElement | null>>({})
 const additionalFileInputs = ref<Record<number, HTMLInputElement | null>>({})
+const updateFileInputs = ref<Record<number, HTMLInputElement | null>>({})
 
 const requiredPendingCount = computed(() =>
   (requestItem.value?.required_documents ?? []).filter((item: any) => !item.is_uploaded).length,
@@ -30,6 +33,31 @@ const requiredPendingCount = computed(() =>
 const additionalPendingCount = computed(() =>
   (requestItem.value?.additional_document_requests ?? []).filter((item: any) => item.status !== 'uploaded').length,
 )
+
+const activeUpdateBatch = computed(() => requestItem.value?.active_update_batch ?? null)
+const fileUpdateItems = computed(() => (activeUpdateBatch.value?.items ?? []).filter((item: any) => item.item_type === 'attachment'))
+const pendingFileUpdateCount = computed(() => fileUpdateItems.value.filter((item: any) => item.status !== 'approved').length)
+
+function localizedText(en?: string | null, ar?: string | null, fallback = '—') {
+  if (locale.value === 'ar') return ar || en || fallback
+  return en || ar || fallback
+}
+
+function updateStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'updated') return 'Submitted for review'
+  if (key === 'approved') return 'Approved'
+  if (key === 'rejected') return 'Needs another upload'
+  if (key === 'pending') return 'Waiting for your file'
+  return key || 'Unknown'
+}
+
+function updateStatusClass(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'approved') return 'client-badge client-badge--green'
+  if (key === 'updated') return 'client-badge client-badge--blue'
+  return 'client-badge client-badge--amber'
+}
 
 async function load() {
   loading.value = true
@@ -53,12 +81,39 @@ function setAdditionalFileRef(documentId: number, el: Element | null) {
   additionalFileInputs.value[documentId] = el as HTMLInputElement | null
 }
 
+function setUpdateFileRef(itemId: number, el: Element | null) {
+  updateFileInputs.value[itemId] = el as HTMLInputElement | null
+}
+
 function openRequiredPicker(stepId: number) {
   requiredFileInputs.value[stepId]?.click()
 }
 
 function openAdditionalPicker(documentId: number) {
   additionalFileInputs.value[documentId]?.click()
+}
+
+function openUpdatePicker(itemId: number) {
+  updateFileInputs.value[itemId]?.click()
+}
+
+function canUploadAdditional(item: any) {
+  if (typeof item?.can_client_upload === 'boolean') return item.can_client_upload
+  return ['pending', 'rejected'].includes(String(item?.status || '').toLowerCase())
+}
+
+function additionalUploadButtonLabel(item: any) {
+  if (uploadingAdditional.value[item.id]) return t('clientDocuments.actions.uploading')
+  if (String(item?.status || '').toLowerCase() === 'rejected') return t('clientDocuments.actions.uploadCorrected')
+  if (!canUploadAdditional(item)) return t('clientDocuments.states.uploaded')
+  return t('clientDocuments.actions.uploadFile')
+}
+
+function requiredUploadButtonLabel(item: any) {
+  if (uploadingRequired.value[item.document_upload_step_id]) return t('clientDocuments.actions.uploading')
+  if (item.is_change_requested) return t('clientDocuments.actions.uploadCorrected')
+  if (!item.can_client_upload && item.is_uploaded) return t('clientDocuments.states.uploaded')
+  return t('clientDocuments.actions.uploadFile')
 }
 
 function applyRequestFromResponse(data: any) {
@@ -132,6 +187,35 @@ async function onAdditionalFileChange(documentId: number, event: Event) {
   }
 }
 
+async function onUpdateFileChange(itemId: number, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+
+  if (!file) return
+
+  uploadingUpdateFiles.value = {
+    ...uploadingUpdateFiles.value,
+    [itemId]: true,
+  }
+
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await submitClientUpdateFile(requestId.value, itemId, { file })
+    applyRequestFromResponse(data)
+    successMessage.value = data.message || 'Requested file update submitted successfully.'
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || 'Unable to submit the requested file update.'
+  } finally {
+    uploadingUpdateFiles.value = {
+      ...uploadingUpdateFiles.value,
+      [itemId]: false,
+    }
+    input.value = ''
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -153,6 +237,7 @@ onMounted(load)
     <p v-if="loading" class="empty-state">{{ t('clientDocuments.states.loading') }}</p>
     <p v-else-if="errorMessage && !requestItem" class="error-state">{{ errorMessage }}</p>
     <p v-if="successMessage" class="success-state">{{ successMessage }}</p>
+    <p v-if="errorMessage && requestItem" class="error-state">{{ errorMessage }}</p>
 
     <template v-else-if="requestItem">
       <div class="client-status-chip-grid client-status-chip-grid--summary">
@@ -168,9 +253,76 @@ onMounted(load)
           <strong>{{ additionalPendingCount }}</strong>
           <span>{{ t('clientDocuments.summary.additionalPending') }}</span>
         </div>
+        <div class="client-status-chip-card">
+          <strong>{{ pendingFileUpdateCount }}</strong>
+          <span>Requested file updates</span>
+        </div>
       </div>
 
       <div class="client-accordion-stack">
+        <details v-if="fileUpdateItems.length" class="client-accordion-card" open>
+          <summary>
+            <div>
+              <h2>Requested file replacements</h2>
+              <p>Upload only the files the team specifically asked you to replace.</p>
+            </div>
+          </summary>
+
+          <div class="client-accordion-card__body">
+            <div v-if="localizedText(activeUpdateBatch?.reason_en, activeUpdateBatch?.reason_ar, '') !== ''" class="notes-box">
+              <span>Reason from the team</span>
+              <p>{{ localizedText(activeUpdateBatch?.reason_en, activeUpdateBatch?.reason_ar, '—') }}</p>
+            </div>
+
+            <div class="client-doc-grid">
+              <article v-for="item in fileUpdateItems" :key="item.id" class="client-doc-card">
+                <div class="client-card-head">
+                  <div>
+                    <h3>{{ localizedText(item.label_en, item.label_ar, 'Requested file update') }}</h3>
+                    <p class="client-subtext">{{ localizedText(item.instruction_en, item.instruction_ar, 'Please upload the replacement file requested by the team.') }}</p>
+                  </div>
+
+                  <span :class="updateStatusClass(item.status)">{{ updateStatusLabel(item.status) }}</span>
+                </div>
+
+                <p class="client-subtext" v-if="item.old_value_json?.file_name">
+                  Current file: {{ item.old_value_json.file_name }}
+                </p>
+                <p class="client-subtext" v-if="item.new_value_json?.file_name">
+                  Last submitted: {{ item.new_value_json.file_name }}
+                </p>
+
+                <div class="client-inline-actions client-inline-actions--stackable">
+                  <input
+                    :id="`update-file-${item.id}`"
+                    :ref="(el) => setUpdateFileRef(item.id, el)"
+                    type="file"
+                    class="sr-only"
+                    @change.stop="onUpdateFileChange(item.id, $event)"
+                  />
+
+                  <button
+                    type="button"
+                    class="client-btn-primary"
+                    :disabled="uploadingUpdateFiles[item.id] || item.status === 'approved' || !requestItem.can_submit_client_updates"
+                    @click.stop.prevent="openUpdatePicker(item.id)"
+                  >
+                    {{
+                      uploadingUpdateFiles[item.id]
+                        ? 'Uploading...'
+                        : item.status === 'rejected'
+                          ? 'Upload replacement again'
+                          : item.status === 'updated'
+                            ? 'Upload revised file'
+                            : 'Upload file'
+                    }}
+                  </button>
+                </div>
+              </article>
+            </div>
+          </div>
+        </details>
+
         <details class="client-accordion-card" open>
           <summary>
             <div>
@@ -221,7 +373,7 @@ onMounted(load)
                   {{ t('clientDocuments.states.lockedAfterUpload') }}
                 </p>
 
-                <div v-if="item.can_client_upload" class="client-inline-actions client-inline-actions--stackable">
+                <div class="client-inline-actions client-inline-actions--stackable">
                   <input
                     :id="`required-file-${item.document_upload_step_id}`"
                     :ref="(el) => setRequiredFileRef(item.document_upload_step_id, el)"
@@ -233,16 +385,10 @@ onMounted(load)
                   <button
                     type="button"
                     class="client-btn-primary"
-                    :disabled="uploadingRequired[item.document_upload_step_id]"
+                    :disabled="uploadingRequired[item.document_upload_step_id] || !item.can_client_upload"
                     @click.stop.prevent="openRequiredPicker(item.document_upload_step_id)"
                   >
-                    {{
-                      uploadingRequired[item.document_upload_step_id]
-                        ? t('clientDocuments.actions.uploading')
-                        : item.is_change_requested
-                          ? t('clientDocuments.actions.uploadCorrected')
-                          : t('clientDocuments.actions.uploadFile')
-                    }}
+                    {{ requiredUploadButtonLabel(item) }}
                   </button>
                 </div>
               </article>
@@ -287,6 +433,10 @@ onMounted(load)
 
                 <p v-if="item.rejection_reason" class="client-form-error">{{ item.rejection_reason }}</p>
 
+                <p v-if="item.file_name && !canUploadAdditional(item)" class="client-subtext">
+                  {{ t('clientDocuments.states.lockedAfterUpload') }}
+                </p>
+
                 <div class="client-inline-actions client-inline-actions--stackable">
                   <input
                     :id="`additional-file-${item.id}`"
@@ -299,14 +449,10 @@ onMounted(load)
                   <button
                     type="button"
                     class="client-btn-primary"
-                    :disabled="uploadingAdditional[item.id]"
+                    :disabled="uploadingAdditional[item.id] || !canUploadAdditional(item)"
                     @click.stop.prevent="openAdditionalPicker(item.id)"
                   >
-                    {{
-                      uploadingAdditional[item.id]
-                        ? t('clientDocuments.actions.uploading')
-                        : t('clientDocuments.actions.uploadFile')
-                    }}
+                    {{ additionalUploadButtonLabel(item) }}
                   </button>
                 </div>
               </article>

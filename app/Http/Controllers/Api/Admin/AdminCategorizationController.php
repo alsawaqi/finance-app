@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\FinanceRequestStatus;
+use App\Enums\FinanceRequestWorkflowStage;
 use App\Enums\UserAccountType;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
+use App\Models\Bank;
 use App\Models\FinanceRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -74,6 +76,32 @@ class AdminCategorizationController extends Controller
             ])
             ->values();
 
+        $bankBreakdown = Bank::query()
+            ->leftJoin('agents', 'agents.bank_id', '=', 'banks.id')
+            ->leftJoin('request_email_agents', 'request_email_agents.agent_id', '=', 'agents.id')
+            ->leftJoin('request_emails', 'request_emails.id', '=', 'request_email_agents.request_email_id')
+            ->select([
+                'banks.id',
+                'banks.name',
+                'banks.short_name',
+                DB::raw('COUNT(DISTINCT agents.id) as agents_count'),
+                DB::raw('COUNT(DISTINCT request_emails.id) as emails_count'),
+                DB::raw('COUNT(DISTINCT request_emails.finance_request_id) as requests_count'),
+            ])
+            ->groupBy('banks.id', 'banks.name', 'banks.short_name')
+            ->orderByDesc('emails_count')
+            ->orderBy('banks.name')
+            ->get()
+            ->map(fn ($bank) => [
+                'id' => (int) $bank->id,
+                'name' => $bank->name,
+                'short_name' => $bank->short_name,
+                'agents_count' => (int) $bank->agents_count,
+                'emails_count' => (int) $bank->emails_count,
+                'requests_count' => (int) $bank->requests_count,
+            ])
+            ->values();
+
         $staff = $staffBase
             ->withCount([
                 'staffAssignments as active_assignments_count' => fn ($query) => $query->where('is_active', true),
@@ -112,9 +140,12 @@ class AdminCategorizationController extends Controller
                     FinanceRequestStatus::REJECTED->value,
                 ]),
                 'financeRequests as needs_action_count' => fn ($query) => $query->whereIn('workflow_stage', [
+                    'awaiting_client_signature',
+                    'awaiting_client_documents',
+                    'awaiting_additional_documents',
+                    'client_update_requested',
                     'contract',
                     'document_collection',
-                    'awaiting_additional_documents',
                 ]),
             ])
             ->orderBy('name')
@@ -137,6 +168,36 @@ class AdminCategorizationController extends Controller
             })
             ->values();
 
+        $pendingQueueCount = FinanceRequest::query()
+            ->where('status', FinanceRequestStatus::SUBMITTED->value)
+            ->whereIn('workflow_stage', [
+                FinanceRequestWorkflowStage::QUESTIONNAIRE->value,
+                FinanceRequestWorkflowStage::REVIEW->value,
+                FinanceRequestWorkflowStage::SUBMITTED_FOR_REVIEW->value,
+            ])
+            ->count();
+
+        $contractQueueCount = FinanceRequest::query()
+            ->where('status', FinanceRequestStatus::ACTIVE->value)
+            ->whereIn('workflow_stage', [
+                FinanceRequestWorkflowStage::ADMIN_CONTRACT_PREPARATION->value,
+                FinanceRequestWorkflowStage::CONTRACT->value,
+                FinanceRequestWorkflowStage::AWAITING_CLIENT_SIGNATURE->value,
+            ])
+            ->count();
+
+        $assignedQueueCount = FinanceRequest::query()
+            ->whereHas('assignments', fn ($query) => $query->where('is_active', true))
+            ->whereNotIn('status', [
+                FinanceRequestStatus::COMPLETED->value,
+                FinanceRequestStatus::REJECTED->value,
+                FinanceRequestStatus::CANCELLED->value,
+            ])
+            ->count();
+
+        $requestTrend = $this->requestTrend();
+        $bankChart = $bankBreakdown->take(6)->values();
+
         return response()->json([
             'summary' => [
                 'total_requests' => FinanceRequest::count(),
@@ -147,12 +208,53 @@ class AdminCategorizationController extends Controller
                 'total_staff' => $staff->count(),
                 'total_agents' => $agents->count(),
                 'with_additional_document_requests' => FinanceRequest::query()->whereHas('additionalDocuments')->count(),
+                'pending_queue_requests' => $pendingQueueCount,
+                'contract_queue_requests' => $contractQueueCount,
+                'assigned_queue_requests' => $assignedQueueCount,
             ],
             'status_breakdown' => $requestStatusCounts,
             'stage_breakdown' => $workflowStageCounts,
+            'charts' => [
+                'request_trend' => $requestTrend,
+                'bank_email_breakdown' => [
+                    'labels' => $bankChart->pluck('short_name')->map(fn ($value, $index) => $value ?: $bankChart[$index]['name'])->values(),
+                    'email_series' => $bankChart->pluck('emails_count')->values(),
+                    'request_series' => $bankChart->pluck('requests_count')->values(),
+                ],
+            ],
+            'bank_breakdown' => $bankBreakdown,
             'agents' => $agents,
             'staff' => $staff,
             'clients' => $clients,
         ]);
+    }
+
+    private function requestTrend(): array
+    {
+        $labels = [];
+        $series = [];
+
+        for ($i = 5; $i >= 0; $i--) {
+            $start = now()->startOfMonth()->subMonths($i);
+            $end = (clone $start)->endOfMonth();
+
+            $labels[] = $start->format('M Y');
+
+            $series[] = FinanceRequest::query()
+                ->where(function ($query) use ($start, $end) {
+                    $query
+                        ->whereBetween('submitted_at', [$start, $end])
+                        ->orWhere(function ($inner) use ($start, $end) {
+                            $inner->whereNull('submitted_at')
+                                ->whereBetween('created_at', [$start, $end]);
+                        });
+                })
+                ->count();
+        }
+
+        return [
+            'labels' => $labels,
+            'series' => $series,
+        ];
     }
 }

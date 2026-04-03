@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Client;
 use App\Enums\FinanceRequestPriority;
 use App\Enums\FinanceRequestStatus;
 use App\Enums\FinanceRequestWorkflowStage;
+use App\Enums\FinanceRequestUpdateBatchStatus;
+use App\Enums\FinanceRequestUpdateItemStatus;
 use App\Enums\RequestAdditionalDocumentStatus;
 use App\Enums\RequestDocumentUploadStatus;
 use App\Http\Controllers\Controller;
@@ -13,21 +15,23 @@ use App\Http\Requests\Client\UploadAdditionalDocumentRequest;
 use App\Http\Requests\Client\UploadRequiredDocumentRequest;
 use App\Models\DocumentUploadStep;
 use App\Models\FinanceRequest;
+use App\Models\FinanceRequestType;
 use App\Models\RequestDocumentUpload;
 use App\Models\FinanceRequestShareholder;
 use App\Models\RequestAdditionalDocument;
 use App\Models\RequestAnswer;
 use App\Models\RequestAttachment;
 use App\Models\RequestQuestion;
-use App\Models\RequestTimeline;
+use App\Support\RequestTimelineLogger;
 use App\Services\FinanceRequestDocumentChecklistService;
 use App\Services\FinanceRequestWorkflowService;
+use App\Services\FinanceRequestUpdateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+ 
 use Illuminate\Support\Str;
 
 class ClientRequestController extends Controller
@@ -35,6 +39,7 @@ class ClientRequestController extends Controller
     public function __construct(
         private readonly FinanceRequestDocumentChecklistService $documentChecklistService,
         private readonly FinanceRequestWorkflowService $workflowService,
+        private readonly FinanceRequestUpdateService $updateService,
     ) {
     }
 
@@ -61,13 +66,18 @@ class ClientRequestController extends Controller
 
         return response()->json([
             'questions' => $questions,
+            'finance_request_types' => $this->serializeActiveFinanceRequestTypes(),
         ]);
     }
 
     public function index(Request $request): JsonResponse
     {
         $requests = FinanceRequest::query()
-            ->with(['currentContract:id,finance_request_id,version_no,status,admin_signed_at,client_signed_at,contract_pdf_path'])
+            ->with([
+                'currentContract:id,finance_request_id,version_no,status,admin_signed_at,client_signed_at,contract_pdf_path',
+                'financeRequestType:id,slug,name_en,name_ar,description_en,description_ar,is_active,sort_order',
+                'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
+            ])
             ->withCount(['answers', 'attachments'])
             ->where('user_id', $request->user()->id)
             ->latest('submitted_at')
@@ -103,14 +113,16 @@ class ClientRequestController extends Controller
         $companyCrNumber = trim((string) Arr::get($details, 'company_cr_number', ''));
         $address = trim((string) Arr::get($details, 'address', ''));
         $notes = Arr::get($details, 'notes');
+        $financeRequestTypeId = Arr::get($details, 'finance_request_type_id');
 
         $financeRequest = FinanceRequest::create([
             'reference_number' => 'TMP-' . Str::upper(Str::random(12)),
             'user_id' => $user->id,
+            'finance_request_type_id' => $financeRequestTypeId ? (int) $financeRequestTypeId : null,
             'applicant_type' => $applicantType,
             'company_name' => $companyName,
             'status' => FinanceRequestStatus::SUBMITTED,
-            'workflow_stage' => FinanceRequestWorkflowStage::REVIEW,
+            'workflow_stage' => FinanceRequestWorkflowStage::SUBMITTED_FOR_REVIEW,
             'priority' => FinanceRequestPriority::NORMAL,
             'submitted_at' => $now,
             'latest_activity_at' => $now,
@@ -122,6 +134,7 @@ class ClientRequestController extends Controller
                     'country_code' => $country,
                     'requested_amount' => $requestedAmount,
                     'finance_type' => $applicantType,
+                    'finance_request_type_id' => $financeRequestTypeId ? (int) $financeRequestTypeId : null,
                     'company_name' => $companyName,
                     'email' => $email,
                     'phone_country_code' => $phoneCountryCode,
@@ -230,13 +243,15 @@ class ClientRequestController extends Controller
             ]);
         }
 
-        RequestTimeline::create([
-            'finance_request_id' => $financeRequest->id,
-            'actor_user_id' => $user->id,
-            'event_type' => 'request_submitted',
-            'event_title' => 'Request submitted',
-            'event_description' => 'Client submitted a new finance request and it is now waiting for admin review.',
-            'metadata_json' => [
+        RequestTimelineLogger::log(
+            $financeRequest,
+            'request_submitted',
+            $user->id,
+            'Request submitted',
+            'تم إرسال الطلب',
+            'Client submitted a new finance request and it is now waiting for admin review.',
+            'قام العميل بإرسال طلب تمويل جديد وهو الآن بانتظار مراجعة الإدارة.',
+            [
                 'reference_number' => $financeRequest->reference_number,
                 'answer_count' => $answers->count(),
                 'attachment_count' => count($storedAttachments),
@@ -252,11 +267,12 @@ class ClientRequestController extends Controller
                 'national_address_number' => $nationalAddressNumber,
                 'company_cr_number' => $companyCrNumber,
                 'address' => $address,
+                'finance_request_type_id' => $financeRequestTypeId ? (int) $financeRequestTypeId : null,
             ],
-            'created_at' => $now,
-        ]);
+            $now,
+        );
 
-        return $financeRequest->fresh(['answers.question', 'attachments', 'shareholders', 'additionalDocuments', 'currentContract']);
+        return $financeRequest->fresh(['answers.question', 'attachments', 'shareholders', 'additionalDocuments', 'currentContract', 'financeRequestType']);
     });
 
     return response()->json([
@@ -274,8 +290,11 @@ class ClientRequestController extends Controller
             'attachments',
             'client',
             'currentContract',
+            'financeRequestType',
             'shareholders',
             'additionalDocuments',
+            'updateBatches.requester:id,name,email',
+            'updateBatches.items.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',
         ]);
 
         return response()->json([
@@ -290,8 +309,8 @@ class ClientRequestController extends Controller
         $stage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
         abort_unless(in_array($stage, [
             FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+            FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
             FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
-            FinanceRequestWorkflowStage::PROCESSING->value,
         ], true), 422, 'This request is not currently accepting document uploads.');
 
         $step = DocumentUploadStep::query()
@@ -331,20 +350,21 @@ class ClientRequestController extends Controller
                 'uploaded_at' => now(),
             ]);
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $request->user()->id,
-                'event_type' => 'request.required_document_uploaded',
-                'event_title' => 'Required document uploaded',
-                'event_description' => 'Client uploaded the required document: ' . $step->name . '.',
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.required_document_uploaded',
+                $request->user()->id,
+                'Required document uploaded',
+                'تم رفع المستند المطلوب',
+                'Client uploaded the required document: ' . $step->name . '.',
+                'قام العميل برفع المستند المطلوب: ' . $step->name . '.',
+                [
                     'document_upload_step_id' => $step->id,
                     'document_name' => $step->name,
                     'is_resubmission' => $latestUpload !== null,
                     'previous_upload_id' => $latestUpload?->id,
                 ],
-                'created_at' => now(),
-            ]);
+            );
 
             $this->workflowService->syncAfterRequiredDocuments($financeRequest->fresh());
         });
@@ -352,7 +372,7 @@ class ClientRequestController extends Controller
         return response()->json([
             'message' => 'Required document uploaded successfully.',
             'request' => $this->transformRequestDetails(
-                $financeRequest->fresh(['answers.question', 'attachments', 'client', 'currentContract', 'shareholders', 'additionalDocuments'])
+                $financeRequest->fresh(['answers.question', 'attachments', 'client', 'currentContract', 'financeRequestType', 'shareholders', 'additionalDocuments'])
             ),
         ]);
     }
@@ -364,6 +384,13 @@ class ClientRequestController extends Controller
     ): JsonResponse {
         $this->authorizeClient($financeRequest, $request->user()->id);
         abort_unless((int) $additionalDocument->finance_request_id === (int) $financeRequest->id, 404);
+
+        if (! in_array($additionalDocument->status?->value ?? (string) $additionalDocument->status, [
+            RequestAdditionalDocumentStatus::PENDING->value,
+            RequestAdditionalDocumentStatus::REJECTED->value,
+        ], true)) {
+            abort(422, 'This additional document is already locked after upload. A new version can only be uploaded if the team asks for another file.');
+        }
 
         $file = $request->file('file');
 
@@ -385,18 +412,19 @@ class ClientRequestController extends Controller
                 'rejection_reason' => null,
             ]);
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $request->user()->id,
-                'event_type' => 'request.additional_document_uploaded',
-                'event_title' => 'Additional document uploaded',
-                'event_description' => 'Client uploaded the requested additional document: ' . $additionalDocument->title . '.',
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.additional_document_uploaded',
+                $request->user()->id,
+                'Additional document uploaded',
+                'تم رفع المستند الإضافي',
+                'Client uploaded the requested additional document: ' . $additionalDocument->title . '.',
+                'قام العميل برفع المستند الإضافي المطلوب: ' . $additionalDocument->title . '.',
+                [
                     'additional_document_id' => $additionalDocument->id,
                     'title' => $additionalDocument->title,
                 ],
-                'created_at' => now(),
-            ]);
+            );
 
             $this->workflowService->syncAfterAdditionalDocuments($financeRequest->fresh());
         });
@@ -404,7 +432,7 @@ class ClientRequestController extends Controller
         return response()->json([
             'message' => 'Additional document uploaded successfully.',
             'request' => $this->transformRequestDetails(
-                $financeRequest->fresh(['answers.question', 'attachments', 'client', 'currentContract', 'shareholders', 'additionalDocuments'])
+                $financeRequest->fresh(['answers.question', 'attachments', 'client', 'currentContract', 'financeRequestType', 'shareholders', 'additionalDocuments'])
             ),
         ]);
     }
@@ -473,6 +501,7 @@ class ClientRequestController extends Controller
             'status' => $status,
             'workflow_stage' => $stage,
             'applicant_type' => $financeRequest->applicant_type,
+            'finance_request_type' => $this->serializeFinanceRequestType($financeRequest->financeRequestType),
             'company_name' => $financeRequest->company_name,
             'submitted_at' => optional($financeRequest->submitted_at)->toISOString(),
             'latest_activity_at' => optional($financeRequest->latest_activity_at)->toISOString(),
@@ -480,6 +509,41 @@ class ClientRequestController extends Controller
             'intake_details_json' => $details,
             'answers_count' => $financeRequest->answers_count ?? 0,
             'attachments_count' => $financeRequest->attachments_count ?? 0,
+            'active_update_batch' => ($activeBatch = $this->updateService->getActiveClientBatch($financeRequest)) ? [
+                'id' => $activeBatch->id,
+                'status' => $activeBatch->status?->value ?? (string) $activeBatch->status,
+                'reason_en' => $activeBatch->reason_en,
+                'reason_ar' => $activeBatch->reason_ar,
+                'opened_at' => optional($activeBatch->opened_at)->toISOString(),
+                'items' => $activeBatch->items->map(function ($item) {
+                    $question = $item->question;
+
+                    return [
+                        'id' => $item->id,
+                        'item_type' => $item->item_type,
+                        'field_key' => $item->field_key,
+                        'question_id' => $item->question_id,
+                        'label_en' => $item->label_en,
+                        'label_ar' => $item->label_ar,
+                        'instruction_en' => $item->instruction_en,
+                        'instruction_ar' => $item->instruction_ar,
+                        'status' => $item->status?->value ?? (string) $item->status,
+                        'is_required' => (bool) $item->is_required,
+                        'old_value_json' => $item->old_value_json,
+                        'new_value_json' => $item->new_value_json,
+                        'question' => $question ? [
+                            'id' => $question->id,
+                            'code' => $question->code,
+                            'question_text' => $question->question_text,
+                            'question_type' => $question->question_type,
+                            'options_json' => $question->options_json ?? [],
+                            'placeholder' => $question->placeholder,
+                            'help_text' => $question->help_text,
+                            'is_required' => (bool) $question->is_required,
+                        ] : null,
+                    ];
+                })->values(),
+            ] : null,
             'current_contract' => $financeRequest->currentContract ? [
                 'id' => $financeRequest->currentContract->id,
                 'version_no' => $financeRequest->currentContract->version_no,
@@ -505,6 +569,7 @@ class ClientRequestController extends Controller
             'workflow_stage' => $stage,
             'priority' => $financeRequest->priority?->value ?? (string) $financeRequest->priority,
             'applicant_type' => $financeRequest->applicant_type,
+            'finance_request_type' => $this->serializeFinanceRequestType($financeRequest->financeRequestType),
             'company_name' => $financeRequest->company_name,
             'submitted_at' => optional($financeRequest->submitted_at)->toISOString(),
             'approved_at' => optional($financeRequest->approved_at)->toISOString(),
@@ -512,11 +577,47 @@ class ClientRequestController extends Controller
             'intake_details' => $details,
             'intake_details_json' => $details,
             'can_sign' => $financeRequest->currentContract && ($financeRequest->currentContract->status?->value ?? (string) $financeRequest->currentContract->status) === 'admin_signed',
-            'can_upload_documents' => in_array($stage, [
-                FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
-                FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
-                FinanceRequestWorkflowStage::PROCESSING->value,
-            ], true),
+           'can_upload_documents' => in_array($stage, [
+    FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+    FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+    FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
+], true),
+            'can_submit_client_updates' => $stage === FinanceRequestWorkflowStage::CLIENT_UPDATE_REQUESTED->value,
+            'active_update_batch' => ($activeBatch = $this->updateService->getActiveClientBatch($financeRequest)) ? [
+                'id' => $activeBatch->id,
+                'status' => $activeBatch->status?->value ?? (string) $activeBatch->status,
+                'reason_en' => $activeBatch->reason_en,
+                'reason_ar' => $activeBatch->reason_ar,
+                'opened_at' => optional($activeBatch->opened_at)->toISOString(),
+                'items' => $activeBatch->items->map(function ($item) {
+                    $question = $item->question;
+
+                    return [
+                        'id' => $item->id,
+                        'item_type' => $item->item_type,
+                        'field_key' => $item->field_key,
+                        'question_id' => $item->question_id,
+                        'label_en' => $item->label_en,
+                        'label_ar' => $item->label_ar,
+                        'instruction_en' => $item->instruction_en,
+                        'instruction_ar' => $item->instruction_ar,
+                        'status' => $item->status?->value ?? (string) $item->status,
+                        'is_required' => (bool) $item->is_required,
+                        'old_value_json' => $item->old_value_json,
+                        'new_value_json' => $item->new_value_json,
+                        'question' => $question ? [
+                            'id' => $question->id,
+                            'code' => $question->code,
+                            'question_text' => $question->question_text,
+                            'question_type' => $question->question_type,
+                            'options_json' => $question->options_json ?? [],
+                            'placeholder' => $question->placeholder,
+                            'help_text' => $question->help_text,
+                            'is_required' => (bool) $question->is_required,
+                        ] : null,
+                    ];
+                })->values(),
+            ] : null,
             'current_contract' => $financeRequest->currentContract ? [
                 'id' => $financeRequest->currentContract->id,
                 'version_no' => $financeRequest->currentContract->version_no,
@@ -596,7 +697,41 @@ class ClientRequestController extends Controller
                 'requested_at' => optional($document->requested_at)->toISOString(),
                 'uploaded_at' => optional($document->uploaded_at)->toISOString(),
                 'rejection_reason' => $document->rejection_reason,
+                'can_client_upload' => in_array($document->status?->value ?? (string) $document->status, [
+                    RequestAdditionalDocumentStatus::PENDING->value,
+                    RequestAdditionalDocumentStatus::REJECTED->value,
+                ], true),
             ])->values(),
         ];
     }
+    private function serializeActiveFinanceRequestTypes(): array
+    {
+        return FinanceRequestType::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name_en')
+            ->get()
+            ->map(fn (FinanceRequestType $type) => $this->serializeFinanceRequestType($type))
+            ->values()
+            ->all();
+    }
+
+    private function serializeFinanceRequestType(?FinanceRequestType $financeRequestType): ?array
+    {
+        if (! $financeRequestType) {
+            return null;
+        }
+
+        return [
+            'id' => $financeRequestType->id,
+            'slug' => $financeRequestType->slug,
+            'name_en' => $financeRequestType->name_en,
+            'name_ar' => $financeRequestType->name_ar,
+            'description_en' => $financeRequestType->description_en,
+            'description_ar' => $financeRequestType->description_ar,
+            'is_active' => (bool) $financeRequestType->is_active,
+            'sort_order' => (int) $financeRequestType->sort_order,
+        ];
+    }
+
 }

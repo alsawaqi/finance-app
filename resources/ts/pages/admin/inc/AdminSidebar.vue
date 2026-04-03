@@ -53,7 +53,7 @@ const menuItems = computed(() => {
       to: { name: 'staff-requests' },
       active: route.name === 'staff-requests' || route.name === 'staff-request-details',
       badge: auth.isStaff && !auth.isAdmin ? t('adminSidebar.badges.myQueue') : t('adminSidebar.badges.workspace'),
-      show: auth.isAdmin || auth.can('view assigned requests'),
+      show:   auth.can('view assigned requests'),
     },
     {
       label: t('adminSidebar.menu.requestQuestions'),
@@ -63,6 +63,22 @@ const menuItems = computed(() => {
       badge: t('adminSidebar.badges.setup'),
       show: auth.can('manage questions'),
     },
+    {
+  label: t('adminSidebar.menu.staffQuestionTemplates'),
+  icon: 'fas fa-clipboard-question',
+  to: { name: 'admin-staff-question-templates' },
+  active: route.name === 'admin-staff-question-templates',
+  badge: t('adminSidebar.badges.setup'),
+  show: auth.isAdmin,
+},
+{
+  label: t('adminSidebar.menu.financeRequestTypes'),
+  icon: 'fas fa-tags',
+  to: { name: 'admin-finance-request-types' },
+  active: route.name === 'admin-finance-request-types',
+  badge: t('adminSidebar.badges.master'),
+  show: auth.isAdmin,
+},
     {
       label: t('adminSidebar.menu.documentSteps'),
       icon: 'fas fa-folder-open',
@@ -118,6 +134,22 @@ const menuItems = computed(() => {
       active: route.name === 'admin-agents',
       badge: t('adminSidebar.badges.setup'),
       show: auth.can('manage agents'),
+    },
+    {
+      label: 'Inbox',
+      icon: 'fas fa-envelope-open-text',
+      to: { name: 'admin-inbox' },
+      active: route.name === 'admin-inbox',
+      badge: auth.isAdmin ? t('adminSidebar.badges.workspace') : t('adminSidebar.badges.myQueue'),
+      show: auth.isAdmin || auth.isStaff,
+    },
+    {
+      label: t('adminSidebar.menu.mailSettings'),
+      icon: 'fas fa-envelope-circle-check',
+      to: { name: 'admin-mail-settings' },
+      active: route.name === 'admin-mail-settings',
+      badge: t('adminSidebar.badges.setup'),
+      show: auth.isAdmin,
     },
   ]
 

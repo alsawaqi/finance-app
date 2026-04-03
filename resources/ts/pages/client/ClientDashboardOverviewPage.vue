@@ -13,6 +13,9 @@ const errorMessage = ref('')
 const requests = ref<any[]>([])
 const { t } = useI18n()
 
+const documentStages = ['document_collection', 'awaiting_additional_documents', 'awaiting_client_documents']
+const processingStages = ['review', 'submitted_for_review', 'admin_contract_preparation', 'awaiting_staff_assignment', 'ready_for_processing', 'assigned_to_staff', 'awaiting_agent_assignment', 'processing']
+
 async function load() {
   loading.value = true
   errorMessage.value = ''
@@ -28,9 +31,16 @@ async function load() {
 
 const totalRequests = computed(() => requests.value.length)
 const awaitingSignature = computed(() => requests.value.filter((item) => item.current_contract?.status === 'admin_signed').length)
-const awaitingDocuments = computed(() => requests.value.filter((item) => ['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)).length)
-const processingCount = computed(() => requests.value.filter((item) => item.workflow_stage === 'processing').length)
-const actionNeeded = computed(() => awaitingSignature.value + awaitingDocuments.value)
+
+const awaitingDocuments = computed(() => requests.value.filter((item) => documentStages.includes(item.workflow_stage)).length)
+const processingCount = computed(() => requests.value.filter((item) => processingStages.includes(item.workflow_stage)).length)
+const actionNeeded = computed(() =>
+  requests.value.filter((item) =>
+    item.current_contract?.status === 'admin_signed'
+    || documentStages.includes(item.workflow_stage)
+    || item.workflow_stage === 'client_update_requested',
+  ).length,
+)
 
 const kpis = computed(() => [
   { label: t('clientDashboard.kpi.totalRequests'), value: totalRequests.value, badge: t('clientDashboard.kpi.allTime'), badgeClass: 'client-badge--blue' },
@@ -59,7 +69,7 @@ function requestActionRoute(item: any) {
     return { name: 'client-request-sign', params: { id: item.id } }
   }
 
-  if (['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)) {
+  if (documentStages.includes(item.workflow_stage)) {
     return { name: 'client-request-documents', params: { id: item.id } }
   }
 
@@ -72,7 +82,7 @@ function stageMeta(stage: string | null | undefined) {
 
 function requestActionLabel(item: any) {
   if (item.current_contract?.status === 'admin_signed') return t('clientDashboard.actions.signContract')
-  if (['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)) return t('clientDashboard.actions.openDocuments')
+  if (documentStages.includes(item.workflow_stage)) return t('clientDashboard.actions.openDocuments')
   return t('clientDashboard.actions.viewRequest')
 }
 

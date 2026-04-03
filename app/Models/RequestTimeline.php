@@ -19,7 +19,11 @@ class RequestTimeline extends Model
         'actor_user_id',
         'event_type',
         'event_title',
+        'event_title_en',
+        'event_title_ar',
         'event_description',
+        'event_description_en',
+        'event_description_ar',
         'metadata_json',
         'created_at',
     ];

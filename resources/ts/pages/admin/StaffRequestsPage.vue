@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { getStaffRequests, type StaffWorkspaceRequestSummary } from '@/services/staffWorkspace'
 import { countryNameFromCode } from '@/utils/countries'
 import { intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 
 const loading = ref(true)
 const errorMessage = ref('')
@@ -13,7 +14,19 @@ const workflowStage = ref('')
 const requests = ref<StaffWorkspaceRequestSummary[]>([])
 const { t, locale } = useI18n()
 
-const availableStages = computed(() => ['document_collection', 'awaiting_additional_documents', 'processing', 'completed'])
+const availableStages = computed(() => [
+  'awaiting_client_documents',
+  'awaiting_additional_documents',
+  'understudy',
+  'awaiting_staff_answers',
+  'awaiting_agent_assignment',
+  'processing',
+  'completed',
+])
+
+function stageMeta(stage: string | null | undefined) {
+  return getRequestWorkflowStageMeta(stage)
+}
 
 async function load() {
   loading.value = true
@@ -65,7 +78,7 @@ onMounted(load)
           <span>{{ t('staffRequests.filters.stage') }}</span>
           <select v-model="workflowStage" class="admin-select">
             <option value="">{{ t('staffRequests.filters.allStages') }}</option>
-            <option v-for="stage in availableStages" :key="stage" :value="stage">{{ stage }}</option>
+            <option v-for="stage in availableStages" :key="stage" :value="stage">{{ stageMeta(stage).label }}</option>
           </select>
         </div>
         <div class="filter-actions">
@@ -115,7 +128,7 @@ onMounted(load)
               </td>
               <td>{{ item.comments_count || 0 }}</td>
               <td>{{ item.latest_activity_at ? new Date(item.latest_activity_at).toLocaleString() : t('staffRequests.states.emptyValue') }}</td>
-              <td><span class="status-badge">{{ item.workflow_stage }}</span></td>
+              <td><span class="status-badge">{{ stageMeta(item.workflow_stage).label }}</span></td>
               <td>
                 <RouterLink :to="{ name: 'staff-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('staffRequests.actions.view') }}</RouterLink>
               </td>

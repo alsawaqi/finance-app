@@ -7,19 +7,27 @@ use App\Enums\RequestAdditionalDocumentStatus;
 use App\Enums\RequestCommentVisibility;
 use App\Enums\RequestDocumentUploadStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\AnswerFinanceRequestStaffQuestionRequest;
+use App\Http\Requests\Staff\SaveFinanceRequestUnderstudyDraftRequest;
+use App\Http\Requests\Staff\SubmitFinanceRequestUnderstudyRequest;
 use App\Http\Requests\Staff\RequestRequiredDocumentChangeRequest;
+use App\Http\Requests\Staff\SendFinanceRequestEmailRequest;
 use App\Http\Requests\Staff\StoreAdditionalDocumentRequest;
 use App\Http\Requests\Staff\StoreStaffRequestCommentRequest;
 use App\Models\Agent;
 use App\Models\Bank;
 use App\Models\DocumentUploadStep;
 use App\Models\FinanceRequest;
+use App\Models\FinanceRequestStaffQuestion;
 use App\Models\RequestAdditionalDocument;
 use App\Models\RequestComment;
 use App\Models\RequestDocumentUpload;
-use App\Models\RequestTimeline;
+use App\Services\FinanceRequestAgentAssignmentService;
 use App\Services\FinanceRequestDocumentChecklistService;
+use App\Services\FinanceRequestEmailService;
+use App\Services\FinanceRequestStaffQuestionService;
 use App\Services\FinanceRequestWorkflowService;
+use App\Support\RequestTimelineLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +37,9 @@ class StaffRequestWorkspaceController extends Controller
     public function __construct(
         private readonly FinanceRequestDocumentChecklistService $documentChecklistService,
         private readonly FinanceRequestWorkflowService $workflowService,
+        private readonly FinanceRequestStaffQuestionService $staffQuestionService,
+        private readonly FinanceRequestAgentAssignmentService $agentAssignmentService,
+        private readonly FinanceRequestEmailService $requestEmailService,
     ) {
     }
 
@@ -41,6 +52,7 @@ class StaffRequestWorkspaceController extends Controller
             ->with([
                 'client:id,name,email',
                 'currentContract:id,finance_request_id,version_no,status,client_signed_at',
+                'financeRequestType:id,slug,name_en,name_ar',
                 'assignments' => fn ($assignmentQuery) => $assignmentQuery
                     ->where('is_active', true)
                     ->with('staff:id,name,email')
@@ -49,8 +61,12 @@ class StaffRequestWorkspaceController extends Controller
             ])
             ->withCount('comments')
             ->whereIn('workflow_stage', [
+                FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
                 FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
                 FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+                FinanceRequestWorkflowStage::UNDERSTUDY->value,
+                FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value,
+                FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
                 FinanceRequestWorkflowStage::PROCESSING->value,
                 FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
                 FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
@@ -88,9 +104,17 @@ class StaffRequestWorkspaceController extends Controller
                 WHEN workflow_stage = ? THEN 0 
                 WHEN workflow_stage = ? THEN 1 
                 WHEN workflow_stage = ? THEN 2 
-                ELSE 3 END", [
+                WHEN workflow_stage = ? THEN 3 
+                WHEN workflow_stage = ? THEN 4 
+                WHEN workflow_stage = ? THEN 5 
+                WHEN workflow_stage = ? THEN 6 
+                ELSE 7 END", [
+                FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
                 FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
                 FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+                FinanceRequestWorkflowStage::UNDERSTUDY->value,
+                FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value,
+                FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
                 FinanceRequestWorkflowStage::PROCESSING->value,
             ])
             ->orderByDesc('latest_activity_at')
@@ -106,22 +130,12 @@ class StaffRequestWorkspaceController extends Controller
     {
         $this->ensureVisibleToUser($request->user(), $financeRequest);
 
-        $financeRequest->load([
-    'client:id,name,email,phone',
-    'answers.question:id,code,question_text,question_type,sort_order',
-    'attachments.uploader:id,name',
-    'currentContract',
-    'timeline.actor:id,name',
-    'shareholders',
-    'assignments' => fn ($query) => $query->where('is_active', true)->with(['staff:id,name,email', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
-    'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
-    'additionalDocuments.requester:id,name',
-    'additionalDocuments.uploader:id,name',
-]);
+        $financeRequest = $this->loadRequestGraph($financeRequest);
 
         return response()->json([
             'request' => $financeRequest,
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($financeRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($financeRequest),
         ]);
     }
 
@@ -144,43 +158,120 @@ class StaffRequestWorkspaceController extends Controller
             $financeRequest->save();
             $this->workflowService->syncAfterAdditionalDocuments($financeRequest);
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $user?->id,
-                'event_type' => 'request.comment_added',
-                'event_title' => 'Internal follow-up comment added',
-                'event_description' => str($comment->comment_text)->limit(240)->toString(),
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.comment_added',
+                $user?->id,
+                'Internal follow-up comment added',
+                'تمت إضافة ملاحظة متابعة داخلية',
+                str($comment->comment_text)->limit(240)->toString(),
+                'تمت إضافة ملاحظة متابعة داخلية على الطلب.',
+                [
                     'comment_id' => $comment->id,
                     'visibility' => $comment->visibility?->value,
                 ],
-                'created_at' => now(),
-            ]);
+            );
 
             return $comment->load('user:id,name,email');
         });
 
-      $freshRequest = $financeRequest->fresh([
-    'client:id,name,email,phone',
-    'answers.question:id,code,question_text,question_type,sort_order',
-    'attachments.uploader:id,name',
-    'currentContract',
-    'timeline.actor:id,name',
-    'shareholders',
-    'assignments' => fn ($query) => $query->where('is_active', true)->with(['staff:id,name,email', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
-    'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
-    'additionalDocuments.requester:id,name',
-    'additionalDocuments.uploader:id,name',
-]);
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
 
         return response()->json([
             'message' => 'Comment added successfully.',
             'comment' => $comment,
             'request' => $freshRequest,
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
         ], 201);
     }
 
+    public function answerStaffQuestion(
+        AnswerFinanceRequestStaffQuestionRequest $request,
+        FinanceRequest $financeRequest,
+        FinanceRequestStaffQuestion $staffQuestion,
+    ): JsonResponse {
+        $user = $request->user();
+        $this->ensureVisibleToUser($user, $financeRequest);
+
+        if ($staffQuestion->assigned_to && (int) $staffQuestion->assigned_to !== (int) $user?->id && ! $user?->hasRole('admin')) {
+            abort(403, 'This staff question is assigned to another staff member.');
+        }
+
+        $answeredQuestion = DB::transaction(function () use ($request, $financeRequest, $staffQuestion, $user) {
+            $answeredQuestion = $this->staffQuestionService->answerQuestion(
+                $financeRequest,
+                $staffQuestion,
+                $user,
+                $request->validated(),
+            );
+
+            $this->workflowService->syncStaffQuestionStage($financeRequest, $user?->id);
+
+            return $answeredQuestion;
+        });
+
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
+
+        return response()->json([
+            'message' => 'Staff study question answered successfully.',
+            'staff_question' => $answeredQuestion,
+            'request' => $freshRequest,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
+        ]);
+    }
+
+
+    public function saveUnderstudyDraft(
+        SaveFinanceRequestUnderstudyDraftRequest $request,
+        FinanceRequest $financeRequest,
+    ): JsonResponse {
+        $user = $request->user();
+        $this->ensureVisibleToUser($user, $financeRequest);
+
+        $updatedRequest = DB::transaction(function () use ($financeRequest, $user, $request) {
+            return $this->staffQuestionService->saveStudyDraft(
+                $financeRequest,
+                $user,
+                $request->validated('understudy_note'),
+            );
+        });
+
+        $freshRequest = $this->loadRequestGraph($updatedRequest->fresh());
+
+        return response()->json([
+            'message' => 'Understudy draft saved successfully.',
+            'request' => $freshRequest,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
+        ]);
+    }
+
+    public function submitUnderstudy(
+        SubmitFinanceRequestUnderstudyRequest $request,
+        FinanceRequest $financeRequest,
+    ): JsonResponse {
+        $user = $request->user();
+        $this->ensureVisibleToUser($user, $financeRequest);
+
+        $updatedRequest = DB::transaction(function () use ($financeRequest, $user, $request) {
+            return $this->staffQuestionService->submitStudy(
+                $financeRequest,
+                $user,
+                (string) $request->validated('understudy_note'),
+            );
+        });
+
+        $freshRequest = $this->loadRequestGraph($updatedRequest->fresh());
+
+        return response()->json([
+            'message' => 'Understudy submitted to admin successfully.',
+            'request' => $freshRequest,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
+        ]);
+    }
 
     public function requestRequiredDocumentChange(
         RequestRequiredDocumentChangeRequest $request,
@@ -215,39 +306,30 @@ class StaffRequestWorkspaceController extends Controller
 
             $this->workflowService->syncAfterRequiredDocuments($financeRequest);
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $user?->id,
-                'event_type' => 'request.required_document_change_requested',
-                'event_title' => 'Required document change requested',
-                'event_description' => 'Staff requested a corrected upload for: ' . $documentUploadStep->name . '.',
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.required_document_change_requested',
+                $user?->id,
+                'Required document change requested',
+                'تم طلب تعديل المستند المطلوب',
+                'Staff requested a corrected upload for: ' . $documentUploadStep->name . '.',
+                'طلب الموظف رفع نسخة مصححة من المستند: ' . $documentUploadStep->name . '.',
+                [
                     'document_upload_step_id' => $documentUploadStep->id,
                     'document_upload_id' => $latestUpload->id,
                     'document_name' => $documentUploadStep->name,
                     'reason' => $reason,
                 ],
-                'created_at' => now(),
-            ]);
+            );
         });
 
-      $freshRequest = $financeRequest->fresh([
-    'client:id,name,email,phone',
-    'answers.question:id,code,question_text,question_type,sort_order',
-    'attachments.uploader:id,name',
-    'currentContract',
-    'timeline.actor:id,name',
-    'shareholders',
-    'assignments' => fn ($query) => $query->where('is_active', true)->with(['staff:id,name,email', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
-    'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
-    'additionalDocuments.requester:id,name',
-    'additionalDocuments.uploader:id,name',
-]);
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
 
         return response()->json([
             'message' => 'The client can now upload a corrected version of this required document.',
             'request' => $freshRequest,
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
         ]);
     }
 
@@ -269,42 +351,75 @@ class StaffRequestWorkspaceController extends Controller
 
             $this->workflowService->moveToAwaitingAdditionalDocuments($financeRequest);
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $user?->id,
-                'event_type' => 'request.additional_document_requested',
-                'event_title' => 'Additional document requested',
-                'event_description' => 'Staff requested an additional document from the client: ' . $additionalDocument->title . '.',
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.additional_document_requested',
+                $user?->id,
+                'Additional document requested',
+                'تم طلب مستند إضافي',
+                'Staff requested an additional document from the client: ' . $additionalDocument->title . '.',
+                'طلب الموظف مستنداً إضافياً من العميل: ' . $additionalDocument->title . '.',
+                [
                     'additional_document_id' => $additionalDocument->id,
                     'title' => $additionalDocument->title,
                     'reason' => $additionalDocument->reason,
                 ],
-                'created_at' => now(),
-            ]);
+            );
 
             return $additionalDocument->load('requester:id,name,email');
         });
 
-       $freshRequest = $financeRequest->fresh([
-    'client:id,name,email,phone',
-    'answers.question:id,code,question_text,question_type,sort_order',
-    'attachments.uploader:id,name',
-    'currentContract',
-    'timeline.actor:id,name',
-    'shareholders',
-    'assignments' => fn ($query) => $query->where('is_active', true)->with(['staff:id,name,email', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
-    'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
-    'additionalDocuments.requester:id,name',
-    'additionalDocuments.uploader:id,name',
-]);
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
 
         return response()->json([
             'message' => 'Additional document request created successfully.',
             'additional_document' => $additionalDocument,
             'request' => $freshRequest,
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
         ], 201);
+    }
+
+    public function sendEmail(SendFinanceRequestEmailRequest $request, FinanceRequest $financeRequest): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureVisibleToUser($user, $financeRequest);
+        abort_unless($user && ($user->hasRole('admin') || $user->can('send request emails')), 403);
+
+        $requestEmail = $this->requestEmailService->sendToAssignedAgent(
+            $financeRequest,
+            $user,
+            $request->validated(),
+        );
+
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
+
+        return response()->json([
+            'message' => 'Request email sent successfully.',
+            'email' => $requestEmail,
+            'request' => $freshRequest,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
+            ...$this->agentAssignmentService->emailOptions(
+                $freshRequest,
+                $request->validated('bank_id'),
+                $request->validated('agent_id'),
+            ),
+        ]);
+    }
+
+    public function emailOptions(Request $request, FinanceRequest $financeRequest): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureVisibleToUser($user, $financeRequest);
+        abort_unless($user && ($user->hasRole('admin') || $user->can('send request emails') || $user->can('view assigned requests')), 403);
+
+        $bankId = $request->filled('bank_id') ? (int) $request->input('bank_id') : null;
+        $agentId = $request->filled('agent_id') ? (int) $request->input('agent_id') : null;
+
+        return response()->json(
+            $this->agentAssignmentService->emailOptions($financeRequest, $bankId, $agentId)
+        );
     }
 
     public function agents(Request $request): JsonResponse
@@ -343,6 +458,45 @@ class StaffRequestWorkspaceController extends Controller
             'banks' => $banks,
             'agents' => $agents,
         ]);
+    }
+
+    private function loadRequestGraph(FinanceRequest $financeRequest): FinanceRequest
+    {
+        $financeRequest->load([
+            'client:id,name,email,phone',
+            'primaryStaff:id,name,email,phone',
+            'understudySubmittedBy:id,name,email',
+            'understudyReviewedBy:id,name,email',
+            'answers.question:id,code,question_text,question_type,sort_order',
+            'attachments.uploader:id,name',
+            'currentContract',
+            'timeline.actor:id,name',
+            'financeRequestType:id,slug,name_en,name_ar,description_en,description_ar,is_active,sort_order',
+            'staffQuestions.asker:id,name,email',
+            'staffQuestions.assignedStaff:id,name,email',
+            'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
+            'updateBatches.requester:id,name,email',
+            'updateBatches.items.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',
+            'updateItems.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',
+            'agentAssignments.agent:id,name,email,bank_id',
+            'agentAssignments.bank:id,name,short_name,code',
+            'agentAssignments.assignedBy:id,name,email',
+            'agentAssignments.allowedDocuments',
+            'shareholders',
+            'assignments' => fn ($query) => $query->where('is_active', true)->with(['staff:id,name,email', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
+            'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
+            'additionalDocuments.requester:id,name',
+            'additionalDocuments.uploader:id,name',
+            'emails' => fn ($query) => $query
+                ->with([
+                    'sender:id,name,email',
+                    'agents.bank:id,name,short_name,code',
+                    'attachments',
+                ])
+                ->latest('id'),
+        ]);
+
+        return $financeRequest;
     }
 
     private function ensureVisibleToUser($user, FinanceRequest $financeRequest): void

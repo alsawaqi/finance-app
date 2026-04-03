@@ -20,6 +20,33 @@ export type AdminRequestListItem = {
   } | null
 }
 
+export type RequestEmailLog = {
+  id: number
+  subject: string
+  body?: string | null
+  delivery_status?: string | null
+  from_email?: string | null
+  sent_at?: string | null
+  created_at?: string | null
+  sender?: { id: number; name: string; email?: string | null } | null
+  agents?: Array<{
+    id: number
+    name: string
+    email?: string | null
+    bank?: { id: number; name: string; short_name?: string | null; code?: string | null } | null
+  }>
+  to_emails_json?: string[] | null
+  attachments?: Array<{
+    id: number
+    file_name: string
+    file_path: string
+    disk?: string | null
+    mime_type?: string | null
+    file_extension?: string | null
+    file_size?: number | null
+  }>
+}
+
 export type FinanceRequestDetail = AdminRequestListItem & {
   assignments?: Array<{
     id: number
@@ -76,11 +103,41 @@ export type FinanceRequestDetail = AdminRequestListItem & {
     client_signed_at?: string | null
     contract_pdf_path?: string | null
   } | null
+  emails?: RequestEmailLog[]
 }
 
-export async function listNewRequests() {
-  const { data } = await api.get('/api/admin/requests/new')
-  return data
+export type AdminRequestStaffQuestion = {
+  id: number
+  question_text_en?: string | null
+  question_text_ar?: string | null
+  question_type?: string | null
+  is_required?: boolean
+  status?: string | null
+  answer_text?: string | null
+  answer_json?: string[] | null
+  template?: {
+    id: number
+    question_text_en?: string | null
+    question_text_ar?: string | null
+    question_type?: string | null
+    sort_order?: number | null
+    is_required?: boolean | null
+  } | null
+  assigned_staff?: { id: number; name: string; email?: string | null } | null
+  asker?: { id: number; name: string; email?: string | null } | null
+}
+
+export async function listNewRequests(params?: { queue?: 'all' | 'pending' | 'contract' }) {
+  const { data } = await api.get('/api/admin/requests/new', { params })
+  return data as {
+    selected_queue: 'all' | 'pending' | 'contract'
+    queue_summary: {
+      all: number
+      pending: number
+      contract: number
+    }
+    requests: AdminRequestListItem[]
+  }
 }
 
 export async function getAdminRequestDetails(id: number | string) {
@@ -140,6 +197,14 @@ export function adminAdditionalDocumentDownloadUrl(id: number | string, addition
   return `/api/admin/requests/${id}/additional-documents/${additionalDocumentId}/download`
 }
 
+export function adminRequestEmailAttachmentDownloadUrl(
+  id: number | string,
+  requestEmailId: number | string,
+  requestEmailAttachmentId: number | string,
+) {
+  return `/api/admin/requests/${id}/emails/${requestEmailId}/attachments/${requestEmailAttachmentId}/download`
+}
+
 export type AssignmentReadyRequest = AdminRequestListItem & {
   latest_assignment_at?: string | null
   latest_activity_at?: string | null
@@ -184,4 +249,118 @@ export async function assignRequestStaff(
 ) {
   const { data } = await api.post(`/api/admin/requests/${id}/assign-staff`, payload)
   return data
+}
+
+
+export type AdminUpdateBatchDraftItem = {
+  item_type: 'intake_field' | 'request_answer' | 'attachment'
+  field_key?: string | null
+  question_id?: number | null
+  label_en?: string | null
+  label_ar?: string | null
+  instruction_en?: string | null
+  instruction_ar?: string | null
+  editable_by?: 'client' | 'both'
+  is_required?: boolean
+}
+
+export async function createAdminUpdateBatch(
+  id: number | string,
+  payload: { reason_en?: string; reason_ar?: string; items: AdminUpdateBatchDraftItem[] },
+) {
+  const { data } = await api.post(`/api/admin/requests/${id}/update-batches`, payload)
+  return data
+}
+
+export async function cancelAdminUpdateBatch(
+  id: number | string,
+  updateBatchId: number | string,
+) {
+  const { data } = await api.patch(`/api/admin/requests/${id}/update-batches/${updateBatchId}/cancel`)
+  return data
+}
+
+export async function reviewAdminUpdateItem(
+  id: number | string,
+  updateItemId: number | string,
+  payload: { action: 'approve' | 'reject'; review_note?: string },
+) {
+  const { data } = await api.patch(`/api/admin/requests/${id}/update-items/${updateItemId}/review`, payload)
+  return data
+}
+
+
+export async function reviewAdminUnderstudy(
+  id: number | string,
+  payload: { action: 'approve' | 'reject'; review_note?: string },
+) {
+  const { data } = await api.post(`/api/admin/requests/${id}/understudy-review`, payload)
+  return data
+}
+
+export async function rejectAdminRequest(
+  id: number | string,
+  payload: { reason?: string },
+) {
+  const { data } = await api.post(`/api/admin/requests/${id}/reject`, payload)
+  return data
+}
+
+
+export type RequestAssignmentBankOption = {
+  id: number
+  name: string
+  short_name?: string | null
+  code?: string | null
+}
+
+export type RequestAssignmentAgentOption = {
+  id: number
+  name: string
+  email?: string | null
+  phone?: string | null
+  company_name?: string | null
+  agent_type?: string | null
+  bank_id?: number | null
+  bank_name?: string | null
+  bank_short_name?: string | null
+  bank_code?: string | null
+}
+
+export type RequestEmailDocumentOption = {
+  key: string
+  document_type: string
+  document_id?: number | null
+  group_label?: string | null
+  label: string
+  file_name: string
+  download_url?: string | null
+}
+
+export async function getAdminRequestAgentAssignmentOptions(id: number | string) {
+  const { data } = await api.get(`/api/admin/requests/${id}/agent-assignment-options`)
+  return data as {
+    banks: RequestAssignmentBankOption[]
+    agents: RequestAssignmentAgentOption[]
+    available_documents: RequestEmailDocumentOption[]
+  }
+}
+
+export async function storeAdminRequestAgentAssignments(
+  id: number | string,
+  payload: {
+    review_note?: string
+    assignments: Array<{ agent_id: number; document_keys: string[] }>
+  },
+) {
+  const { data } = await api.post(`/api/admin/requests/${id}/agent-assignments`, payload)
+  return data as {
+    message: string
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+    banks: RequestAssignmentBankOption[]
+    agents: RequestAssignmentAgentOption[]
+    available_documents: RequestEmailDocumentOption[]
+  }
 }

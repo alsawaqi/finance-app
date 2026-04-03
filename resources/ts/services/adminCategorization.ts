@@ -9,6 +9,18 @@ export type CategorizationSummary = {
   total_staff: number
   total_agents: number
   with_additional_document_requests: number
+  pending_queue_requests: number
+  contract_queue_requests: number
+  assigned_queue_requests: number
+}
+
+export type CategorizedBank = {
+  id: number
+  name: string
+  short_name?: string | null
+  agents_count: number
+  emails_count: number
+  requests_count: number
 }
 
 export type CategorizedAgent = {
@@ -58,6 +70,18 @@ export async function getAdminCategorization() {
     summary: CategorizationSummary
     status_breakdown: Record<string, number>
     stage_breakdown: Record<string, number>
+    charts: {
+      request_trend: {
+        labels: string[]
+        series: number[]
+      }
+      bank_email_breakdown: {
+        labels: string[]
+        email_series: number[]
+        request_series: number[]
+      }
+    }
+    bank_breakdown: CategorizedBank[]
     agents: CategorizedAgent[]
     staff: CategorizedStaff[]
     clients: CategorizedClient[]

@@ -58,6 +58,30 @@ export async function uploadClientAdditionalDocument(
   return data
 }
 
+export async function submitClientUpdateValue(
+  id: number | string,
+  updateItemId: number | string,
+  payload: { value: unknown },
+) {
+  const { data } = await api.patch(`/api/client/requests/${id}/update-items/${updateItemId}/value`, payload)
+  return data
+}
+
+export async function submitClientUpdateFile(
+  id: number | string,
+  updateItemId: number | string,
+  payload: { file: File },
+) {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/client/requests/${id}/update-items/${updateItemId}/file`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
+  return data
+}
+
 export function clientContractDownloadUrl(id: number | string) {
   return `/api/client/requests/${id}/contract/download`
 }

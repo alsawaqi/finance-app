@@ -3,38 +3,100 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
+  adminAdditionalDocumentDownloadUrl,
   adminContractDownloadUrl,
+  adminRequestEmailAttachmentDownloadUrl,
+  adminRequiredDocumentDownloadUrl,
   adminRequestAttachmentDownloadUrl,
   adminRequestShareholderIdDownloadUrl,
   approveAdminRequest,
+  cancelAdminUpdateBatch,
+  createAdminUpdateBatch,
+  getAdminRequestAgentAssignmentOptions,
   getAdminRequestDetails,
+  rejectAdminRequest,
+  reviewAdminUpdateItem,
+  reviewAdminUnderstudy,
+  storeAdminRequestAgentAssignments,
+  type AdminUpdateBatchDraftItem,
 } from '@/services/adminRequests'
-import { countryNameFromCode } from '@/utils/countries'
 import {
-  intakeAddress,
-  intakeCountryCode,
-  intakeEmail,
-  intakeFinanceType,
   intakeFullName,
-  intakeNationalAddressNumber,
-  intakeNotes,
-  intakePhoneDisplay,
   intakeRequestedAmount,
-  intakeUnifiedNumber,
 } from '@/utils/requestIntake'
 import AdminQuickViewModal from './inc/AdminQuickViewModal.vue'
+import RequestAnswersList from './inc/RequestAnswersList.vue'
+import RequestCoreDetailsCard from './inc/RequestCoreDetailsCard.vue'
+import RequestRelatedCollectionsCard from './inc/RequestRelatedCollectionsCard.vue'
+import RequestSummaryStatGrid from './inc/RequestSummaryStatGrid.vue'
+import RequestWorkspaceShell from './inc/RequestWorkspaceShell.vue'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 
 const route = useRoute()
 const router = useRouter()
 const requestItem = ref<any | null>(null)
+const requiredDocuments = ref<any[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
+const successMessage = ref('')
 const approving = ref(false)
 const approvalNotes = ref('')
+const rejectingRequest = ref(false)
+const rejectReason = ref('')
+const reviewingUnderstudy = ref(false)
+const understudyReviewNote = ref('')
+const creatingBatch = ref(false)
+const cancellingBatch = ref(false)
+const reviewingUpdateItems = ref<Record<number, boolean>>({})
+const batchReasonEn = ref('')
+const batchReasonAr = ref('')
+const updateDraftItems = ref<any[]>([])
+const reviewNotes = ref<Record<number, string>>({})
 const quickView = ref<'answers' | 'attachments' | 'shareholders' | 'assignments' | 'comments' | 'timeline' | null>(null)
+const staffQuestionSummary = ref<any | null>(null)
+const emailBankOptions = ref<any[]>([])
+const emailAgentOptions = ref<any[]>([])
+const availableEmailDocuments = ref<any[]>([])
+const selectedAssignmentBankId = ref<number | null>(null)
+const selectedAgentIds = ref<number[]>([])
+const selectedAgentDocumentKeys = ref<Record<number, string[]>>({})
+const savingAgentAssignments = ref(false)
+const agentAssignmentReviewNote = ref('')
 const { t, locale } = useI18n()
 
 const requestId = computed(() => route.params.id as string)
+
+function stageMeta(stage: string | null | undefined) {
+  return getRequestWorkflowStageMeta(stage)
+}
+
+const summaryStatItems = computed(() => [
+  {
+    label: t('adminRequestDetails.summary.status'),
+    value: requestItem.value?.status || t('adminRequestDetails.states.emptyValue'),
+    hint: t('adminRequestDetails.summary.currentBusinessState'),
+  },
+  {
+    label: t('adminRequestDetails.summary.stage'),
+    value: stageMeta(requestItem.value?.workflow_stage).label,
+    hint: t('adminRequestDetails.summary.operationalStage'),
+  },
+  {
+    label: t('adminRequestDetails.summary.client'),
+    value: intakeFullName(requestItem.value?.intake_details_json, requestItem.value?.client?.name || t('adminRequestDetails.states.clientFallback')),
+    hint: requestItem.value?.client?.email || t('adminRequestDetails.states.noEmailSaved'),
+  },
+  {
+    label: 'Company name',
+    value: requestItem.value?.company_name || requestItem.value?.intake_details_json?.company_name || t('adminRequestDetails.states.emptyValue'),
+    hint: requestItem.value?.applicant_type || t('adminRequestDetails.states.emptyValue'),
+  },
+  {
+    label: t('adminRequestDetails.summary.requestedAmount'),
+    value: intakeRequestedAmount(requestItem.value?.intake_details_json),
+    hint: requestItem.value?.finance_request_type?.name_en || requestItem.value?.finance_request_type?.name_ar || t('adminRequestDetails.states.emptyValue'),
+  },
+])
 const activityCounts = computed(() => ({
   comments: requestItem.value?.comments?.length ?? 0,
   timeline: requestItem.value?.timeline?.length ?? 0,
@@ -42,8 +104,135 @@ const activityCounts = computed(() => ({
   assignments: requestItem.value?.assignments?.length ?? 0,
   answers: requestItem.value?.answers?.length ?? 0,
   attachments: requestItem.value?.attachments?.length ?? 0,
+  requiredDocuments: requiredDocuments.value?.length ?? 0,
+  additionalDocuments: requestItem.value?.additional_documents?.length ?? 0,
   shareholders: requestItem.value?.shareholders?.length ?? 0,
+  updateBatches: requestItem.value?.update_batches?.length ?? 0,
 }))
+
+const intakeFieldOptions = [
+  { value: 'requested_amount', label: 'Requested amount' },
+  { value: 'company_name', label: 'Company name' },
+  { value: 'company_cr_number', label: 'Company CR number' },
+  { value: 'email', label: 'Email' },
+  { value: 'phone_country_code', label: 'Phone country code' },
+  { value: 'phone_number', label: 'Phone number' },
+  { value: 'unified_number', label: 'Unified number' },
+  { value: 'national_address_number', label: 'National address number' },
+  { value: 'address', label: 'Address' },
+  { value: 'notes', label: 'Notes' },
+  { value: 'finance_request_type_id', label: 'Finance request type' },
+]
+
+const attachmentFieldOptions = [
+  { value: 'national_address_attachment', label: 'National address attachment' },
+  { value: 'company_cr', label: 'Company CR attachment' },
+  { value: 'initial_submission', label: 'Initial submission attachment' },
+]
+
+const questionOptions = computed(() => {
+  const answers = requestItem.value?.answers ?? []
+  const seen = new Set<number>()
+
+  return answers
+    .map((answer: any) => answer.question)
+    .filter((question: any) => question?.id)
+    .filter((question: any) => {
+      if (seen.has(question.id)) return false
+      seen.add(question.id)
+      return true
+    })
+})
+
+const activeOpenBatch = computed(() =>
+  (requestItem.value?.update_batches ?? []).find((batch: any) => ['open', 'partially_completed'].includes(String(batch.status || ''))),
+)
+
+const staffQuestions = computed(() => {
+  const rows = Array.isArray(requestItem.value?.staff_questions) ? requestItem.value.staff_questions : []
+  return [...rows].sort((a: any, b: any) => {
+    const aOrder = Number(a?.template?.sort_order ?? 9999)
+    const bOrder = Number(b?.template?.sort_order ?? 9999)
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return Number(a?.id ?? 0) - Number(b?.id ?? 0)
+  })
+})
+
+const understudyStage = computed(() => String(requestItem.value?.workflow_stage || '').toLowerCase())
+
+const understudyVisible = computed(() =>
+  ['understudy', 'awaiting_staff_answers', 'awaiting_understudy_review'].includes(understudyStage.value),
+)
+
+const understudyReadyForReview = computed(() =>
+  ['submitted'].includes(String(requestItem.value?.understudy_status || '').toLowerCase())
+  || understudyStage.value === 'awaiting_understudy_review',
+)
+
+const understudyActionsVisible = computed(() =>
+  understudyReadyForReview.value && Boolean(staffQuestionSummary.value?.all_required_answered),
+)
+
+const activeAgentAssignments = computed(() =>
+  Array.isArray(requestItem.value?.agent_assignments)
+    ? requestItem.value.agent_assignments.filter((item: any) => item?.is_active !== false)
+    : [],
+)
+
+const agentAssignmentVisible = computed(() =>
+  ['awaiting_agent_assignment', 'processing'].includes(understudyStage.value)
+  || activeAgentAssignments.value.length > 0,
+)
+
+const filteredAssignableAgents = computed(() => {
+  const rows = emailAgentOptions.value ?? []
+  if (!selectedAssignmentBankId.value) return rows
+  return rows.filter((agent: any) => Number(agent.bank_id ?? 0) === Number(selectedAssignmentBankId.value))
+})
+
+const selectedAssignableAgents = computed(() =>
+  (emailAgentOptions.value ?? []).filter((agent: any) => selectedAgentIds.value.includes(Number(agent.id))),
+)
+
+const canSaveAgentAssignments = computed(() => {
+  if (savingAgentAssignments.value) return false
+  if (!selectedAssignableAgents.value.length) return false
+
+  return selectedAssignableAgents.value.every((agent: any) => (selectedAgentDocumentKeys.value[Number(agent.id)] ?? []).length > 0)
+})
+
+const canRejectRequest = computed(() => {
+  const status = String(requestItem.value?.status || '').toLowerCase()
+  return Boolean(requestItem.value) && !['rejected', 'completed', 'cancelled'].includes(status)
+})
+
+const draftItemTypeOptions = [
+  { value: 'intake_field', label: 'Intake field' },
+  { value: 'request_answer', label: 'Question answer' },
+  { value: 'attachment', label: 'Attachment' },
+]
+
+function isDraftItemComplete(item: any) {
+  const itemType = String(item?.item_type || '').trim()
+
+  if (!itemType) return false
+  if (itemType === 'request_answer') return Number.isInteger(Number(item?.question_id)) && Number(item.question_id) > 0
+  if (itemType === 'intake_field' || itemType === 'attachment') return Boolean(String(item?.field_key || '').trim())
+
+  return false
+}
+
+const canSubmitUpdateBatch = computed(() => {
+  if (creatingBatch.value) return false
+  if (!updateDraftItems.value.length) return false
+
+  return updateDraftItems.value.every((item) => isDraftItemComplete(item))
+})
+
+function localizedText(en?: string | null, ar?: string | null, fallback = '—') {
+  if (locale.value === 'ar') return ar || en || fallback
+  return en || ar || fallback
+}
 
 function answerText(answer: any) {
   if (!answer) return t('adminRequestDetails.states.emptyValue')
@@ -55,12 +244,266 @@ function answerText(answer: any) {
   return String(value)
 }
 
+function formatUpdateValue(item: any, mode: 'old' | 'new') {
+  const payload = mode === 'old' ? item?.old_value_json : item?.new_value_json
+  if (!payload) return '—'
+  if (Object.prototype.hasOwnProperty.call(payload, 'value')) {
+    const value = payload.value
+    return Array.isArray(value) ? value.join(', ') : value === null || value === undefined || value === '' ? '—' : String(value)
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'answer_value_json') && payload.answer_value_json !== null && payload.answer_value_json !== undefined) {
+    return Array.isArray(payload.answer_value_json) ? payload.answer_value_json.join(', ') : String(payload.answer_value_json)
+  }
+  if (payload.answer_text) return String(payload.answer_text)
+  if (payload.file_name) return String(payload.file_name)
+  return '—'
+}
+
+function updateStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'updated') return 'Submitted for review'
+  if (key === 'approved') return 'Approved'
+  if (key === 'rejected') return 'Rejected'
+  if (key === 'pending') return 'Waiting for client'
+  return key || 'Unknown'
+}
+
+function updateStatusClass(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'approved') return 'client-badge client-badge--green'
+  if (key === 'updated') return 'client-badge client-badge--blue'
+  if (key === 'rejected') return 'client-badge client-badge--rose'
+  return 'client-badge client-badge--amber'
+}
+
+function emailStatusClass(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'sent') return 'client-badge client-badge--green'
+  if (key === 'failed') return 'client-badge client-badge--rose'
+  return 'client-badge client-badge--amber'
+}
+
+function emailRecipients(email: any) {
+  const named = Array.isArray(email?.agents)
+    ? email.agents.map((agent: any) => [agent?.name, agent?.email].filter(Boolean).join(' · ')).filter(Boolean)
+    : []
+
+  if (named.length) return named.join(', ')
+
+  const raw = Array.isArray(email?.to_emails_json) ? email.to_emails_json.filter(Boolean) : []
+  return raw.length ? raw.join(', ') : '—'
+}
+
+function formatFileSize(value: number | null | undefined) {
+  if (!value || value <= 0) return 'Size unavailable'
+
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = value
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  return `${size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`
+}
+
+function emailAttachmentDownloadUrl(emailId: number | string, attachmentId: number | string) {
+  return adminRequestEmailAttachmentDownloadUrl(requestId.value, emailId, attachmentId)
+}
+
+function studyQuestionTitle(question: any) {
+  return locale.value === 'ar'
+    ? (question?.question_text_ar || question?.template?.question_text_ar || question?.question_text_en || question?.template?.question_text_en || 'Study question')
+    : (question?.question_text_en || question?.template?.question_text_en || question?.question_text_ar || question?.template?.question_text_ar || 'Study question')
+}
+
+function studyQuestionAnswer(question: any) {
+  if (Array.isArray(question?.answer_json) && question.answer_json.length) return question.answer_json.join(', ')
+  if (question?.answer_text) return question.answer_text
+  return 'No answer saved yet.'
+}
+
+function studyQuestionStatusLabel(question: any) {
+  const key = String(question?.status || '').toLowerCase()
+  if (key === 'closed') return 'Reviewed'
+  if (key === 'answered') return 'Answered'
+  return 'Pending'
+}
+
+function studyQuestionStatusClass(question: any) {
+  const key = String(question?.status || '').toLowerCase()
+  if (key === 'closed') return 'client-badge client-badge--green'
+  if (key === 'answered') return 'client-badge client-badge--blue'
+  return 'client-badge client-badge--amber'
+}
+
+function addUpdateDraftItem() {
+  updateDraftItems.value.push({
+    local_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    item_type: '',
+    field_key: null,
+    question_id: null,
+    label_en: '',
+    instruction_en: '',
+    is_required: true,
+  })
+}
+
+function removeUpdateDraftItem(localId: string) {
+  updateDraftItems.value = updateDraftItems.value.filter((item) => item.local_id !== localId)
+}
+
+function onDraftTypeChange(item: any) {
+  if (item.item_type === 'intake_field' || item.item_type === 'attachment') {
+    item.field_key = null
+    item.question_id = null
+    return
+  }
+
+  if (item.item_type === 'request_answer') {
+    item.question_id = null
+    item.field_key = null
+    return
+  }
+
+  item.field_key = null
+  item.question_id = null
+}
+
+function syncAgentAssignmentDraftFromRequest() {
+  const activeAssignments = Array.isArray(requestItem.value?.agent_assignments)
+    ? requestItem.value.agent_assignments.filter((item: any) => item?.is_active !== false)
+    : []
+
+  selectedAgentIds.value = activeAssignments
+    .map((item: any) => Number(item?.agent_id ?? item?.agent?.id ?? 0))
+    .filter((id: number) => id > 0)
+
+  selectedAgentDocumentKeys.value = activeAssignments.reduce((carry: Record<number, string[]>, item: any) => {
+    const agentId = Number(item?.agent_id ?? item?.agent?.id ?? 0)
+    if (!agentId) return carry
+
+    carry[agentId] = Array.isArray(item?.allowed_documents)
+      ? item.allowed_documents.map((document: any) => String(document.document_key || document.key)).filter(Boolean)
+      : []
+
+    return carry
+  }, {})
+}
+
+async function loadAgentAssignmentOptions() {
+  const data = await getAdminRequestAgentAssignmentOptions(requestId.value)
+  emailBankOptions.value = data.banks ?? []
+  emailAgentOptions.value = data.agents ?? []
+  availableEmailDocuments.value = data.available_documents ?? []
+}
+
+function toggleAgentSelection(agentId: number, checked: boolean) {
+  if (checked) {
+    if (!selectedAgentIds.value.includes(agentId)) {
+      selectedAgentIds.value = [...selectedAgentIds.value, agentId]
+    }
+
+    if (!selectedAgentDocumentKeys.value[agentId]) {
+      selectedAgentDocumentKeys.value = {
+        ...selectedAgentDocumentKeys.value,
+        [agentId]: [],
+      }
+    }
+
+    return
+  }
+
+  selectedAgentIds.value = selectedAgentIds.value.filter((id) => id !== agentId)
+  const next = { ...selectedAgentDocumentKeys.value }
+  delete next[agentId]
+  selectedAgentDocumentKeys.value = next
+}
+
+function isAgentSelected(agentId: number) {
+  return selectedAgentIds.value.includes(agentId)
+}
+
+function toggleAgentDocument(agentId: number, documentKey: string, checked: boolean) {
+  const current = Array.isArray(selectedAgentDocumentKeys.value[agentId])
+    ? [...selectedAgentDocumentKeys.value[agentId]]
+    : []
+
+  if (checked && !current.includes(documentKey)) {
+    current.push(documentKey)
+  }
+
+  if (!checked) {
+    const index = current.indexOf(documentKey)
+    if (index >= 0) current.splice(index, 1)
+  }
+
+  selectedAgentDocumentKeys.value = {
+    ...selectedAgentDocumentKeys.value,
+    [agentId]: current,
+  }
+}
+
+function isAgentDocumentSelected(agentId: number, documentKey: string) {
+  return (selectedAgentDocumentKeys.value[agentId] ?? []).includes(documentKey)
+}
+
+async function submitAgentAssignments() {
+  if (!requestItem.value || !canSaveAgentAssignments.value || savingAgentAssignments.value) return
+
+  savingAgentAssignments.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const payload = {
+      review_note: agentAssignmentReviewNote.value || undefined,
+      assignments: selectedAssignableAgents.value.map((agent: any) => ({
+        agent_id: Number(agent.id),
+        document_keys: (selectedAgentDocumentKeys.value[Number(agent.id)] ?? []).filter(Boolean),
+      })),
+    }
+
+    const data = await storeAdminRequestAgentAssignments(requestItem.value.id, payload)
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    emailBankOptions.value = data.banks ?? emailBankOptions.value
+    emailAgentOptions.value = data.agents ?? emailAgentOptions.value
+    availableEmailDocuments.value = data.available_documents ?? availableEmailDocuments.value
+    syncAgentAssignmentDraftFromRequest()
+    successMessage.value = data.message || 'Allowed bank agents saved successfully.'
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || 'Unable to save the allowed bank agents for this request.'
+  } finally {
+    savingAgentAssignments.value = false
+  }
+}
+
+function resetUpdateBatchForm() {
+  batchReasonEn.value = ''
+  batchReasonAr.value = ''
+  updateDraftItems.value = []
+}
+
 async function load() {
   loading.value = true
   errorMessage.value = ''
+  successMessage.value = ''
   try {
-    const data = await getAdminRequestDetails(requestId.value)
+    const [data, agentOptions] = await Promise.all([
+      getAdminRequestDetails(requestId.value),
+      getAdminRequestAgentAssignmentOptions(requestId.value),
+    ])
     requestItem.value = data.request ?? null
+    requiredDocuments.value = data.required_documents ?? []
+    staffQuestionSummary.value = data.staff_question_summary ?? null
+    emailBankOptions.value = agentOptions.banks ?? []
+    emailAgentOptions.value = agentOptions.agents ?? []
+    availableEmailDocuments.value = agentOptions.available_documents ?? []
+    syncAgentAssignmentDraftFromRequest()
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminRequestDetails.errors.loadFailed')
   } finally {
@@ -76,6 +519,64 @@ function shareholderIdDownloadUrl(shareholderId: number | string) {
   return adminRequestShareholderIdDownloadUrl(requestId.value, shareholderId)
 }
 
+async function submitUnderstudyReview(action: 'approve' | 'reject') {
+  if (!requestItem.value || reviewingUnderstudy.value) return
+
+  reviewingUnderstudy.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await reviewAdminUnderstudy(requestItem.value.id, {
+      action,
+      review_note: understudyReviewNote.value || undefined,
+    })
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    if (String(requestItem.value?.workflow_stage || '').toLowerCase() === 'awaiting_agent_assignment') {
+      await loadAgentAssignmentOptions()
+      syncAgentAssignmentDraftFromRequest()
+    }
+    successMessage.value = data.message || (action === 'approve' ? 'Understudy approved successfully.' : 'Understudy returned to staff successfully.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || 'Unable to review the understudy package.'
+  } finally {
+    reviewingUnderstudy.value = false
+  }
+}
+
+async function rejectRequest() {
+  if (!requestItem.value || !canRejectRequest.value || rejectingRequest.value) return
+  if (!window.confirm('Reject this request now? This action will mark the request as rejected.')) return
+
+  rejectingRequest.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await rejectAdminRequest(requestItem.value.id, {
+      reason: rejectReason.value || undefined,
+    })
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    successMessage.value = data.message || 'Request rejected successfully.'
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || 'Unable to reject the request.'
+  } finally {
+    rejectingRequest.value = false
+  }
+}
+
+function requiredDocumentDownloadUrl(uploadId: number | string) {
+  return adminRequiredDocumentDownloadUrl(requestId.value, uploadId)
+}
+
+function additionalDocumentDownloadUrl(additionalDocumentId: number | string) {
+  return adminAdditionalDocumentDownloadUrl(requestId.value, additionalDocumentId)
+}
+
 async function approveRequest() {
   if (!requestItem.value) return
   approving.value = true
@@ -89,51 +590,362 @@ async function approveRequest() {
   }
 }
 
-onMounted(load)
+async function submitUpdateBatch() {
+  if (!requestItem.value || !canSubmitUpdateBatch.value) return
+
+  creatingBatch.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const payload: { reason_en?: string; reason_ar?: string; items: AdminUpdateBatchDraftItem[] } = {
+      reason_en: batchReasonEn.value || undefined,
+      reason_ar: batchReasonAr.value || undefined,
+      items: updateDraftItems.value.map((item) => ({
+        item_type: item.item_type,
+        field_key: item.item_type === 'request_answer' ? null : item.field_key,
+        question_id: item.item_type === 'request_answer' ? Number(item.question_id) : null,
+        label_en: item.label_en || null,
+        instruction_en: item.instruction_en || null,
+        is_required: Boolean(item.is_required),
+        editable_by: 'client',
+      })),
+    }
+
+    const data = await createAdminUpdateBatch(requestItem.value.id, payload)
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    resetUpdateBatchForm()
+    successMessage.value = data.message || 'Client update batch created successfully.'
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || 'Unable to create the client update batch.'
+  } finally {
+    creatingBatch.value = false
+  }
+}
+
+
+async function cancelActiveBatch() {
+  if (!requestItem.value || !activeOpenBatch.value || cancellingBatch.value) return
+  if (!window.confirm('Cancel the current client update batch? This will close the active update request and remove any unresolved update items.')) return
+
+  cancellingBatch.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await cancelAdminUpdateBatch(requestItem.value.id, activeOpenBatch.value.id)
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    successMessage.value = data.message || 'Client update batch cancelled successfully.'
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || 'Unable to cancel the client update batch.'
+  } finally {
+    cancellingBatch.value = false
+  }
+}
+
+async function reviewUpdateItem(item: any, action: 'approve' | 'reject') {
+  if (!requestItem.value) return
+
+  reviewingUpdateItems.value = {
+    ...reviewingUpdateItems.value,
+    [item.id]: true,
+  }
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await reviewAdminUpdateItem(requestItem.value.id, item.id, {
+      action,
+      review_note: reviewNotes.value[item.id] || undefined,
+    })
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    successMessage.value = data.message || 'Update item reviewed successfully.'
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || 'Unable to review the update item.'
+  } finally {
+    reviewingUpdateItems.value = {
+      ...reviewingUpdateItems.value,
+      [item.id]: false,
+    }
+  }
+}
+
+onMounted(() => {
+  load()
+})
 </script>
 
 <template>
-  <section class="admin-page-shell admin-workspace-page">
-    <div class="page-topbar">
-      <div>
-        <p class="eyebrow">{{ t('adminRequestDetails.hero.eyebrow') }}</p>
-        <h1>{{ t('adminRequestDetails.hero.title') }}</h1>
-        <p class="subtext">{{ t('adminRequestDetails.hero.subtitle') }}</p>
-      </div>
-      <div class="actions-row">
-        <RouterLink :to="{ name: 'admin-new-requests' }" class="ghost-btn">{{ t('adminRequestDetails.hero.backToQueue') }}</RouterLink>
-        <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.hero.downloadContractPdf') }}</a>
-        <RouterLink v-if="requestItem?.approval_reference_number || requestItem?.current_contract" :to="{ name: 'admin-request-contract', params: { id: requestId } }" class="primary-btn">{{ t('adminRequestDetails.hero.goToContract') }}</RouterLink>
-        <RouterLink v-if="requestItem?.current_contract?.client_signed_at" :to="{ name: 'admin-assignment-details', params: { id: requestId } }" class="ghost-btn">{{ t('adminRequestDetails.hero.assignStaff') }}</RouterLink>
-      </div>
-    </div>
+  <RequestWorkspaceShell
+    :eyebrow="t('adminRequestDetails.hero.eyebrow')"
+    :title="t('adminRequestDetails.hero.title')"
+    :subtitle="t('adminRequestDetails.hero.subtitle')"
+    :loading="loading"
+    :error-message="errorMessage"
+    :success-message="successMessage"
+    :has-record="Boolean(requestItem)"
+  >
+    <template #topbar-actions>
+      <RouterLink :to="{ name: 'admin-new-requests' }" class="ghost-btn">{{ t('adminRequestDetails.hero.backToQueue') }}</RouterLink>
+      <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.hero.downloadContractPdf') }}</a>
+      <RouterLink v-if="requestItem?.approval_reference_number || requestItem?.current_contract" :to="{ name: 'admin-request-contract', params: { id: requestId } }" class="primary-btn">{{ t('adminRequestDetails.hero.goToContract') }}</RouterLink>
+      <RouterLink v-if="requestItem?.current_contract?.client_signed_at" :to="{ name: 'admin-assignment-details', params: { id: requestId }, query: { return_to: String(route.fullPath || `/admin/requests/${requestId}`) } }" class="ghost-btn">{{ t('adminRequestDetails.hero.assignStaff') }}</RouterLink>
+    </template>
 
-    <p v-if="loading" class="empty-state">{{ t('adminRequestDetails.states.loading') }}</p>
-    <p v-else-if="errorMessage" class="error-state">{{ errorMessage }}</p>
+    <template #loading>{{ t('adminRequestDetails.states.loading') }}</template>
 
-    <template v-else-if="requestItem">
-      <div class="admin-workspace-summary-grid">
-        <article class="admin-workspace-stat">
-          <span>{{ t('adminRequestDetails.summary.status') }}</span>
-          <strong>{{ requestItem.status }}</strong>
-          <small>{{ t('adminRequestDetails.summary.currentBusinessState') }}</small>
-        </article>
-        <article class="admin-workspace-stat">
-          <span>{{ t('adminRequestDetails.summary.stage') }}</span>
-          <strong>{{ requestItem.workflow_stage }}</strong>
-          <small>{{ t('adminRequestDetails.summary.operationalStage') }}</small>
-        </article>
-        <article class="admin-workspace-stat">
-          <span>{{ t('adminRequestDetails.summary.client') }}</span>
-          <strong>{{ intakeFullName(requestItem.intake_details_json, requestItem.client?.name || t('adminRequestDetails.states.clientFallback')) }}</strong>
-          <small>{{ requestItem.client?.email || t('adminRequestDetails.states.noEmailSaved') }}</small>
-        </article>
-        <article class="admin-workspace-stat">
-          <span>{{ t('adminRequestDetails.summary.requestedAmount') }}</span>
-          <strong>{{ intakeRequestedAmount(requestItem.intake_details_json) }}</strong>
-          <small>{{ intakeFinanceType(requestItem.intake_details_json) }}</small>
-        </article>
-      </div>
+    <template #summary>
+      <RequestSummaryStatGrid :items="summaryStatItems" />
+    </template>
+
+    <template #main>
+      <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
+
+      <article style="margin: 1.25rem 0;">
+        <RequestRelatedCollectionsCard :request="requestItem" :required-documents="requiredDocuments" />
+      </article>
+
+      <details class="admin-accordion-card" open>
+        <summary>
+          <div>
+            <h2>Required documents</h2>
+            <p>View the required checklist and download the latest uploaded file for each completed step.</p>
+          </div>
+        </summary>
+        <div class="admin-accordion-card__body">
+          <div v-if="requiredDocuments.length" class="checklist-grid">
+            <article v-for="item in requiredDocuments" :key="item.document_upload_step_id" class="checklist-card" :class="{ 'is-complete': item.is_uploaded && !item.is_change_requested }">
+              <div class="checklist-card__head">
+                <strong>{{ item.name }}</strong>
+                <span class="status-badge">
+                  {{ item.is_change_requested ? 'Change requested' : item.is_uploaded ? 'Uploaded' : 'Pending' }}
+                </span>
+              </div>
+              <p>
+                {{ item.is_uploaded || item.is_change_requested ? `Latest file: ${item.upload?.file_name || 'Uploaded file'}` : 'Waiting for client upload.' }}
+              </p>
+              <p v-if="item.rejection_reason" class="form-help form-help--error">Reason: {{ item.rejection_reason }}</p>
+              <div v-if="item.upload?.id" class="approve-actions">
+                <a :href="requiredDocumentDownloadUrl(item.upload.id)" target="_blank" rel="noopener" class="ghost-btn">Download latest file</a>
+              </div>
+            </article>
+          </div>
+          <p v-else class="empty-state">No required documents configured for this request.</p>
+        </div>
+      </details>
+
+      <details class="admin-accordion-card">
+        <summary>
+          <div>
+            <h2>Additional document requests</h2>
+            <p>View every extra document request made for this finance request and download any uploaded file.</p>
+          </div>
+        </summary>
+        <div class="admin-accordion-card__body">
+          <div v-if="requestItem?.additional_documents?.length" class="timeline-list compact-list">
+            <div v-for="item in requestItem.additional_documents" :key="item.id" class="timeline-item">
+              <strong>{{ item.title || 'Additional document' }}</strong>
+              <p>{{ item.reason || 'No reason added.' }}</p>
+              <span>{{ item.status }}<template v-if="item.file_name"> · {{ item.file_name }}</template></span>
+              <div v-if="item.file_name" class="approve-actions">
+                <a :href="additionalDocumentDownloadUrl(item.id)" target="_blank" rel="noopener" class="ghost-btn">Download file</a>
+              </div>
+            </div>
+          </div>
+          <p v-else class="empty-state">No additional documents have been requested yet.</p>
+        </div>
+      </details>
+
+      <details v-if="understudyVisible" class="admin-accordion-card" open>
+        <summary>
+          <div>
+            <h2>Understudy review</h2>
+            <p>Review the staff study answers and decide whether to move the request forward or send it back.</p>
+          </div>
+        </summary>
+        <div class="admin-accordion-card__body">
+          <div class="catalog-mini-stats" style="margin-bottom: 1rem;">
+            <div><span>Study status</span><strong>{{ String(requestItem?.understudy_status || 'draft').toUpperCase() }}</strong></div>
+            <div><span>Required answered</span><strong>{{ staffQuestionSummary?.required_answered_count ?? 0 }}/{{ staffQuestionSummary?.required_count ?? 0 }}</strong></div>
+            <div><span>All required answered</span><strong>{{ staffQuestionSummary?.all_required_answered ? 'Yes' : 'No' }}</strong></div>
+          </div>
+
+          <div v-if="requestItem?.understudy_submitted_at" class="notes-box" style="margin-bottom: 1rem;">
+            <span>Study submission</span>
+            <p>
+              Questions answered and submitted
+              <template v-if="requestItem?.understudy_submitted_by?.name"> · {{ requestItem.understudy_submitted_by.name }}</template>
+              <template v-if="requestItem?.understudy_submitted_at"> · {{ new Date(requestItem.understudy_submitted_at).toLocaleString() }}</template>
+            </p>
+          </div>
+
+          <div v-if="requestItem?.understudy_note" class="notes-box" style="margin-bottom: 1rem;">
+            <span>What the staff understood</span>
+            <p>{{ requestItem.understudy_note }}</p>
+          </div>
+
+          <div v-if="staffQuestions.length" class="qa-list" style="margin-bottom: 1rem;">
+            <article v-for="question in staffQuestions" :key="question.id" class="qa-item">
+              <div class="client-card-head" style="margin-bottom: 0.75rem; align-items: flex-start;">
+                <div>
+                  <strong>{{ studyQuestionTitle(question) }}</strong>
+                  <p class="client-subtext">{{ question.question_type || question.template?.question_type || 'text' }}<template v-if="question.is_required || question.template?.is_required"> · Required</template></p>
+                </div>
+                <span :class="studyQuestionStatusClass(question)">{{ studyQuestionStatusLabel(question) }}</span>
+              </div>
+              <p>{{ studyQuestionAnswer(question) }}</p>
+            </article>
+          </div>
+          <p v-else class="empty-state">No staff study questions are available yet.</p>
+
+          <div class="client-form-group" style="margin-top: 1rem;">
+            <label class="client-form-label">Admin review note</label>
+            <textarea v-model="understudyReviewNote" rows="4" class="client-form-control client-form-control--textarea" placeholder="Optional note for approving this study or sending it back to staff." />
+          </div>
+
+          <div v-if="understudyActionsVisible" class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="ghost-btn" :disabled="reviewingUnderstudy" @click="submitUnderstudyReview('reject')">
+              {{ reviewingUnderstudy ? 'Saving...' : 'Reject study answers' }}
+            </button>
+            <button type="button" class="primary-btn" :disabled="reviewingUnderstudy" @click="submitUnderstudyReview('approve')">
+              {{ reviewingUnderstudy ? 'Saving...' : 'Approve for next step' }}
+            </button>
+          </div>
+
+          <p v-else-if="understudyVisible && understudyReadyForReview && !staffQuestionSummary?.all_required_answered" class="form-help form-help--error" style="margin-top: 1rem;">
+            All required study questions must be answered before the request can be approved or sent back.
+          </p>
+
+          <div v-else-if="requestItem?.understudy_reviewed_at" class="notes-box" style="margin-top: 1rem;">
+            <span>Admin review result</span>
+            <p>
+              {{ String(requestItem?.understudy_status || 'draft').toUpperCase() }}
+              <template v-if="requestItem?.understudy_reviewed_by?.name"> · {{ requestItem.understudy_reviewed_by.name }}</template>
+              <template v-if="requestItem?.understudy_reviewed_at"> · {{ new Date(requestItem.understudy_reviewed_at).toLocaleString() }}</template>
+            </p>
+            <p v-if="requestItem?.understudy_review_note" style="margin-top: 0.5rem;">{{ requestItem.understudy_review_note }}</p>
+          </div>
+        </div>
+      </details>
+
+      <details v-if="agentAssignmentVisible" class="admin-accordion-card" :open="understudyStage === 'awaiting_agent_assignment' || activeAgentAssignments.length > 0">
+        <summary>
+          <div>
+            <h2>Allowed bank agents and email files</h2>
+            <p>Choose which bank agents can receive this request and which request-linked files staff may use later in the email composer.</p>
+          </div>
+        </summary>
+        <div class="admin-accordion-card__body">
+          <div class="catalog-mini-stats" style="margin-bottom: 1rem;">
+            <div><span>Active agents</span><strong>{{ activeAgentAssignments.length }}</strong></div>
+            <div><span>Available files</span><strong>{{ availableEmailDocuments.length }}</strong></div>
+            <div><span>Stage after save</span><strong>{{ stageMeta('processing').label }}</strong></div>
+          </div>
+
+          <div class="notes-box" style="margin-bottom: 1rem;">
+            <span>How this works</span>
+            <p>The staff member will only see the banks, agents, and request files that you save here. Once saved, the request moves into the processing phase for controlled bank communication.</p>
+          </div>
+
+          <div class="field-block field-block--grow" style="max-width: 22rem; margin-bottom: 1rem;">
+            <span>Bank filter</span>
+            <select v-model="selectedAssignmentBankId" class="admin-select">
+              <option :value="null">All banks</option>
+              <option v-for="bank in emailBankOptions" :key="bank.id" :value="bank.id">
+                {{ bank.name }}<template v-if="bank.short_name"> · {{ bank.short_name }}</template>
+              </option>
+            </select>
+          </div>
+
+          <div class="admin-inline-block-grid">
+            <article class="panel-card slim-card">
+              <div class="panel-head"><h3>Select agents</h3></div>
+              <div v-if="filteredAssignableAgents.length" class="timeline-list compact-list">
+                <label
+                  v-for="agent in filteredAssignableAgents"
+                  :key="agent.id"
+                  class="timeline-item"
+                  style="display: block; cursor: pointer;"
+                >
+                  <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                    <input
+                      :checked="isAgentSelected(agent.id)"
+                      type="checkbox"
+                      style="margin-top: 0.2rem;"
+                      @change="toggleAgentSelection(agent.id, ($event.target as HTMLInputElement).checked)"
+                    />
+                    <div>
+                      <strong>{{ agent.name }}</strong>
+                      <p>{{ agent.bank_name || 'No bank linked.' }}</p>
+                      <span>{{ agent.email || agent.phone || agent.company_name || 'No contact details saved.' }}</span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+              <p v-else class="empty-state">No active agents match the selected bank filter.</p>
+            </article>
+
+            <article class="panel-card slim-card">
+              <div class="panel-head"><h3>Link files per selected agent</h3></div>
+              <div v-if="selectedAssignableAgents.length" class="timeline-list compact-list">
+                <div v-for="agent in selectedAssignableAgents" :key="agent.id" class="timeline-item">
+                  <strong>{{ agent.name }}</strong>
+                  <p>{{ agent.bank_name || 'No bank linked.' }}</p>
+                  <span>{{ (selectedAgentDocumentKeys[agent.id] ?? []).length }} file(s) selected</span>
+
+                  <div class="qa-list" style="margin-top: 0.85rem; gap: 0.5rem;">
+                    <label
+                      v-for="document in availableEmailDocuments"
+                      :key="`${agent.id}-${document.key}`"
+                      class="qa-item"
+                      style="display: block; cursor: pointer;"
+                    >
+                      <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+                        <input
+                          :checked="isAgentDocumentSelected(agent.id, document.key)"
+                          type="checkbox"
+                          style="margin-top: 0.2rem;"
+                          @change="toggleAgentDocument(agent.id, document.key, ($event.target as HTMLInputElement).checked)"
+                        />
+                        <div>
+                          <strong>{{ document.label }}</strong>
+                          <p>{{ document.group_label || 'Request file' }}</p>
+                          <span>{{ document.file_name }}</span>
+                          <div v-if="document.download_url" class="approve-actions" style="margin-top: 0.45rem;">
+                            <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">Preview file</a>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="empty-state">Select one or more agents first, then choose which request files each of them can receive later in the email stage.</p>
+            </article>
+          </div>
+
+          <div class="client-form-group" style="margin-top: 1rem;">
+            <label class="client-form-label">Admin note</label>
+            <textarea v-model="agentAssignmentReviewNote" rows="3" class="client-form-control client-form-control--textarea" placeholder="Optional note for this bank-agent assignment setup." />
+          </div>
+
+          <div class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="primary-btn" :disabled="!canSaveAgentAssignments" @click="submitAgentAssignments">
+              {{ savingAgentAssignments ? 'Saving...' : 'Save allowed agents and files' }}
+            </button>
+          </div>
+
+          <p v-if="selectedAssignableAgents.length && !canSaveAgentAssignments" class="form-help form-help--error" style="margin-top: 0.75rem;">
+            Each selected agent must have at least one linked request file before you can save this phase.
+          </p>
+        </div>
+      </details>
 
       <article class="panel-card admin-quick-panel">
         <div class="panel-head">
@@ -173,36 +985,151 @@ onMounted(load)
 
       <div class="admin-workspace-layout admin-workspace-layout--compact-side">
         <div class="admin-workspace-main">
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.submissionSummary') }}</h2></div>
+          <article class="panel-card slim-card" style="margin-top: 1.25rem;">
+            <div class="panel-head">
+              <div>
+                <h2>Client update requests</h2>
+                <p class="subtext">Open a targeted update batch or review the client submissions already received.</p>
+              </div>
+            </div>
 
-            <div class="summary-grid">
-  <div><span>{{ t('adminRequestDetails.summary.requestReference') }}</span><strong>{{ requestItem.reference_number }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.approvalReference') }}</span><strong>{{ requestItem.approval_reference_number || t('adminRequestDetails.states.pendingApproval') }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json), locale) }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.submitted') }}</span><strong>{{ requestItem.submitted_at ? new Date(requestItem.submitted_at).toLocaleString() : t('adminRequestDetails.states.emptyValue') }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.applicantType') }}</span><strong>{{ requestItem.applicant_type || t('adminRequestDetails.states.individual') }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.companyName') }}</span><strong>{{ requestItem.company_name || t('adminRequestDetails.states.emptyValue') }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.email') }}</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.phone') }}</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
-  <div><span>{{ t('adminRequestDetails.summary.nationalAddressNo') }}</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
-</div>
+            <div class="catalog-mini-stats" style="margin-bottom: 1rem;">
+              <div><span>Open batch</span><strong>{{ activeOpenBatch ? activeOpenBatch.status : 'None' }}</strong></div>
+              <div><span>Total batches</span><strong>{{ activityCounts.updateBatches }}</strong></div>
+            </div>
 
-<div class="notes-box">
-  <span>{{ t('adminRequestDetails.summary.fullAddress') }}</span>
-  <p>{{ intakeAddress(requestItem.intake_details_json) }}</p>
-</div>
+            <div v-if="!activeOpenBatch" class="qa-list" style="margin-bottom: 1rem;">
+              <div class="client-form-group">
+                <label class="client-form-label">Reason in English</label>
+                <textarea v-model="batchReasonEn" rows="3" class="client-form-control client-form-control--textarea" placeholder="Explain what the client needs to update." />
+              </div>
 
-<div class="notes-box">
-  <span>{{ t('adminRequestDetails.summary.supportingNotes') }}</span>
-  <p>{{ intakeNotes(requestItem.intake_details_json) }}</p>
-</div>
-           
+              <div class="client-form-group">
+                <label class="client-form-label">Reason in Arabic</label>
+                <textarea v-model="batchReasonAr" rows="3" class="client-form-control client-form-control--textarea" placeholder="اشرح ما الذي يحتاج العميل إلى تعديله." />
+              </div>
+
+              <div v-for="item in updateDraftItems" :key="item.local_id" class="panel-card slim-card" style="padding: 1rem;">
+                <div class="summary-grid summary-grid--compact">
+                  <div class="client-form-group">
+                    <label class="client-form-label">Item type</label>
+                    <select v-model="item.item_type" class="client-form-control" @change="onDraftTypeChange(item)">
+                      <option value="" disabled>Select item type</option>
+                      <option v-for="option in draftItemTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </div>
+
+                  <div class="client-form-group" v-if="item.item_type === 'intake_field'">
+                    <label class="client-form-label">Field</label>
+                    <select v-model="item.field_key" class="client-form-control">
+                      <option :value="null" disabled>Select field</option>
+                      <option v-for="field in intakeFieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                    </select>
+                  </div>
+
+                  <div class="client-form-group" v-else-if="item.item_type === 'request_answer'">
+                    <label class="client-form-label">Question</label>
+                    <select v-model="item.question_id" class="client-form-control">
+                      <option :value="null" disabled>Select question</option>
+                      <option v-for="question in questionOptions" :key="question.id" :value="question.id">
+                        {{ question.question_text }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <div class="client-form-group" v-else-if="item.item_type === 'attachment'">
+                    <label class="client-form-label">Attachment</label>
+                    <select v-model="item.field_key" class="client-form-control">
+                      <option :value="null" disabled>Select attachment</option>
+                      <option v-for="field in attachmentFieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                    </select>
+                  </div>
+
+                  <div class="client-form-group">
+                    <label class="client-form-label">Required?</label>
+                    <select v-model="item.is_required" class="client-form-control">
+                      <option :value="true">Required</option>
+                      <option :value="false">Optional</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="client-form-group">
+                  <label class="client-form-label">Custom label</label>
+                  <input v-model="item.label_en" type="text" class="client-form-control" placeholder="Label shown to the client" />
+                </div>
+
+                <div class="client-form-group">
+                  <label class="client-form-label">Instruction</label>
+                  <textarea v-model="item.instruction_en" rows="3" class="client-form-control client-form-control--textarea" placeholder="Tell the client exactly what to correct or replace." />
+                </div>
+
+                <div class="approve-actions">
+                  <button type="button" class="ghost-btn" @click="removeUpdateDraftItem(item.local_id)">Remove item</button>
+                </div>
+              </div>
+
+              <div class="approve-actions">
+                <button type="button" class="ghost-btn" @click="addUpdateDraftItem">{{ updateDraftItems.length ? 'Add another item' : 'Add first item' }}</button>
+                <button type="button" class="primary-btn" :disabled="!canSubmitUpdateBatch" @click="submitUpdateBatch">
+                  {{ creatingBatch ? 'Creating batch...' : 'Open client update batch' }}
+                </button>
+              </div>
+            </div>
+
+            <div v-else class="qa-list">
+              <div class="notes-box">
+                <span>Current batch reason</span>
+                <p>{{ localizedText(activeOpenBatch.reason_en, activeOpenBatch.reason_ar, 'No reason was added.') }}</p>
+              </div>
+
+              <div class="approve-actions" style="margin-bottom: 1rem;">
+                <button type="button" class="ghost-btn" :disabled="cancellingBatch" @click="cancelActiveBatch">
+                  {{ cancellingBatch ? 'Cancelling batch...' : 'Cancel this update batch' }}
+                </button>
+              </div>
+
+              <div v-for="item in activeOpenBatch.items || []" :key="item.id" class="panel-card slim-card" style="padding: 1rem; margin-bottom: 1rem;">
+                <div class="client-card-head">
+                  <div>
+                    <h3>{{ localizedText(item.label_en, item.label_ar, 'Requested update') }}</h3>
+                    <p class="client-subtext">{{ localizedText(item.instruction_en, item.instruction_ar, 'No extra instruction added.') }}</p>
+                  </div>
+                  <span :class="updateStatusClass(item.status)">{{ updateStatusLabel(item.status) }}</span>
+                </div>
+
+                <div class="summary-grid summary-grid--compact">
+                  <div>
+                    <span>Previous value</span>
+                    <strong>{{ formatUpdateValue(item, 'old') }}</strong>
+                  </div>
+                  <div>
+                    <span>Client submission</span>
+                    <strong>{{ formatUpdateValue(item, 'new') }}</strong>
+                  </div>
+                </div>
+
+                <div class="client-form-group" style="margin-top: 1rem;">
+                  <label class="client-form-label">Review note</label>
+                  <textarea v-model="reviewNotes[item.id]" rows="3" class="client-form-control client-form-control--textarea" placeholder="Optional note for approval or rejection." />
+                </div>
+
+                <div class="approve-actions">
+                  <button type="button" class="ghost-btn" :disabled="reviewingUpdateItems[item.id] || item.status !== 'updated'" @click="reviewUpdateItem(item, 'reject')">
+                    {{ reviewingUpdateItems[item.id] ? 'Saving...' : 'Reject' }}
+                  </button>
+                  <button type="button" class="primary-btn" :disabled="reviewingUpdateItems[item.id] || item.status !== 'updated'" @click="reviewUpdateItem(item, 'approve')">
+                    {{ reviewingUpdateItems[item.id] ? 'Saving...' : 'Approve' }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </article>
         </div>
+      </div>
+    </template>
 
-        <aside class="admin-workspace-side">
+    <template #side>
           <article class="panel-card slim-card">
             <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.contractState') }}</h2></div>
             <div class="summary-grid summary-grid--tight">
@@ -210,6 +1137,17 @@ onMounted(load)
               <div><span>{{ t('adminRequestDetails.summary.contractStatus') }}</span><strong>{{ requestItem.current_contract?.status || t('adminRequestDetails.states.emptyValue') }}</strong></div>
               <div><span>{{ t('adminRequestDetails.summary.adminSigned') }}</span><strong>{{ requestItem.current_contract?.admin_signed_at ? new Date(requestItem.current_contract.admin_signed_at).toLocaleString() : t('adminRequestDetails.states.pending') }}</strong></div>
               <div><span>{{ t('adminRequestDetails.summary.clientSigned') }}</span><strong>{{ requestItem.current_contract?.client_signed_at ? new Date(requestItem.current_contract.client_signed_at).toLocaleString() : t('adminRequestDetails.states.pending') }}</strong></div>
+            </div>
+          </article>
+
+          <article v-if="canRejectRequest" class="panel-card slim-card action-card">
+            <div class="panel-head"><h2>Reject request</h2></div>
+            <p class="subtext">This button stays available so the admin can reject the request at any time.</p>
+            <textarea v-model="rejectReason" rows="4" class="admin-textarea" placeholder="Optional rejection reason"></textarea>
+            <div class="approve-actions">
+              <button class="ghost-btn" type="button" :disabled="rejectingRequest" @click="rejectRequest">
+                {{ rejectingRequest ? 'Rejecting...' : 'Reject request now' }}
+              </button>
             </div>
           </article>
 
@@ -223,6 +1161,35 @@ onMounted(load)
             </div>
           </article>
 
+          <article class="panel-card slim-card">
+            <div class="panel-head"><h2>Sent email activity</h2></div>
+            <div v-if="requestItem.emails?.length" class="timeline-list compact-list">
+              <div v-for="email in requestItem.emails" :key="email.id" class="timeline-item">
+                <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;">
+                  <div style="flex:1;min-width:0;">
+                    <strong>{{ email.subject }}</strong>
+                    <p>From: {{ email.sender?.name || 'System' }} · {{ email.from_email || email.sender?.email || '—' }}</p>
+                    <p>To: {{ emailRecipients(email) }}</p>
+                    <p v-if="email.body" style="white-space:pre-wrap;margin-top:0.35rem;">{{ email.body }}</p>
+                    <span>{{ email.attachments?.length || 0 }} attachment(s) · {{ email.sent_at ? new Date(email.sent_at).toLocaleString() : new Date(email.created_at || '').toLocaleString() }}</span>
+                  </div>
+                  <span :class="emailStatusClass(email.delivery_status)">{{ email.delivery_status || 'queued' }}</span>
+                </div>
+
+                <div v-if="email.attachments?.length" class="file-list" style="margin-top:0.75rem;">
+                  <div v-for="attachment in email.attachments" :key="attachment.id" class="file-item">
+                    <div>
+                      <strong>{{ attachment.file_name }}</strong>
+                      <span>{{ attachment.mime_type || attachment.file_extension || 'Stored request file' }} · {{ formatFileSize(attachment.file_size) }}</span>
+                    </div>
+                    <a :href="emailAttachmentDownloadUrl(email.id, attachment.id)" target="_blank" rel="noopener" class="ghost-btn">Download</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p v-else class="empty-state">No outbound emails have been sent for this request yet.</p>
+          </article>
+
           <article v-if="!requestItem.approval_reference_number" class="panel-card slim-card action-card">
             <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.approveRequest') }}</h2></div>
             <p class="subtext">{{ t('adminRequestDetails.sections.approveSubtitle') }}</p>
@@ -233,8 +1200,6 @@ onMounted(load)
               </button>
             </div>
           </article>
-        </aside>
-      </div>
 
       <AdminQuickViewModal
         :model-value="quickView !== null"
@@ -253,13 +1218,13 @@ onMounted(load)
         :subtitle="t('adminRequestDetails.modal.subtitle')"
         wide
       >
-        <div v-if="quickView === 'answers'" class="qa-list">
-          <div v-if="requestItem.answers?.length" v-for="answer in requestItem.answers" :key="answer.id" class="qa-item">
-            <h3>{{ answer.question?.question_text || t('adminRequestDetails.states.questionFallback') }}</h3>
-            <p>{{ answerText(answer) }}</p>
-          </div>
-          <p v-else class="empty-state">{{ t('adminRequestDetails.states.noAnswersRecorded') }}</p>
-        </div>
+        <RequestAnswersList
+          v-if="quickView === 'answers'"
+          :answers="requestItem.answers || []"
+          :empty-text="t('adminRequestDetails.states.noAnswersRecorded')"
+          :question-fallback="t('adminRequestDetails.states.questionFallback')"
+          :format-answer="answerText"
+        />
 
         <div v-else-if="quickView === 'attachments'" class="file-list">
           <div v-if="requestItem.attachments?.length" v-for="file in requestItem.attachments" :key="file.id" class="file-item">
@@ -272,18 +1237,18 @@ onMounted(load)
           <p v-else class="empty-state">{{ t('adminRequestDetails.states.noInitialAttachments') }}</p>
         </div>
 
-       <div v-else-if="quickView === 'shareholders'" class="qa-list">
-  <div v-if="requestItem.shareholders?.length" v-for="shareholder in requestItem.shareholders" :key="shareholder.id" class="qa-item">
-    <strong>{{ shareholder.shareholder_name }}</strong>
-    <p v-if="shareholder.phone_number">{{ [shareholder.phone_country_code, shareholder.phone_number].filter(Boolean).join(' ') }}</p>
-    <p v-if="shareholder.id_number">{{ t('adminRequestDetails.states.idNumberLabel', { id: shareholder.id_number }) }}</p>
-    <p>{{ shareholder.id_file_name }}</p>
-    <div class="approve-actions">
-      <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.downloadIdFile') }}</a>
-    </div>
-  </div>
-  <p v-else class="empty-state">{{ t('adminRequestDetails.states.noShareholdersRecorded') }}</p>
-</div>
+        <div v-else-if="quickView === 'shareholders'" class="qa-list">
+          <div v-if="requestItem.shareholders?.length" v-for="shareholder in requestItem.shareholders" :key="shareholder.id" class="qa-item">
+            <strong>{{ shareholder.shareholder_name }}</strong>
+            <p v-if="shareholder.phone_number">{{ [shareholder.phone_country_code, shareholder.phone_number].filter(Boolean).join(' ') }}</p>
+            <p v-if="shareholder.id_number">{{ t('adminRequestDetails.states.idNumberLabel', { id: shareholder.id_number }) }}</p>
+            <p>{{ shareholder.id_file_name }}</p>
+            <div class="approve-actions">
+              <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.downloadIdFile') }}</a>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ t('adminRequestDetails.states.noShareholdersRecorded') }}</p>
+        </div>
 
         <div v-else-if="quickView === 'assignments'" class="assignment-chip-list assignment-chip-list--stacked">
           <div v-if="requestItem.assignments?.length" v-for="assignment in requestItem.assignments" :key="assignment.id" class="assignment-chip">
@@ -312,5 +1277,5 @@ onMounted(load)
         </div>
       </AdminQuickViewModal>
     </template>
-  </section>
+  </RequestWorkspaceShell>
 </template>

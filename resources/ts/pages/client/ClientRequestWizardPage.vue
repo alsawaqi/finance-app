@@ -1,10 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ClientQuestionField from './inc/ClientQuestionField.vue'
 import { useAuthStore } from '../../stores/auth'
-import { getRequestQuestions, submitClientRequest, type ClientQuestion } from '@/services/clientRequests'
+import {
+  getRequestQuestions,
+  submitClientRequest,
+  type ClientQuestion,
+  type FinanceRequestTypeOption,
+} from '@/services/clientRequests'
+import {
+  clearClientRequestDraft,
+  hasMeaningfulClientRequestDraftData,
+  loadClientRequestDraft,
+  saveClientRequestDraft,
+  type ClientRequestWizardDraftPayload,
+} from '@/utils/clientRequestDraft'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -16,6 +28,7 @@ const currentStep = ref(1)
 const totalSteps = 2
 
 const questions = ref<ClientQuestion[]>([])
+  const financeRequestTypes = ref<FinanceRequestTypeOption[]>([])
 const answers = reactive<Record<number, unknown>>({})
 const attachments = ref<File[]>([])
 const nationalAddressAttachment = ref<File | null>(null)
@@ -25,6 +38,12 @@ const shareholders = ref<Array<{ name: string; phone_country_code: string; phone
 const fieldErrors = reactive<Record<string, string>>({})
 const generalError = ref('')
 const successMessage = ref('')
+const draftRestored = ref(false)
+const draftMessage = ref('')
+const restoringDraft = ref(false)
+const skipDraftPersistenceOnUnmount = ref(false)
+let draftSaveTimeout: number | null = null
+ 
 
 const countryOptions = computed(() => [
   { code: 'SA', value: 'Saudi Arabia', label: t('clientWizard.countries.sa') },
@@ -69,6 +88,7 @@ const phoneCodeOptions = computed(() => [
 
 const details = reactive({
   finance_type: 'individual' as 'individual' | 'company',
+  finance_request_type_id: '',
   country: '',
   requested_amount: '',
   company_name: '',
@@ -81,6 +101,29 @@ const details = reactive({
   address: '',
   notes: '',
 })
+
+
+type ShareholderState = {
+  name: string
+  phone_country_code: string
+  phone_number: string
+  id_number: string
+  id_file: File | null
+}
+
+function getDraftUserId() {
+  return auth.user?.id ?? 'guest'
+}
+
+function createEmptyShareholder(): ShareholderState {
+  return {
+    name: '',
+    phone_country_code: '+966',
+    phone_number: '',
+    id_number: '',
+    id_file: null,
+  }
+}
 
 const steps = computed(() => [
   { id: 1, title: t('clientWizard.steps.questionsTitle'), text: t('clientWizard.steps.questionsText') },
@@ -118,17 +161,48 @@ function hydrateApplicantDefaults() {
 }
 
 function addShareholder() {
-  shareholders.value.push({
-    name: '',
-    phone_country_code: '+966',
-    phone_number: '',
-    id_number: '',
-    id_file: null,
-  })
+  shareholders.value.push(createEmptyShareholder())
 }
 
 function removeShareholder(index: number) {
   shareholders.value.splice(index, 1)
+}
+
+function resetWizardState() {
+  currentStep.value = 1
+
+  details.finance_type = 'individual'
+  details.finance_request_type_id = ''
+  
+  details.country = ''
+  details.requested_amount = ''
+  details.company_name = ''
+  details.company_cr_number = ''
+  details.email = ''
+  details.phone_country_code = '+966'
+  details.phone_number = ''
+  details.unified_number = ''
+  details.national_address_number = ''
+  details.address = ''
+  details.notes = ''
+
+  Object.keys(answers).forEach((key) => {
+    delete answers[Number(key)]
+  })
+
+  questions.value.forEach((question) => {
+    answers[question.id] = question.question_type === 'checkbox' ? [] : ''
+  })
+
+  attachments.value = []
+  nationalAddressAttachment.value = null
+  companyCr.value = null
+  shareholders.value = []
+
+  clearErrors()
+  successMessage.value = ''
+  generalError.value = ''
+  hydrateApplicantDefaults()
 }
 
 function handleAttachments(event: Event) {
@@ -150,6 +224,124 @@ function handleShareholderFile(index: number, event: Event) {
   const input = event.target as HTMLInputElement
   shareholders.value[index].id_file = input.files?.[0] || null
 }
+
+function syncAnswersFromQuestions() {
+  const activeQuestionIds = new Set<number>()
+
+  questions.value.forEach((question) => {
+    activeQuestionIds.add(question.id)
+
+    if (!(question.id in answers)) {
+      answers[question.id] = question.question_type === 'checkbox' ? [] : ''
+    }
+  })
+
+  Object.keys(answers).forEach((key) => {
+    const numericKey = Number(key)
+
+    if (Number.isInteger(numericKey) && !activeQuestionIds.has(numericKey)) {
+      delete answers[numericKey]
+    }
+  })
+}
+
+function applyDraftToState(draft: ClientRequestWizardDraftPayload) {
+  restoringDraft.value = true
+
+  currentStep.value = draft.currentStep
+  Object.assign(details, draft.details)
+
+  Object.keys(answers).forEach((key) => {
+    delete answers[Number(key)]
+  })
+
+  questions.value.forEach((question) => {
+    if (question.id in draft.answers) {
+      answers[question.id] = draft.answers[question.id]
+      return
+    }
+
+    answers[question.id] = question.question_type === 'checkbox' ? [] : ''
+  })
+
+  shareholders.value = draft.shareholders.map((shareholder) => ({
+    ...shareholder,
+    id_file: null,
+  }))
+
+  hydrateApplicantDefaults()
+  draftRestored.value = true
+  draftMessage.value = t('clientWizard.draft.restoredWithFilesNotice')
+  restoringDraft.value = false
+}
+
+function restoreDraftIfAvailable() {
+  const draft = loadClientRequestDraft(getDraftUserId())
+
+  if (!draft) {
+    syncAnswersFromQuestions()
+    hydrateApplicantDefaults()
+    return
+  }
+
+  applyDraftToState(draft)
+}
+
+function persistDraftNow() {
+  if (restoringDraft.value || skipDraftPersistenceOnUnmount.value) return
+
+  const draftInput = {
+    currentStep: currentStep.value,
+    details,
+    answers,
+    shareholders: shareholders.value,
+  }
+
+  if (!hasMeaningfulClientRequestDraftData(draftInput)) {
+    clearClientRequestDraft(getDraftUserId())
+    return
+  }
+
+  saveClientRequestDraft(getDraftUserId(), draftInput)
+}
+
+function queueDraftSave() {
+  if (restoringDraft.value) return
+
+  if (draftSaveTimeout) {
+    window.clearTimeout(draftSaveTimeout)
+  }
+
+  draftSaveTimeout = window.setTimeout(() => {
+    persistDraftNow()
+    draftSaveTimeout = null
+  }, 250)
+}
+
+function discardDraft() {
+  clearClientRequestDraft(getDraftUserId())
+  draftRestored.value = false
+  draftMessage.value = t('clientWizard.draft.discarded')
+  resetWizardState()
+}
+
+watch(
+  () => ({
+    currentStep: currentStep.value,
+    details: { ...details },
+    answers: JSON.parse(JSON.stringify(answers)),
+    shareholders: shareholders.value.map((shareholder) => ({
+      name: shareholder.name,
+      phone_country_code: shareholder.phone_country_code,
+      phone_number: shareholder.phone_number,
+      id_number: shareholder.id_number,
+    })),
+  }),
+  () => {
+    queueDraftSave()
+  },
+  { deep: true },
+)
 
 function validateStepOne() {
   clearErrors()
@@ -181,6 +373,11 @@ function validateStepTwo() {
     hasError = true
   }
 
+  if (!String(details.finance_request_type_id).trim()) {
+  fieldErrors['details.finance_request_type_id'] = t('clientWizard.errors.requestTypeRequired')
+  hasError = true
+}
+
   if (!details.country.trim()) {
     fieldErrors['details.country'] = t('clientWizard.errors.countryCodeRequired')
     hasError = true
@@ -196,30 +393,30 @@ function validateStepTwo() {
     hasError = true
   }
 
- if (!details.phone_number.trim()) {
-  fieldErrors['details.phone_number'] = t('clientWizard.errors.phoneRequired')
-  hasError = true
-}
+  if (!details.phone_number.trim()) {
+    fieldErrors['details.phone_number'] = t('clientWizard.errors.phoneRequired')
+    hasError = true
+  }
 
-if (!details.unified_number.trim()) {
-  fieldErrors['details.unified_number'] = t('clientWizard.errors.unifiedNumberRequired')
-  hasError = true
-}
+  if (!details.unified_number.trim()) {
+    fieldErrors['details.unified_number'] = t('clientWizard.errors.unifiedNumberRequired')
+    hasError = true
+  }
 
-if (!details.national_address_number.trim()) {
-  fieldErrors['details.national_address_number'] = t('clientWizard.errors.nationalAddressNumberRequired')
-  hasError = true
-}
+  if (!details.national_address_number.trim()) {
+    fieldErrors['details.national_address_number'] = t('clientWizard.errors.nationalAddressNumberRequired')
+    hasError = true
+  }
 
-if (!details.address.trim()) {
-  fieldErrors['details.address'] = t('clientWizard.errors.addressRequired')
-  hasError = true
-}
+  if (!details.address.trim()) {
+    fieldErrors['details.address'] = t('clientWizard.errors.addressRequired')
+    hasError = true
+  }
 
-if (!nationalAddressAttachment.value) {
-  fieldErrors.national_address_attachment = t('clientWizard.errors.nationalAddressAttachmentRequired')
-  hasError = true
-}
+  if (!nationalAddressAttachment.value) {
+    fieldErrors.national_address_attachment = t('clientWizard.errors.nationalAddressAttachmentRequired')
+    hasError = true
+  }
 
   if (details.finance_type === 'company') {
     if (!details.company_name.trim()) {
@@ -290,13 +487,9 @@ async function loadQuestions() {
 
   try {
     const { data } = await getRequestQuestions()
-    questions.value = data.questions ?? []
-
-    questions.value.forEach((question) => {
-      if (!(question.id in answers)) {
-        answers[question.id] = question.question_type === 'checkbox' ? [] : ''
-      }
-    })
+questions.value = data.questions ?? []
+financeRequestTypes.value = data.finance_request_types ?? []
+restoreDraftIfAvailable()
   } catch (error: any) {
     generalError.value = error?.response?.data?.message || t('clientWizard.errors.loadQuestionsFailed')
   } finally {
@@ -314,20 +507,21 @@ async function submitRequest() {
   try {
     const { data } = await submitClientRequest({
       answers: answerPayload.value,
-     details: {
-  country: details.country,
-  requested_amount: details.requested_amount,
-  finance_type: details.finance_type,
-  company_name: details.company_name,
-  company_cr_number: details.company_cr_number,
-  email: details.email,
-  phone_country_code: details.phone_country_code,
-  phone_number: details.phone_number,
-  unified_number: details.unified_number,
-  national_address_number: details.national_address_number,
-  address: details.address,
-  notes: details.notes,
-},
+      details: {
+        finance_request_type_id: Number(details.finance_request_type_id),
+        country: details.country,
+        requested_amount: details.requested_amount,
+        finance_type: details.finance_type,
+        company_name: details.company_name,
+        company_cr_number: details.company_cr_number,
+        email: details.email,
+        phone_country_code: details.phone_country_code,
+        phone_number: details.phone_number,
+        unified_number: details.unified_number,
+        national_address_number: details.national_address_number,
+        address: details.address,
+        notes: details.notes,
+      },
       attachments: attachments.value,
       national_address_attachment: nationalAddressAttachment.value,
       company_cr: companyCr.value,
@@ -335,7 +529,18 @@ async function submitRequest() {
     })
 
     successMessage.value = data.message
-    await router.replace({ name: 'client-request-details', params: { id: data.request.id } })
+skipDraftPersistenceOnUnmount.value = true
+clearClientRequestDraft(getDraftUserId())
+
+if (draftSaveTimeout) {
+  window.clearTimeout(draftSaveTimeout)
+  draftSaveTimeout = null
+}
+
+await router.replace({ name: 'client-request-details', params: { id: data.request.id } })
+
+
+
   } catch (error: any) {
     const responseErrors = error?.response?.data?.errors || {}
     const responseMessage = error?.response?.data?.message
@@ -358,8 +563,18 @@ async function submitRequest() {
 }
 
 onMounted(() => {
-  hydrateApplicantDefaults()
   loadQuestions()
+})
+
+onBeforeUnmount(() => {
+  if (draftSaveTimeout) {
+    window.clearTimeout(draftSaveTimeout)
+    draftSaveTimeout = null
+  }
+
+  if (!skipDraftPersistenceOnUnmount.value) {
+    persistDraftNow()
+  }
 })
 </script>
 
@@ -414,7 +629,8 @@ onMounted(() => {
         </div>
 
         <div v-if="generalError" class="client-alert client-alert--error">{{ generalError }}</div>
-        <div v-if="successMessage" class="client-alert client-alert--success">{{ successMessage }}</div>
+<div v-if="successMessage" class="client-alert client-alert--success">{{ successMessage }}</div>
+<div v-if="draftMessage" class="client-alert client-alert--success">{{ draftMessage }}</div>
 
         <template v-if="currentStep === 1">
           <div v-if="questions.length === 0" class="client-empty-state client-empty-state--inner">
@@ -434,9 +650,16 @@ onMounted(() => {
           </div>
 
           <div class="client-inline-actions">
-            <RouterLink :to="{ name: 'client-new-request' }" class="client-btn-secondary">{{ t('clientWizard.actions.cancel') }}</RouterLink>
-            <button type="button" class="client-btn-primary" @click="goNext">{{ t('clientWizard.actions.continueToDetails') }}</button>
-          </div>
+  <button v-if="draftRestored" type="button" class="client-btn-secondary" @click="discardDraft">
+    {{ t('clientWizard.actions.discardDraft') }}
+  </button>
+  <RouterLink :to="{ name: 'client-new-request' }" class="client-btn-secondary">
+    {{ t('clientWizard.actions.cancel') }}
+  </RouterLink>
+  <button type="button" class="client-btn-primary" @click="goNext">
+    {{ t('clientWizard.actions.continueToDetails') }}
+  </button>
+</div>
         </template>
 
         <template v-else>
@@ -450,6 +673,22 @@ onMounted(() => {
               </div>
 
               <div class="client-form-grid">
+                 
+                <div class="client-form-group">
+                  <label class="client-form-label">{{ t('clientWizard.fields.requestType') }} <span class="client-required-mark">*</span></label>
+                  <select v-model="details.finance_request_type_id" class="client-form-control">
+                    <option value="">{{ t('clientWizard.placeholders.selectRequestType') }}</option>
+                    <option v-for="type in financeRequestTypes" :key="type.id" :value="String(type.id)">
+                      {{ type.name_en }}
+                    </option>
+                  </select>
+                  <p v-if="fieldErrors['details.finance_request_type_id']" class="client-form-error">
+                    {{ fieldErrors['details.finance_request_type_id'] }}
+                  </p>
+                </div>
+
+
+
                 <div class="client-form-group">
                   <label class="client-form-label">{{ t('clientWizard.fields.applicantType') }} <span class="client-required-mark">*</span></label>
                   <select v-model="details.finance_type" class="client-form-control">
@@ -696,11 +935,16 @@ onMounted(() => {
           </div>
 
           <div class="client-inline-actions">
-            <button type="button" class="client-btn-secondary" @click="goBack">{{ t('clientWizard.actions.back') }}</button>
-            <button type="button" class="client-btn-primary" :disabled="submitting" @click="submitRequest">
-              {{ submitting ? t('clientWizard.actions.submitting') : t('clientWizard.actions.submitRequest') }}
-            </button>
-          </div>
+  <button v-if="draftRestored" type="button" class="client-btn-secondary" @click="discardDraft">
+    {{ t('clientWizard.actions.discardDraft') }}
+  </button>
+  <button type="button" class="client-btn-secondary" @click="goBack">
+    {{ t('clientWizard.actions.back') }}
+  </button>
+  <button type="button" class="client-btn-primary" :disabled="submitting" @click="submitRequest">
+    {{ submitting ? t('clientWizard.actions.submitting') : t('clientWizard.actions.submitRequest') }}
+  </button>
+</div>
         </template>
       </article>
     </section>

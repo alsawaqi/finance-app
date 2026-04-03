@@ -8,7 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignStaffToFinanceRequestRequest;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestStaffAssignment;
-use App\Models\RequestTimeline;
+use App\Support\RequestTimelineLogger;
 use App\Models\User;
 use App\Services\FinanceRequestWorkflowService;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +28,7 @@ class AdminAssignmentController extends Controller
             ->with([
                 'client:id,name,email',
                 'currentContract:id,finance_request_id,version_no,status,admin_signed_at,client_signed_at',
+                'financeRequestType:id,slug,name_en,name_ar',
                 'assignments' => fn ($query) => $query
                     ->where('is_active', true)
                     ->with('staff:id,name,email')
@@ -41,14 +42,41 @@ class AdminAssignmentController extends Controller
                 ]);
             })
             ->whereIn('workflow_stage', [
+                FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
+                FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
+                FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+                FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
+                FinanceRequestWorkflowStage::PROCESSING->value,
                 FinanceRequestWorkflowStage::CONTRACT->value,
                 FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
-                FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
-                FinanceRequestWorkflowStage::PROCESSING->value,
                 FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
                 FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
             ])
-            ->orderByRaw("CASE WHEN workflow_stage = ? THEN 0 ELSE 1 END", [FinanceRequestWorkflowStage::CONTRACT->value])
+            ->orderByRaw(
+                "CASE
+                    WHEN workflow_stage = ? THEN 0
+                    WHEN workflow_stage = ? THEN 1
+                    WHEN workflow_stage = ? THEN 2
+                    WHEN workflow_stage = ? THEN 3
+                    WHEN workflow_stage = ? THEN 4
+                    WHEN workflow_stage = ? THEN 5
+                    WHEN workflow_stage = ? THEN 6
+                    WHEN workflow_stage = ? THEN 7
+                    WHEN workflow_stage = ? THEN 8
+                    ELSE 9
+                END",
+                [
+                    FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
+                    FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
+                    FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+                    FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
+                    FinanceRequestWorkflowStage::PROCESSING->value,
+                    FinanceRequestWorkflowStage::CONTRACT->value,
+                    FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+                    FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
+                    FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
+                ]
+            )
             ->orderByDesc('latest_activity_at')
             ->orderByDesc('id')
             ->get();
@@ -163,13 +191,15 @@ class AdminAssignmentController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name']);
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $admin?->id,
-                'event_type' => 'request.assigned_to_staff',
-                'event_title' => 'Request assigned to staff',
-                'event_description' => 'The request was assigned to the staff workspace and the client can now upload the required documents.',
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.assigned_to_staff',
+                $admin?->id,
+                'Request assigned to staff',
+                'تم إسناد الطلب إلى الموظفين',
+                'The request was assigned to the staff workspace and the client can now upload the required documents.',
+                'تم إسناد الطلب إلى مساحة عمل الموظفين ويمكن للعميل الآن رفع المستندات المطلوبة.',
+                [
                     'primary_staff_id' => $primaryStaffId,
                     'staff' => $assignedUsers->map(fn (User $user) => [
                         'id' => $user->id,
@@ -177,8 +207,7 @@ class AdminAssignmentController extends Controller
                     ])->values()->all(),
                     'notes' => $notes,
                 ],
-                'created_at' => now(),
-            ]);
+            );
         });
 
         return response()->json([
@@ -194,6 +223,7 @@ class AdminAssignmentController extends Controller
                 'shareholders',
                 'additionalDocuments.requester:id,name',
                 'additionalDocuments.uploader:id,name',
+                'financeRequestType:id,slug,name_en,name_ar,description_en,description_ar,is_active,sort_order',
             ]),
         ]);
     }

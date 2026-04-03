@@ -9,7 +9,7 @@ use App\Http\Requests\Admin\StoreAdminContractRequest;
 use App\Models\Contract;
 use App\Models\ContractTemplate;
 use App\Models\FinanceRequest;
-use App\Models\RequestTimeline;
+use App\Support\RequestTimelineLogger;
 use App\Support\ContractDocumentBuilder;
 use App\Support\ContractTemplateResolver;
 use App\Support\MpdfContractPdfRenderer;
@@ -102,23 +102,24 @@ class AdminContractController extends Controller
             $contract->save();
 
             $financeRequest->current_contract_id = $contract->id;
-            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::CONTRACT;
+            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::AWAITING_CLIENT_SIGNATURE;
             $financeRequest->latest_activity_at = now();
             $financeRequest->save();
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $admin->id,
-                'event_type' => 'contract.admin_signed',
-                'event_title' => 'Contract drafted and signed by admin',
-                'event_description' => 'The contract was prepared from the selected Arabic template, signed by the admin, and sent to the client for final review and signature.',
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'contract.admin_signed',
+                $admin->id,
+                'Contract drafted and signed by admin',
+                'تم إعداد العقد وتوقيعه من الإدارة',
+                'The contract was prepared from the selected Arabic template, signed by the admin, and sent to the client for final review and signature.',
+                'تم إعداد العقد من القالب العربي المحدد وتوقيعه من الإدارة وإرساله إلى العميل للمراجعة النهائية والتوقيع.',
+                [
                     'contract_id' => $contract->id,
                     'version_no' => $contract->version_no,
                     'template_slug' => $template->slug,
                 ],
-                'created_at' => now(),
-            ]);
+            );
 
             return $contract;
         });

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class AdminRequestFilteringController extends Controller
 {
@@ -36,7 +37,7 @@ class AdminRequestFilteringController extends Controller
             ], 422);
         }
 
-        $requests = FinanceRequest::query()
+        $requestCollection = FinanceRequest::query()
             ->with([
                 'client:id,name,email,phone',
                 'primaryStaff:id,name,email',
@@ -79,7 +80,12 @@ class AdminRequestFilteringController extends Controller
             ->orderByDesc('latest_activity_at')
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
-            ->get()
+            ->get();
+
+        $bankBreakdown = $this->buildBankBreakdown($requestCollection);
+        $agentBreakdown = $this->buildAgentBreakdown($requestCollection);
+
+        $requests = $requestCollection
             ->map(fn (FinanceRequest $financeRequest) => $this->transformRequest($financeRequest))
             ->values();
 
@@ -97,7 +103,10 @@ class AdminRequestFilteringController extends Controller
                 'unique_clients' => $requests->pluck('client.id')->filter()->unique()->count(),
                 'unique_staff' => $requests->flatMap(fn (array $item) => $item['active_staff'] ?? [])->pluck('id')->filter()->unique()->count(),
                 'unique_agents' => $requests->flatMap(fn (array $item) => $item['agents'] ?? [])->pluck('id')->filter()->unique()->count(),
+                'total_emails' => $requestCollection->sum('emails_count'),
             ],
+            'bank_breakdown' => $bankBreakdown,
+            'agent_breakdown' => $agentBreakdown,
             'requests' => $requests,
         ]);
     }
@@ -269,6 +278,76 @@ class AdminRequestFilteringController extends Controller
             'active_staff' => $activeStaff,
             'agents' => $agents,
         ];
+    }
+
+    private function buildBankBreakdown(Collection $requests): Collection
+    {
+        return $requests
+            ->flatMap(function (FinanceRequest $financeRequest) {
+                return $financeRequest->emails->flatMap(function ($email) use ($financeRequest) {
+                    return $email->agents
+                        ->filter(fn ($agent) => !blank($agent->bank_id))
+                        ->map(fn ($agent) => [
+                            'bank_id' => (int) $agent->bank_id,
+                            'bank_name' => $agent->bank?->name,
+                            'bank_short_name' => $agent->bank?->short_name,
+                            'agent_id' => (int) $agent->id,
+                            'email_id' => (int) $email->id,
+                            'request_id' => (int) $financeRequest->id,
+                        ]);
+                });
+            })
+            ->groupBy('bank_id')
+            ->map(function (Collection $items, $bankId) {
+                $first = $items->first();
+
+                return [
+                    'id' => (int) $bankId,
+                    'name' => $first['bank_name'] ?: 'Unknown bank',
+                    'short_name' => $first['bank_short_name'],
+                    'agents_count' => $items->pluck('agent_id')->unique()->count(),
+                    'emails_count' => $items->pluck('email_id')->unique()->count(),
+                    'requests_count' => $items->pluck('request_id')->unique()->count(),
+                ];
+            })
+            ->sortByDesc('emails_count')
+            ->values();
+    }
+
+    private function buildAgentBreakdown(Collection $requests): Collection
+    {
+        return $requests
+            ->flatMap(function (FinanceRequest $financeRequest) {
+                return $financeRequest->emails->flatMap(function ($email) use ($financeRequest) {
+                    return $email->agents->map(fn ($agent) => [
+                        'agent_id' => (int) $agent->id,
+                        'name' => $agent->name,
+                        'email' => $agent->email,
+                        'bank_id' => $agent->bank_id ? (int) $agent->bank_id : null,
+                        'bank_name' => $agent->bank?->name,
+                        'bank_short_name' => $agent->bank?->short_name,
+                        'email_id' => (int) $email->id,
+                        'request_id' => (int) $financeRequest->id,
+                    ]);
+                });
+            })
+            ->groupBy('agent_id')
+            ->map(function (Collection $items, $agentId) {
+                $first = $items->first();
+
+                return [
+                    'id' => (int) $agentId,
+                    'name' => $first['name'],
+                    'email' => $first['email'],
+                    'bank_id' => $first['bank_id'],
+                    'bank_name' => $first['bank_name'],
+                    'bank_short_name' => $first['bank_short_name'],
+                    'emails_count' => $items->pluck('email_id')->unique()->count(),
+                    'requests_count' => $items->pluck('request_id')->unique()->count(),
+                ];
+            })
+            ->sortByDesc('emails_count')
+            ->values();
     }
 
     private function staffOptions()

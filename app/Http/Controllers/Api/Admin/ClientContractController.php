@@ -7,7 +7,7 @@ use App\Enums\FinanceRequestWorkflowStage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\SignClientContractRequest;
 use App\Models\FinanceRequest;
-use App\Models\RequestTimeline;
+use App\Support\RequestTimelineLogger;
 use App\Support\ContractDocumentBuilder;
 use App\Support\ContractTemplateResolver;
 use App\Support\MpdfContractPdfRenderer;
@@ -58,22 +58,23 @@ class ClientContractController extends Controller
             $this->renderAndPersistFinalPdf($financeRequest, $contract);
             $contract->save();
 
-            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::CONTRACT;
+            $financeRequest->workflow_stage = FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT;
             $financeRequest->latest_activity_at = now();
             $financeRequest->save();
 
-            RequestTimeline::create([
-                'finance_request_id' => $financeRequest->id,
-                'actor_user_id' => $client->id,
-                'event_type' => 'contract.client_signed',
-                'event_title' => 'Contract signed by client',
-                'event_description' => 'The client reviewed the Arabic contract template preview and submitted the final signature.',
-                'metadata_json' => [
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'contract.client_signed',
+                $client->id,
+                'Contract signed by client',
+                'تم توقيع العقد من العميل',
+                'The client reviewed the Arabic contract template preview and submitted the final signature.',
+                'قام العميل بمراجعة معاينة العقد العربي وإرسال التوقيع النهائي.',
+                [
                     'contract_id' => $contract->id,
                     'contract_status' => $contract->status->value,
                 ],
-                'created_at' => now(),
-            ]);
+            );
         });
 
         return response()->json([

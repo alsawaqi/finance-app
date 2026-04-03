@@ -11,11 +11,17 @@ const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<any[]>([])
 const { t, locale } = useI18n()
+const documentStages = ['document_collection', 'awaiting_additional_documents', 'awaiting_client_documents'];
+
 
 const stats = computed(() => ({
   total: requests.value.length,
   active: requests.value.filter((item) => item.status === 'active').length,
-  needsAction: requests.value.filter((item) => item.current_contract?.status === 'admin_signed' || ['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)).length,
+  needsAction: requests.value.filter((item) =>
+  item.current_contract?.status === 'admin_signed'
+  || documentStages.includes(item.workflow_stage)
+  || item.workflow_stage === 'client_update_requested',
+).length,
 }))
 
 function stageMeta(stage: string | null | undefined) {
@@ -38,13 +44,13 @@ async function load() {
 function contractActionLabel(item: any) {
   if (item.current_contract?.status === 'admin_signed') return t('clientRequests.actions.reviewContract')
   if (item.current_contract?.status === 'fully_signed') return t('clientRequests.actions.viewSignedRequest')
-  if (['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)) return t('clientRequests.actions.openDocuments')
+  if (documentStages.includes(item.workflow_stage)) return t('clientRequests.actions.openDocuments')
   return t('clientRequests.actions.viewDetails')
 }
 
 function contractActionRoute(item: any) {
   if (item.current_contract?.status === 'admin_signed') return { name: 'client-request-sign', params: { id: item.id } }
-  if (['document_collection', 'awaiting_additional_documents'].includes(item.workflow_stage)) return { name: 'client-request-documents', params: { id: item.id } }
+  if (documentStages.includes(item.workflow_stage)) return { name: 'client-request-documents', params: { id: item.id } }
   return { name: 'client-request-details', params: { id: item.id } }
 }
 

@@ -1,15 +1,35 @@
-export type ClientStageTone = 'slate' | 'blue' | 'amber' | 'purple' | 'green'
+export type ClientStageTone = 'slate' | 'blue' | 'amber' | 'purple' | 'green' | 'rose'
 
 const STAGE_META: Record<string, { label: string; tone: ClientStageTone }> = {
   questionnaire: { label: 'Questionnaire', tone: 'slate' },
-  review: { label: 'Under review', tone: 'blue' },
-  contract: { label: 'Contract stage', tone: 'purple' },
-  document_collection: { label: 'Upload documents', tone: 'amber' },
-  awaiting_additional_documents: { label: 'More documents requested', tone: 'amber' },
-  ready_for_processing: { label: 'Ready for processing', tone: 'blue' },
-  assigned_to_staff: { label: 'Assigned to staff', tone: 'blue' },
-  processing: { label: 'In processing', tone: 'green' },
+
+  review: { label: 'Processing', tone: 'blue' },
+  submitted_for_review: { label: 'Processing', tone: 'blue' },
+  admin_contract_preparation: { label: 'Processing', tone: 'blue' },
+
+  contract: { label: 'Signature', tone: 'purple' },
+  awaiting_client_signature: { label: 'Signature', tone: 'purple' },
+  awaiting_staff_assignment: { label: 'Processing', tone: 'blue' },
+
+  document_collection: { label: 'Document Collection', tone: 'amber' },
+  awaiting_additional_documents: { label: 'Document Collection', tone: 'amber' },
+  awaiting_client_documents: { label: 'Document Collection', tone: 'amber' },
+
+  client_update_requested: { label: 'Please Update', tone: 'amber' },
+
+  understudy: { label: 'Understudy', tone: 'blue' },
+  awaiting_staff_answers: { label: 'Understudy', tone: 'blue' },
+  awaiting_understudy_review: { label: 'Understudy', tone: 'blue' },
+
+  ready_for_processing: { label: 'Processing', tone: 'green' },
+  assigned_to_staff: { label: 'Processing', tone: 'green' },
+  awaiting_agent_assignment: { label: 'Processing', tone: 'green' },
+  processing: { label: 'Processing', tone: 'green' },
+
+  accepted: { label: 'Accepted', tone: 'green' },
   completed: { label: 'Completed', tone: 'green' },
+  rejected: { label: 'Rejected', tone: 'rose' },
+  blocked: { label: 'Blocked', tone: 'slate' },
 }
 
 function titleCase(value: string) {

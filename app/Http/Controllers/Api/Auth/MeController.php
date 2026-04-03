@@ -24,6 +24,7 @@ class MeController extends Controller
                     'name' => $role->name,
                 ])->values()->all(),
                 'permission_names' => $user->getAllPermissions()->pluck('name')->sort()->values()->all(),
+                'mailbox_settings' => $user->mailboxSettingsSummary(),
             ],
         ]);
     }

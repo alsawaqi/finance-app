@@ -13,6 +13,18 @@ export type ClientQuestion = {
   sort_order?: number | null
 }
 
+
+export type FinanceRequestTypeOption = {
+  id: number
+  slug: string
+  name_en: string
+  name_ar: string
+  description_en?: string | null
+  description_ar?: string | null
+  is_active: boolean
+  sort_order: number
+}
+
 export type ClientRequestSummary = {
   id: number
   reference_number: string
@@ -102,6 +114,7 @@ export type ClientRequestDetails = ClientRequestSummary & {
 export type ClientRequestWizardPayload = {
   answers: Array<{ question_id: number; value: unknown }>
   details: {
+      finance_request_type_id: number | ''
       country: string
       requested_amount: string | number
       finance_type: 'individual' | 'company'
@@ -128,7 +141,10 @@ export type ClientRequestWizardPayload = {
 }
 
 export async function getRequestQuestions() {
-  return api.get<{ questions: ClientQuestion[] }>('/api/client/request-questions')
+  return api.get<{
+    questions: ClientQuestion[]
+    finance_request_types: FinanceRequestTypeOption[]
+  }>('/api/client/request-questions')
 }
 
 export async function getClientRequests() {
@@ -154,6 +170,7 @@ export async function submitClientRequest(payload: ClientRequestWizardPayload) {
     }
   })
 
+  formData.append('details[finance_request_type_id]', String(payload.details.finance_request_type_id))
   formData.append('details[country]', payload.details.country)
   formData.append('details[requested_amount]', String(payload.details.requested_amount))
   formData.append('details[finance_type]', payload.details.finance_type)

@@ -14,6 +14,15 @@ type AuthUser = {
   email_verified_at: string | null
   roles?: AuthRole[]
   permission_names?: string[]
+  mailbox_settings?: {
+    sender_email?: string | null
+    sender_name?: string | null
+    smtp_username?: string | null
+    smtp_enabled?: boolean
+    smtp_verified_at?: string | null
+    has_smtp_password?: boolean
+    smtp_last_error?: string | null
+  }
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -37,6 +46,7 @@ export const useAuthStore = defineStore('auth', {
       return this.roleNames.includes('client')
     },
     isVerified: (state) => !!state.user?.email_verified_at,
+    hasVerifiedMailbox: (state) => !!(state.user?.mailbox_settings?.smtp_enabled && state.user?.mailbox_settings?.smtp_verified_at && state.user?.mailbox_settings?.has_smtp_password),
     dashboardRouteName(): string {
       if (this.isAdmin) return 'admin-dashboard'
       if (this.isStaff) return 'staff-requests'

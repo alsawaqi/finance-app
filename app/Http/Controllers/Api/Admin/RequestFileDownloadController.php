@@ -8,6 +8,8 @@ use App\Models\FinanceRequestShareholder;
 use App\Models\RequestAdditionalDocument;
 use App\Models\RequestAttachment;
 use App\Models\RequestDocumentUpload;
+use App\Models\RequestEmail;
+use App\Models\RequestEmailAttachment;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -60,6 +62,19 @@ class RequestFileDownloadController extends Controller
             disk: $additionalDocument->disk ?: 'public',
             path: $additionalDocument->file_path,
             filename: $additionalDocument->file_name ?: ($additionalDocument->title ?: 'additional-document'),
+        );
+    }
+
+    public function emailAttachment(Request $request, FinanceRequest $financeRequest, RequestEmail $requestEmail, RequestEmailAttachment $requestEmailAttachment): StreamedResponse
+    {
+        $this->authorizeRequestDownload($request->user(), $financeRequest);
+        abort_unless((int) $requestEmail->finance_request_id === (int) $financeRequest->id, 404);
+        abort_unless((int) $requestEmailAttachment->request_email_id === (int) $requestEmail->id, 404);
+
+        return $this->downloadStoredFile(
+            disk: $requestEmailAttachment->disk ?: 'public',
+            path: $requestEmailAttachment->file_path,
+            filename: $requestEmailAttachment->file_name ?: 'request-email-attachment',
         );
     }
 
