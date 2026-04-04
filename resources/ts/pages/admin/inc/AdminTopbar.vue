@@ -13,7 +13,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const { t } = useI18n()
 
-const displayName = computed(() => auth.user?.name || 'Admin User')
+const displayName = computed(() => auth.user?.name || t('adminSidebar.defaultUserName'))
 const displayEmail = computed(() => auth.user?.email || 'admin@finance.test')
 
 async function handleLogout() {

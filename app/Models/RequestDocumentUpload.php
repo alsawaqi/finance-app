@@ -48,6 +48,12 @@ class RequestDocumentUpload extends Model
         return $this->belongsTo(DocumentUploadStep::class, 'document_upload_step_id');
     }
 
+    // Backward-compatible alias used by eager loads like `documentUploads.step`.
+    public function step(): BelongsTo
+    {
+        return $this->documentUploadStep();
+    }
+
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');

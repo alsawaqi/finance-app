@@ -101,6 +101,12 @@ const selectedAgentOption = computed(() => agents.value.find((agent) => agent.id
 const mailboxReady = computed(() => Boolean(auth.user?.mailbox_settings?.smtp_enabled && auth.user?.mailbox_settings?.smtp_verified_at && auth.user?.mailbox_settings?.has_smtp_password))
 const canSendEmail = computed(() => Boolean(mailboxReady.value && canEmailAssignedAgents.value && selectedAgentId.value && emailSubject.value.trim() && selectedEmailDocumentKeys.value.length > 0))
 
+function localizedModelValue(entity: any, base: string, fallback = t('staffRequestDetails.states.emptyValue')) {
+  const ar = entity?.[`${base}_ar`]
+  const en = entity?.[`${base}_en`]
+  return locale.value === 'ar' ? (ar || en || fallback) : (en || ar || fallback)
+}
+
 const summaryStatItems = computed(() => [
   {
     label: 'Status',
@@ -118,14 +124,14 @@ const summaryStatItems = computed(() => [
     hint: requestItem.value?.client?.email || t('staffRequestDetails.states.emptyValue'),
   },
   {
-    label: 'Company name',
+    label: t('staffRequestDetails.summary.companyName'),
     value: requestItem.value?.company_name || requestItem.value?.intake_details_json?.company_name || t('staffRequestDetails.states.emptyValue'),
     hint: requestItem.value?.applicant_type || t('staffRequestDetails.states.emptyValue'),
   },
   {
-    label: 'Requested amount',
+    label: t('staffRequestDetails.summary.requestedAmount'),
     value: intakeRequestedAmount(requestItem.value?.intake_details_json),
-    hint: requestItem.value?.finance_request_type?.name_en || requestItem.value?.finance_request_type?.name_ar || `${uploadedRequiredCount.value}/${requiredDocuments.value.length} docs`,
+    hint: localizedModelValue(requestItem.value?.finance_request_type, 'name', `${uploadedRequiredCount.value}/${requiredDocuments.value.length} ${t('staffRequestDetails.summary.docs')}`),
   },
 ])
 
@@ -971,7 +977,7 @@ onMounted(load)
                       <div>
                         <strong>{{ email.subject }}</strong>
                         <p>From: {{ email.sender?.name || 'System' }} · {{ email.from_email || email.sender?.email || '—' }}</p>
-                        <p>To: {{ email.agents?.map((agent) => agent.name).join(', ') || '—' }}</p>
+                        <p>To: {{ email.agents?.map((agent: any) => agent.name).join(', ') || '—' }}</p>
                         <p v-if="email.body">{{ email.body }}</p>
                         <span>{{ email.attachments?.length || 0 }} attachment(s) · {{ email.sent_at ? new Date(email.sent_at).toLocaleString() : new Date(email.created_at || '').toLocaleString() }}</span>
                       </div>

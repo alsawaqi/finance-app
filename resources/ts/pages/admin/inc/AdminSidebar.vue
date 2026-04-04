@@ -18,7 +18,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const { t } = useI18n()
 
-const displayName = computed(() => auth.user?.name || 'Admin User')
+const displayName = computed(() => auth.user?.name || t('adminSidebar.defaultUserName'))
 const displayEmail = computed(() => auth.user?.email || 'admin@finance.test')
 
 const menuItems = computed(() => {
@@ -136,7 +136,7 @@ const menuItems = computed(() => {
       show: auth.can('manage agents'),
     },
     {
-      label: 'Inbox',
+      label: t('adminSidebar.menu.inbox'),
       icon: 'fas fa-envelope-open-text',
       to: { name: 'admin-inbox' },
       active: route.name === 'admin-inbox',

@@ -18,9 +18,9 @@ const { t, locale } = useI18n()
 const selectedQueue = ref<'all' | 'pending' | 'contract'>('all')
 
 const queueCards = computed(() => [
-  { key: 'all', label: 'All pre-assignment', value: queueSummary.value.all },
-  { key: 'pending', label: 'Pending review', value: queueSummary.value.pending },
-  { key: 'contract', label: 'Contract stage', value: queueSummary.value.contract },
+  { key: 'all', label: t('adminNewRequests.queue.allPreAssignment'), value: queueSummary.value.all },
+  { key: 'pending', label: t('adminNewRequests.queue.pendingReview'), value: queueSummary.value.pending },
+  { key: 'contract', label: t('adminNewRequests.queue.contractStage'), value: queueSummary.value.contract },
 ])
 
 function stageMeta(stage: string | null | undefined) {
@@ -93,7 +93,7 @@ onMounted(() => {
         <p class="eyebrow">{{ t('adminNewRequests.hero.eyebrow') }}</p>
         <h1>{{ t('adminNewRequests.hero.title') }}</h1>
         <p class="subtext">
-          Keep both the pending review queue and the contract queue visible here until the request is fully signed and ready for assignment.
+          {{ t('adminNewRequests.hero.subtitle') }}
         </p>
       </div>
 
@@ -134,7 +134,7 @@ onMounted(() => {
               <th>{{ t('adminNewRequests.table.requestedAmount') }}</th>
               <th>{{ t('adminNewRequests.table.financeType') }}</th>
               <th>{{ t('adminNewRequests.table.submitted') }}</th>
-              <th>Queue</th>
+              <th>{{ t('adminNewRequests.table.queue') }}</th>
               <th>{{ t('adminNewRequests.table.status') }}</th>
               <th></th>
             </tr>
@@ -160,8 +160,8 @@ onMounted(() => {
                 <span class="status-badge">
                   {{
                     ['admin_contract_preparation', 'contract', 'awaiting_client_signature'].includes(String(item.workflow_stage))
-                      ? 'Contract'
-                      : 'Pending'
+                      ? t('adminNewRequests.queue.contract')
+                      : t('adminNewRequests.queue.pending')
                   }}
                 </span>
               </td>

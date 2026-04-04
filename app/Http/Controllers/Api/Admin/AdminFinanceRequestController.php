@@ -313,7 +313,7 @@ class AdminFinanceRequestController extends Controller
             'currentContract',
             'contracts',
             'shareholders',
-            'documentUploads.step:id,title,description,required_for_stage,allowed_mime_types,max_file_size_kb',
+            'documentUploads.step:id,code,name,description,is_required,allowed_file_types_json,max_file_size_mb',
             'documentUploads.uploader:id,name,email',
             'documentUploads.reviewer:id,name,email',
             'additionalDocuments.requestedBy:id,name,email',
