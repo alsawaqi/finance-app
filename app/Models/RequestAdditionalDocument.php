@@ -52,7 +52,19 @@ class RequestAdditionalDocument extends Model
         return $this->belongsTo(User::class, 'requested_by');
     }
 
+    /** Alias for {@see requester()} — same as `requester`; use either name in eager loads. */
+    public function requestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
+
     public function uploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    /** Alias for {@see uploader()} — same as `uploader`; use either name in eager loads. */
+    public function uploadedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');
     }

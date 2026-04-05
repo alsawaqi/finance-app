@@ -323,8 +323,8 @@ class AdminFinanceRequestController extends Controller
             'documentUploads.step:id,code,name,description,is_required,allowed_file_types_json,max_file_size_mb',
             'documentUploads.uploader:id,name,email',
             'documentUploads.reviewer:id,name,email',
-            'additionalDocuments.requestedBy:id,name,email',
-            'additionalDocuments.uploadedBy:id,name,email',
+            'additionalDocuments.requester:id,name,email',
+            'additionalDocuments.uploader:id,name,email',
             'assignments' => fn ($query) => $query->with(['staff:id,name,email,phone', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
             'comments' => fn ($query) => $query->with('user:id,name,email')->latest('created_at'),
             'emails' => fn ($query) => $query->with([
