@@ -1,9 +1,12 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
-export type FilterStatusOption = {
+export type FilterStageOption = {
   value: string
   label: string
 }
+
+export type FilterStatusOption = FilterStageOption
 
 export type FilterStaffOption = {
   id: number
@@ -33,6 +36,9 @@ export type FilteredRequestItem = {
   id: number
   reference_number: string
   approval_reference_number?: string | null
+  company_name?: string | null
+  country_code?: string | null
+  intake_details_json?: Record<string, unknown> | null
   status: string
   workflow_stage: string
   submitted_at?: string | null
@@ -102,6 +108,9 @@ export type ClientOverviewRequest = {
   id: number
   reference_number: string
   approval_reference_number?: string | null
+  company_name?: string | null
+  country_code?: string | null
+  intake_details_json?: Record<string, unknown> | null
   status: string
   workflow_stage: string
   submitted_at?: string | null
@@ -121,14 +130,18 @@ export type ClientOverviewRequest = {
 }
 
 export async function getAdminRequestFilterData(params?: {
+  stage?: string
   status?: string
   staff_id?: number | null
   bank_id?: number | null
   agent_id?: number | null
+  page?: number
+  per_page?: number
 }) {
   const { data } = await api.get('/api/admin/request-filters', { params })
   return data as {
     filters: {
+      stages: FilterStageOption[]
       statuses: FilterStatusOption[]
       staff: FilterStaffOption[]
       banks: FilterBankOption[]
@@ -144,10 +157,16 @@ export async function getAdminRequestFilterData(params?: {
     bank_breakdown: FilterBreakdownBank[]
     agent_breakdown: FilterBreakdownAgent[]
     requests: FilteredRequestItem[]
+    pagination: PaginationMeta
   }
 }
 
-export async function getAdminClientsOverview(params?: { search?: string }) {
+export async function getAdminClientsOverview(params?: {
+  search?: string
+  state?: 'active' | 'inactive' | 'all'
+  page?: number
+  per_page?: number
+}) {
   const { data } = await api.get('/api/admin/clients-overview', { params })
   return data as {
     summary: {
@@ -156,11 +175,15 @@ export async function getAdminClientsOverview(params?: { search?: string }) {
       clients_with_active_requests: number
     }
     clients: ClientOverviewItem[]
+    pagination: PaginationMeta
   }
 }
 
-export async function getAdminClientRequests(clientId: number | string) {
-  const { data } = await api.get(`/api/admin/clients-overview/${clientId}/requests`)
+export async function getAdminClientRequests(
+  clientId: number | string,
+  params?: { page?: number; per_page?: number },
+) {
+  const { data } = await api.get(`/api/admin/clients-overview/${clientId}/requests`, { params })
   return data as {
     client: {
       id: number
@@ -169,5 +192,14 @@ export async function getAdminClientRequests(clientId: number | string) {
       phone?: string | null
     }
     requests: ClientOverviewRequest[]
+    pagination: PaginationMeta
+  }
+}
+
+export async function toggleAdminClientActive(clientId: number | string) {
+  const { data } = await api.patch(`/api/admin/clients-overview/${clientId}/toggle-active`)
+  return data as {
+    message: string
+    client: ClientOverviewItem
   }
 }

@@ -8,14 +8,30 @@ use App\Http\Requests\Admin\StoreRequestQuestionRequest;
 use App\Http\Requests\Admin\UpdateRequestQuestionRequest;
 use App\Models\RequestQuestion;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class RequestQuestionController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+        $paginator = RequestQuestion::query()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->paginate($perPage);
+
         return response()->json([
-            'data' => $this->serializeQuestions(),
+            'data' => collect($paginator->items())
+                ->map(fn (RequestQuestion $question) => $this->serializeQuestion($question))
+                ->values(),
+            'pagination' => $this->paginationMeta($paginator),
         ]);
     }
 
@@ -118,6 +134,18 @@ class RequestQuestionController extends Controller
             'is_active' => (bool) $question->is_active,
             'created_at' => optional($question->created_at)?->toISOString(),
             'updated_at' => optional($question->updated_at)?->toISOString(),
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 }

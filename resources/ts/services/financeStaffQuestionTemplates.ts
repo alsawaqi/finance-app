@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export type StaffQuestionType =
   | 'text'
@@ -48,8 +49,8 @@ export interface FinanceStaffQuestionTemplatePayload {
   is_active?: boolean
 }
 
-export async function listFinanceStaffQuestionTemplates() {
-  return api.get<{ data: FinanceStaffQuestionTemplateItem[] }>('/api/admin/staff-question-templates')
+export async function listFinanceStaffQuestionTemplates(params?: { page?: number; per_page?: number }) {
+  return api.get<{ data: FinanceStaffQuestionTemplateItem[]; pagination: PaginationMeta }>('/api/admin/staff-question-templates', { params })
 }
 
 export async function createFinanceStaffQuestionTemplate(payload: FinanceStaffQuestionTemplatePayload) {

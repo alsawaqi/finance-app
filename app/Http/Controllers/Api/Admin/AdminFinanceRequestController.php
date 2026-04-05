@@ -18,6 +18,7 @@ use App\Services\FinanceRequestWorkflowService;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class AdminFinanceRequestController extends Controller
@@ -33,9 +34,12 @@ class AdminFinanceRequestController extends Controller
     {
         $validated = $request->validate([
             'queue' => ['nullable', 'in:all,pending,contract'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
         ]);
 
         $queue = $validated['queue'] ?? 'all';
+        $perPage = (int) ($validated['per_page'] ?? 12);
 
         $pendingStages = [
             FinanceRequestWorkflowStage::QUESTIONNAIRE->value,
@@ -81,7 +85,7 @@ class AdminFinanceRequestController extends Controller
                 ->whereIn('workflow_stage', $contractStages);
         }
 
-        $requests = $baseQuery
+        $requestsPaginator = $baseQuery
             ->orderByRaw(
                 "CASE
                     WHEN workflow_stage = ? THEN 0
@@ -103,7 +107,9 @@ class AdminFinanceRequestController extends Controller
             )
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate($perPage);
+
+        $requests = collect($requestsPaginator->items())->values();
 
         $pendingCount = FinanceRequest::query()
             ->where('status', FinanceRequestStatus::SUBMITTED->value)
@@ -123,6 +129,7 @@ class AdminFinanceRequestController extends Controller
                 'contract' => $contractCount,
             ],
             'requests' => $requests,
+            'pagination' => $this->paginationMeta($requestsPaginator),
         ]);
     }
 
@@ -328,5 +335,17 @@ class AdminFinanceRequestController extends Controller
         ]);
 
         return $financeRequest;
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+        ];
     }
 }

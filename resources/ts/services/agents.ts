@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export interface AgentItem {
   id: number
@@ -30,8 +31,8 @@ export interface AgentPayload {
   is_active?: boolean
 }
 
-export async function listAgents() {
-  return api.get<{ data: AgentItem[] }>('/api/admin/agents')
+export async function listAgents(params?: { page?: number; per_page?: number }) {
+  return api.get<{ data: AgentItem[]; pagination: PaginationMeta }>('/api/admin/agents', { params })
 }
 
 export async function createAgent(payload: AgentPayload) {

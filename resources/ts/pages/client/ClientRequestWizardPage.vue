@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppFilePreviewModal from '@/components/AppFilePreviewModal.vue'
 import ClientQuestionField from './inc/ClientQuestionField.vue'
 import { useAuthStore } from '../../stores/auth'
 import {
@@ -17,10 +18,11 @@ import {
   saveClientRequestDraft,
   type ClientRequestWizardDraftPayload,
 } from '@/utils/clientRequestDraft'
+import { allCountryOptions } from '@/utils/countries'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -34,6 +36,9 @@ const attachments = ref<File[]>([])
 const nationalAddressAttachment = ref<File | null>(null)
 const companyCr = ref<File | null>(null)
 const shareholders = ref<Array<{ name: string; phone_country_code: string; phone_number: string; id_number: string; id_file: File | null }>>([])
+const uploadPreviewOpen = ref(false)
+const uploadPreviewTitle = ref('')
+const uploadPreviewFile = ref<File | null>(null)
 
 const fieldErrors = reactive<Record<string, string>>({})
 const generalError = ref('')
@@ -45,28 +50,7 @@ const skipDraftPersistenceOnUnmount = ref(false)
 let draftSaveTimeout: number | null = null
  
 
-const countryOptions = computed(() => [
-  { code: 'SA', value: 'Saudi Arabia', label: t('clientWizard.countries.sa') },
-  { code: 'OM', value: 'Oman', label: t('clientWizard.countries.om') },
-  { code: 'AE', value: 'United Arab Emirates', label: t('clientWizard.countries.ae') },
-  { code: 'KW', value: 'Kuwait', label: t('clientWizard.countries.kw') },
-  { code: 'QA', value: 'Qatar', label: t('clientWizard.countries.qa') },
-  { code: 'BH', value: 'Bahrain', label: t('clientWizard.countries.bh') },
-  { code: 'EG', value: 'Egypt', label: t('clientWizard.countries.eg') },
-  { code: 'JO', value: 'Jordan', label: t('clientWizard.countries.jo') },
-  { code: 'LB', value: 'Lebanon', label: t('clientWizard.countries.lb') },
-  { code: 'US', value: 'United States', label: t('clientWizard.countries.us') },
-  { code: 'GB', value: 'United Kingdom', label: t('clientWizard.countries.gb') },
-  { code: 'IN', value: 'India', label: t('clientWizard.countries.in') },
-  { code: 'PK', value: 'Pakistan', label: t('clientWizard.countries.pk') },
-  { code: 'BD', value: 'Bangladesh', label: t('clientWizard.countries.bd') },
-  { code: 'TR', value: 'Turkey', label: t('clientWizard.countries.tr') },
-  { code: 'DE', value: 'Germany', label: t('clientWizard.countries.de') },
-  { code: 'FR', value: 'France', label: t('clientWizard.countries.fr') },
-  { code: 'CN', value: 'China', label: t('clientWizard.countries.cn') },
-  { code: 'MY', value: 'Malaysia', label: t('clientWizard.countries.my') },
-  { code: 'SG', value: 'Singapore', label: t('clientWizard.countries.sg') },
-])
+const countryOptions = computed(() => allCountryOptions(locale.value))
 
 const phoneCodeOptions = computed(() => [
   { code: '+966', label: t('clientWizard.phoneCodes.sa') },
@@ -150,14 +134,116 @@ function clearErrors() {
   generalError.value = ''
 }
 
+function financeRequestTypeLabel(type: FinanceRequestTypeOption) {
+  const slug = String((type as any)?.slug || '').trim().toLowerCase()
+  const nameAr = String((type as any)?.name_ar || '').trim()
+  const nameEn = String((type as any)?.name_en || '').trim()
+  const descriptionAr = String((type as any)?.description_ar || '').trim()
+
+  if (locale.value === 'ar') {
+    return nameAr || descriptionAr || fallbackArabicLabelFromSlug(slug) || nameEn
+  }
+
+  return nameEn || nameAr || titleCaseSlug(slug)
+}
+
+function titleCaseSlug(slug: string) {
+  if (!slug) return ''
+  return slug
+    .split(/[_-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function fallbackArabicLabelFromSlug(slug: string) {
+  if (!slug) return ''
+
+  const directMap: Record<string, string> = {
+    home_finance: 'تمويل سكني',
+    personal_finance: 'تمويل شخصي',
+    business_finance: 'تمويل أعمال',
+    company_finance: 'تمويل شركات',
+    auto_finance: 'تمويل سيارة',
+    car_finance: 'تمويل سيارة',
+    mortgage: 'رهن عقاري',
+    real_estate_finance: 'تمويل عقاري',
+  }
+
+  if (directMap[slug]) return directMap[slug]
+
+  const tokenMap: Record<string, string> = {
+    home: 'سكني',
+    housing: 'سكني',
+    personal: 'شخصي',
+    business: 'أعمال',
+    company: 'شركات',
+    auto: 'سيارة',
+    car: 'سيارة',
+    vehicle: 'مركبة',
+    finance: 'تمويل',
+    loan: 'قرض',
+    mortgage: 'رهن',
+    real: 'عقار',
+    estate: 'عقاري',
+  }
+
+  const localizedParts = slug
+    .split(/[_-\s]+/)
+    .filter(Boolean)
+    .map((part) => tokenMap[part] || '')
+    .filter(Boolean)
+
+  if (!localizedParts.length) return ''
+
+  const hasFinanceWord = localizedParts.includes('تمويل')
+  const ordered = hasFinanceWord
+    ? localizedParts
+    : ['تمويل', ...localizedParts]
+
+  return ordered.join(' ').trim()
+}
+
+function digitsOnlyPhone(value: string) {
+  return value.replace(/\D/g, '')
+}
+
+function sanitizeWizardPhones() {
+  details.phone_number = digitsOnlyPhone(details.phone_number)
+  shareholders.value.forEach((s) => {
+    s.phone_number = digitsOnlyPhone(s.phone_number)
+  })
+}
+
+const FILE_INPUT_IDS = {
+  nationalAddress: 'wizard-file-national-address',
+  attachments: 'wizard-file-attachments',
+  companyCr: 'wizard-file-company-cr',
+} as const
+
+function resetFileInput(id: string) {
+  const el = document.getElementById(id) as HTMLInputElement | null
+  if (el) el.value = ''
+}
+
+function shareholderFileInputId(index: number) {
+  return `wizard-file-shareholder-${index}`
+}
+
+function triggerFilePick(id: string) {
+  document.getElementById(id)?.click()
+}
+
 function hydrateApplicantDefaults() {
   if (!details.email && auth.user?.email) {
     details.email = auth.user.email
   }
 
   if (!details.phone_number && auth.user?.phone) {
-    details.phone_number = auth.user.phone
+    details.phone_number = digitsOnlyPhone(String(auth.user.phone))
   }
+
+  details.phone_number = digitsOnlyPhone(details.phone_number)
 }
 
 function addShareholder() {
@@ -198,6 +284,9 @@ function resetWizardState() {
   nationalAddressAttachment.value = null
   companyCr.value = null
   shareholders.value = []
+  uploadPreviewOpen.value = false
+  uploadPreviewTitle.value = ''
+  uploadPreviewFile.value = null
 
   clearErrors()
   successMessage.value = ''
@@ -205,24 +294,93 @@ function resetWizardState() {
   hydrateApplicantDefaults()
 }
 
+function mergeAttachmentFiles(newFiles: File[]) {
+  const merged = [...attachments.value]
+  for (const f of newFiles) {
+    if (!merged.some((x) => x.name === f.name && x.size === f.size)) merged.push(f)
+  }
+  attachments.value = merged
+}
+
 function handleAttachments(event: Event) {
   const input = event.target as HTMLInputElement
-  attachments.value = Array.from(input.files || [])
+  mergeAttachmentFiles(Array.from(input.files || []))
+  input.value = ''
 }
 
 function handleNationalAddressAttachment(event: Event) {
   const input = event.target as HTMLInputElement
   nationalAddressAttachment.value = input.files?.[0] || null
+  input.value = ''
 }
 
 function handleCompanyCr(event: Event) {
   const input = event.target as HTMLInputElement
   companyCr.value = input.files?.[0] || null
+  input.value = ''
 }
 
 function handleShareholderFile(index: number, event: Event) {
   const input = event.target as HTMLInputElement
   shareholders.value[index].id_file = input.files?.[0] || null
+  input.value = ''
+}
+
+function onDropAttachments(event: DragEvent) {
+  event.preventDefault()
+  const list = event.dataTransfer?.files
+  if (!list?.length) return
+  mergeAttachmentFiles(Array.from(list))
+}
+
+function dropNationalAddressAttachment(event: DragEvent) {
+  event.preventDefault()
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) return
+  nationalAddressAttachment.value = file
+  resetFileInput(FILE_INPUT_IDS.nationalAddress)
+}
+
+function dropCompanyCrFile(event: DragEvent) {
+  event.preventDefault()
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) return
+  companyCr.value = file
+  resetFileInput(FILE_INPUT_IDS.companyCr)
+}
+
+function dropShareholderIdFile(index: number, event: DragEvent) {
+  event.preventDefault()
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) return
+  shareholders.value[index].id_file = file
+  resetFileInput(shareholderFileInputId(index))
+}
+
+function clearNationalAddressAttachment() {
+  nationalAddressAttachment.value = null
+  resetFileInput(FILE_INPUT_IDS.nationalAddress)
+}
+
+function clearCompanyCr() {
+  companyCr.value = null
+  resetFileInput(FILE_INPUT_IDS.companyCr)
+}
+
+function removeAttachment(index: number) {
+  attachments.value.splice(index, 1)
+}
+
+function clearShareholderIdFile(index: number) {
+  shareholders.value[index].id_file = null
+  resetFileInput(shareholderFileInputId(index))
+}
+
+function openUploadPreview(file: File | null, title: string) {
+  if (!file) return
+  uploadPreviewTitle.value = title
+  uploadPreviewFile.value = file
+  uploadPreviewOpen.value = true
 }
 
 function syncAnswersFromQuestions() {
@@ -270,6 +428,7 @@ function applyDraftToState(draft: ClientRequestWizardDraftPayload) {
   }))
 
   hydrateApplicantDefaults()
+  sanitizeWizardPhones()
   draftRestored.value = true
   draftMessage.value = t('clientWizard.draft.restoredWithFilesNotice')
   restoringDraft.value = false
@@ -679,7 +838,7 @@ onBeforeUnmount(() => {
                   <select v-model="details.finance_request_type_id" class="client-form-control">
                     <option value="">{{ t('clientWizard.placeholders.selectRequestType') }}</option>
                     <option v-for="type in financeRequestTypes" :key="type.id" :value="String(type.id)">
-                      {{ type.name_en }}
+                      {{ financeRequestTypeLabel(type) }}
                     </option>
                   </select>
                   <p v-if="fieldErrors['details.finance_request_type_id']" class="client-form-error">
@@ -702,8 +861,8 @@ onBeforeUnmount(() => {
                   <label class="client-form-label">{{ t('clientWizard.fields.country') }} <span class="client-required-mark">*</span></label>
                   <select v-model="details.country" class="client-form-control">
                     <option value="">{{ t('clientWizard.placeholders.selectCountry') }}</option>
-                    <option v-for="option in countryOptions" :key="option.code" :value="option.value">
-                      {{ option.label }}
+                    <option v-for="option in countryOptions" :key="option.code" :value="option.code">
+                      {{ `${option.label} (${option.code})` }}
                     </option>
                   </select>
                   <p v-if="fieldErrors['details.country']" class="client-form-error">{{ fieldErrors['details.country'] }}</p>
@@ -759,10 +918,14 @@ onBeforeUnmount(() => {
                       </option>
                     </select>
                     <input
-                      v-model="details.phone_number"
+                      :value="details.phone_number"
                       type="text"
+                      inputmode="numeric"
+                      autocomplete="tel-national"
+                      pattern="[0-9]*"
                       class="client-form-control"
                       :placeholder="t('clientWizard.placeholders.phoneNumber')"
+                      @input="details.phone_number = digitsOnlyPhone(($event.target as HTMLInputElement).value)"
                     />
                   </div>
                   <p v-if="fieldErrors['details.phone_country_code']" class="client-form-error">{{ fieldErrors['details.phone_country_code'] }}</p>
@@ -793,7 +956,45 @@ onBeforeUnmount(() => {
 
 <div class="client-form-group">
   <label class="client-form-label">{{ t('clientWizard.fields.nationalAddressAttachment') }} <span class="client-required-mark">*</span></label>
-  <input type="file" class="client-form-control" @change="handleNationalAddressAttachment" />
+  <div
+    class="client-upload-drop"
+    @dragover.prevent
+    @dragenter.prevent
+    @drop="dropNationalAddressAttachment"
+  >
+    <input
+      :id="FILE_INPUT_IDS.nationalAddress"
+      type="file"
+      class="client-file-input-hidden"
+      @change="handleNationalAddressAttachment"
+    />
+    <label :for="FILE_INPUT_IDS.nationalAddress" class="client-upload-drop__surface">
+      <span class="client-upload-drop__icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+      </span>
+      <span class="client-upload-drop__title">{{ t('clientWizard.upload.browse') }}</span>
+      <span class="client-upload-drop__hint">{{ t('clientWizard.upload.dragHint') }}</span>
+      <span class="client-upload-drop__formats">{{ t('clientWizard.upload.formatsHint') }}</span>
+    </label>
+  </div>
+  <div v-if="nationalAddressAttachment" class="client-upload-file-row">
+    <span class="client-upload-file-row__name" :title="nationalAddressAttachment.name">{{ nationalAddressAttachment.name }}</span>
+    <div class="client-upload-file-row__actions">
+      <button type="button" class="ghost-btn" @click="openUploadPreview(nationalAddressAttachment, t('clientWizard.fields.nationalAddressAttachment'))">
+        {{ t('clientWizard.actions.preview') }}
+      </button>
+      <button type="button" class="ghost-btn" @click="triggerFilePick(FILE_INPUT_IDS.nationalAddress)">
+        {{ t('clientWizard.upload.replace') }}
+      </button>
+      <button type="button" class="ghost-btn client-upload-file-row__remove" @click="clearNationalAddressAttachment">
+        {{ t('clientWizard.upload.remove') }}
+      </button>
+    </div>
+  </div>
   <p v-if="fieldErrors.national_address_attachment" class="client-form-error">{{ fieldErrors.national_address_attachment }}</p>
 </div>
 
@@ -831,7 +1032,40 @@ onBeforeUnmount(() => {
               <div class="client-form-grid">
                 <div class="client-form-group client-form-group--full">
                   <label class="client-form-label">{{ t('clientWizard.fields.initialAttachments') }}</label>
-                  <input type="file" class="client-form-control" multiple @change="handleAttachments" />
+                  <div class="client-upload-drop" @dragover.prevent @dragenter.prevent @drop="onDropAttachments">
+                    <input
+                      :id="FILE_INPUT_IDS.attachments"
+                      type="file"
+                      class="client-file-input-hidden"
+                      multiple
+                      @change="handleAttachments"
+                    />
+                    <label :for="FILE_INPUT_IDS.attachments" class="client-upload-drop__surface">
+                      <span class="client-upload-drop__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="17 8 12 3 7 8" />
+                          <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                      </span>
+                      <span class="client-upload-drop__title">{{ t('clientWizard.upload.browse') }}</span>
+                      <span class="client-upload-drop__hint">{{ t('clientWizard.upload.dragHint') }}</span>
+                      <span class="client-upload-drop__formats">{{ t('clientWizard.upload.multiHint') }}</span>
+                    </label>
+                  </div>
+                  <div v-if="attachments.length" class="client-request-stack client-upload-file-list">
+                    <div v-for="(file, index) in attachments" :key="`${file.name}-${index}`" class="client-upload-file-row">
+                      <span class="client-upload-file-row__name" :title="file.name">{{ file.name }}</span>
+                      <div class="client-upload-file-row__actions">
+                        <button type="button" class="ghost-btn" @click="openUploadPreview(file, t('clientWizard.fields.initialAttachments'))">
+                          {{ t('clientWizard.actions.preview') }}
+                        </button>
+                        <button type="button" class="ghost-btn client-upload-file-row__remove" @click="removeAttachment(index)">
+                          {{ t('clientWizard.upload.remove') }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   <p class="client-form-help">{{ t('clientWizard.help.initialAttachmentsOptional') }}</p>
                 </div>
 
@@ -848,7 +1082,45 @@ onBeforeUnmount(() => {
 
                 <div v-if="details.finance_type === 'company'" class="client-form-group client-form-group--full">
                   <label class="client-form-label">{{ t('clientWizard.fields.companyCr') }} <span class="client-required-mark">*</span></label>
-                  <input type="file" class="client-form-control" @change="handleCompanyCr" />
+                  <div
+                    class="client-upload-drop"
+                    @dragover.prevent
+                    @dragenter.prevent
+                    @drop="dropCompanyCrFile"
+                  >
+                    <input
+                      :id="FILE_INPUT_IDS.companyCr"
+                      type="file"
+                      class="client-file-input-hidden"
+                      @change="handleCompanyCr"
+                    />
+                    <label :for="FILE_INPUT_IDS.companyCr" class="client-upload-drop__surface">
+                      <span class="client-upload-drop__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="17 8 12 3 7 8" />
+                          <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                      </span>
+                      <span class="client-upload-drop__title">{{ t('clientWizard.upload.browse') }}</span>
+                      <span class="client-upload-drop__hint">{{ t('clientWizard.upload.dragHint') }}</span>
+                      <span class="client-upload-drop__formats">{{ t('clientWizard.upload.formatsHint') }}</span>
+                    </label>
+                  </div>
+                  <div v-if="companyCr" class="client-upload-file-row">
+                    <span class="client-upload-file-row__name" :title="companyCr.name">{{ companyCr.name }}</span>
+                    <div class="client-upload-file-row__actions">
+                      <button type="button" class="ghost-btn" @click="openUploadPreview(companyCr, t('clientWizard.fields.companyCr'))">
+                        {{ t('clientWizard.actions.preview') }}
+                      </button>
+                      <button type="button" class="ghost-btn" @click="triggerFilePick(FILE_INPUT_IDS.companyCr)">
+                        {{ t('clientWizard.upload.replace') }}
+                      </button>
+                      <button type="button" class="ghost-btn client-upload-file-row__remove" @click="clearCompanyCr">
+                        {{ t('clientWizard.upload.remove') }}
+                      </button>
+                    </div>
+                  </div>
                   <p v-if="fieldErrors.company_cr" class="client-form-error">{{ fieldErrors.company_cr }}</p>
                 </div>
               </div>
@@ -902,10 +1174,14 @@ onBeforeUnmount(() => {
                           </option>
                         </select>
                         <input
-                          v-model="shareholder.phone_number"
+                          :value="shareholder.phone_number"
                           type="text"
+                          inputmode="numeric"
+                          autocomplete="tel-national"
+                          pattern="[0-9]*"
                           class="client-form-control"
                           :placeholder="t('clientWizard.placeholders.shareholderPhoneNumber')"
+                          @input="shareholder.phone_number = digitsOnlyPhone(($event.target as HTMLInputElement).value)"
                         />
                       </div>
                       <p v-if="fieldErrors[`shareholders.${index}.phone_country_code`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.phone_country_code`] }}</p>
@@ -925,7 +1201,49 @@ onBeforeUnmount(() => {
 
                     <div class="client-form-group">
                       <label class="client-form-label">{{ t('clientWizard.fields.shareholderIdUpload') }} <span class="client-required-mark">*</span></label>
-                      <input type="file" class="client-form-control" @change="handleShareholderFile(index, $event)" />
+                      <div
+                        class="client-upload-drop"
+                        @dragover.prevent
+                        @dragenter.prevent
+                        @drop="dropShareholderIdFile(index, $event)"
+                      >
+                        <input
+                          :id="shareholderFileInputId(index)"
+                          type="file"
+                          class="client-file-input-hidden"
+                          @change="handleShareholderFile(index, $event)"
+                        />
+                        <label :for="shareholderFileInputId(index)" class="client-upload-drop__surface">
+                          <span class="client-upload-drop__icon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                              <polyline points="17 8 12 3 7 8" />
+                              <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                          </span>
+                          <span class="client-upload-drop__title">{{ t('clientWizard.upload.browse') }}</span>
+                          <span class="client-upload-drop__hint">{{ t('clientWizard.upload.dragHint') }}</span>
+                          <span class="client-upload-drop__formats">{{ t('clientWizard.upload.formatsHint') }}</span>
+                        </label>
+                      </div>
+                      <div v-if="shareholder.id_file" class="client-upload-file-row">
+                        <span class="client-upload-file-row__name" :title="shareholder.id_file.name">{{ shareholder.id_file.name }}</span>
+                        <div class="client-upload-file-row__actions">
+                          <button
+                            type="button"
+                            class="ghost-btn"
+                            @click="openUploadPreview(shareholder.id_file, t('clientWizard.fields.shareholderIdUpload'))"
+                          >
+                            {{ t('clientWizard.actions.preview') }}
+                          </button>
+                          <button type="button" class="ghost-btn" @click="triggerFilePick(shareholderFileInputId(index))">
+                            {{ t('clientWizard.upload.replace') }}
+                          </button>
+                          <button type="button" class="ghost-btn client-upload-file-row__remove" @click="clearShareholderIdFile(index)">
+                            {{ t('clientWizard.upload.remove') }}
+                          </button>
+                        </div>
+                      </div>
                       <p v-if="fieldErrors[`shareholders.${index}.id_file`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.id_file`] }}</p>
                     </div>
                   </div>
@@ -948,5 +1266,14 @@ onBeforeUnmount(() => {
         </template>
       </article>
     </section>
+
+    <AppFilePreviewModal
+      :model-value="uploadPreviewOpen"
+      @update:model-value="(value) => { uploadPreviewOpen = value }"
+      :title="uploadPreviewTitle || t('clientWizard.sections.supportingFiles')"
+      :file-name="uploadPreviewFile?.name || ''"
+      :mime-type="uploadPreviewFile?.type || ''"
+      :local-file="uploadPreviewFile"
+    />
   </div>
 </template>

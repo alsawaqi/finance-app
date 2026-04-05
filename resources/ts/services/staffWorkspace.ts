@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export type RequestAssignment = {
   id: number
@@ -132,6 +133,8 @@ export type StaffWorkspaceRequestSummary = {
   id: number
   reference_number: string
   approval_reference_number?: string | null
+  company_name?: string | null
+  country_code?: string | null
   status: string
   workflow_stage: string
   submitted_at?: string | null
@@ -291,9 +294,9 @@ export type RequestEmailLog = {
   }>
 }
 
-export async function getStaffRequests(params?: { search?: string; workflow_stage?: string }) {
+export async function getStaffRequests(params?: { search?: string; workflow_stage?: string; page?: number; per_page?: number }) {
   const { data } = await api.get('/api/staff/requests', { params })
-  return data as { requests: StaffWorkspaceRequestSummary[] }
+  return data as { requests: StaffWorkspaceRequestSummary[]; pagination: PaginationMeta }
 }
 
 export async function getStaffRequest(id: string | number) {
@@ -434,4 +437,12 @@ export function staffAttachmentDownloadUrl(requestId: string | number, attachmen
 
 export function staffShareholderIdDownloadUrl(requestId: string | number, shareholderId: string | number) {
   return `/api/admin/requests/${requestId}/shareholders/${shareholderId}/id-file/download`
+}
+
+export function staffRequestEmailAttachmentDownloadUrl(
+  requestId: string | number,
+  requestEmailId: string | number,
+  attachmentId: string | number,
+) {
+  return `/api/admin/requests/${requestId}/emails/${requestEmailId}/attachments/${attachmentId}/download`
 }

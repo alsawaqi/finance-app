@@ -7,7 +7,7 @@ import AppLocaleSelect from './AppLocaleSelect.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 if (!auth.initialized) {
   auth.init()
@@ -19,6 +19,10 @@ const isDashboardActive = computed(() => route.path.startsWith('/dashboard') || 
 
 function isActive(path: string) {
   return route.path === path
+}
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
 }
 
 defineProps<{
@@ -43,7 +47,7 @@ defineEmits<{
           <div class="main_header_logo">
             <figure>
               <RouterLink to="/">
-                <img src="/financer/assets/images/logo.png" alt="Companny Logo" />
+                <img src="/financer/assets/images/logo.png" :alt="uiText('Company Logo', 'شعار الشركة')" />
               </RouterLink>
             </figure>
           </div>
@@ -153,7 +157,7 @@ defineEmits<{
           <div class="main_header_logo">
             <figure>
               <RouterLink to="/">
-                <img src="/financer/assets/images/logo.png" alt="Companny Logo" />
+                <img src="/financer/assets/images/logo.png" :alt="uiText('Company Logo', 'شعار الشركة')" />
               </RouterLink>
             </figure>
           </div>
@@ -253,7 +257,9 @@ defineEmits<{
 
     <div class="mobile-menu" :class="{ 'mobile-menu-visible': mobileMenuOpen }">
       <div class="menu-backdrop" @click="$emit('close-mobile-menu')"></div>
-      <div class="close-btn" @click="$emit('close-mobile-menu')">X</div>
+      <button type="button" class="close-btn" :aria-label="uiText('Close menu', 'إغلاق القائمة')" @click="$emit('close-mobile-menu')">
+        ×
+      </button>
 
       <nav class="menu-box">
         <div class="nav-logo">
@@ -603,23 +609,6 @@ defineEmits<{
 .mobile-auth-btn-register:hover {
   color: #ffffff;
   box-shadow: 0 12px 24px rgba(37, 99, 235, 0.20);
-}
-
-:global(html[dir='rtl']) .auth-header-actions-wrap,
-:global(body[dir='rtl']) .auth-header-actions-wrap,
-:global(html[dir='rtl']) .auth-header-actions,
-:global(body[dir='rtl']) .auth-header-actions {
-  direction: rtl;
-}
-
-:global(html[dir='rtl']) .auth-header-actions,
-:global(body[dir='rtl']) .auth-header-actions {
-  margin-right: 0;
-}
-
-:global(html[dir='rtl']) .mobile-auth-actions,
-:global(body[dir='rtl']) .mobile-auth-actions {
-  direction: rtl;
 }
 
 @media (max-width: 1199px) {

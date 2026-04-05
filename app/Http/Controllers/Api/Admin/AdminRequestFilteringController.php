@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\FinanceRequestStatus;
+use App\Enums\FinanceRequestWorkflowStage;
 use App\Enums\UserAccountType;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
@@ -12,24 +13,35 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 
 class AdminRequestFilteringController extends Controller
 {
     public function requests(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'stage' => [
+                'nullable',
+                'string',
+                Rule::in(array_map(fn (FinanceRequestWorkflowStage $case) => $case->value, FinanceRequestWorkflowStage::cases())),
+            ],
             'status' => ['nullable', 'string'],
             'staff_id' => ['nullable', 'integer', 'exists:users,id'],
             'bank_id' => ['nullable', 'integer', 'exists:banks,id'],
             'agent_id' => ['nullable', 'integer', 'exists:agents,id'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
         ]);
 
         $staffId = isset($validated['staff_id']) ? (int) $validated['staff_id'] : null;
         $bankId = isset($validated['bank_id']) ? (int) $validated['bank_id'] : null;
         $agentId = isset($validated['agent_id']) ? (int) $validated['agent_id'] : null;
+        $stage = $validated['stage'] ?? null;
         $status = $validated['status'] ?? null;
+        $perPage = (int) ($validated['per_page'] ?? 15);
 
         if ($staffId && ($bankId || $agentId)) {
             return response()->json([
@@ -37,7 +49,7 @@ class AdminRequestFilteringController extends Controller
             ], 422);
         }
 
-        $requestCollection = FinanceRequest::query()
+        $baseQuery = FinanceRequest::query()
             ->with([
                 'client:id,name,email,phone',
                 'primaryStaff:id,name,email',
@@ -54,6 +66,7 @@ class AdminRequestFilteringController extends Controller
                     ]),
             ])
             ->withCount('emails')
+            ->when($stage, fn (Builder $query) => $query->where('workflow_stage', $stage))
             ->when($status, fn (Builder $query) => $query->where('status', $status))
             ->when($staffId, function (Builder $query) use ($staffId) {
                 $query->where(function (Builder $staffQuery) use ($staffId) {
@@ -79,18 +92,23 @@ class AdminRequestFilteringController extends Controller
             })
             ->orderByDesc('latest_activity_at')
             ->orderByDesc('submitted_at')
-            ->orderByDesc('id')
-            ->get();
+            ->orderByDesc('id');
+
+        $requestCollection = (clone $baseQuery)->get();
+        $requestsPaginator = (clone $baseQuery)->paginate($perPage);
 
         $bankBreakdown = $this->buildBankBreakdown($requestCollection);
         $agentBreakdown = $this->buildAgentBreakdown($requestCollection);
 
-        $requests = $requestCollection
+        $requests = collect($requestsPaginator->items())
             ->map(fn (FinanceRequest $financeRequest) => $this->transformRequest($financeRequest))
             ->values();
 
         return response()->json([
             'filters' => [
+                'stages' => collect(FinanceRequestWorkflowStage::cases())
+                    ->map(fn (FinanceRequestWorkflowStage $case) => ['value' => $case->value, 'label' => str_replace('_', ' ', $case->value)])
+                    ->values(),
                 'statuses' => collect(FinanceRequestStatus::cases())
                     ->map(fn (FinanceRequestStatus $case) => ['value' => $case->value, 'label' => str_replace('_', ' ', $case->value)])
                     ->values(),
@@ -108,6 +126,7 @@ class AdminRequestFilteringController extends Controller
             'bank_breakdown' => $bankBreakdown,
             'agent_breakdown' => $agentBreakdown,
             'requests' => $requests,
+            'pagination' => $this->paginationMeta($requestsPaginator),
         ]);
     }
 
@@ -115,11 +134,16 @@ class AdminRequestFilteringController extends Controller
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
+            'state' => ['nullable', Rule::in(['active', 'inactive', 'all'])],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
         ]);
 
         $search = trim((string) ($validated['search'] ?? ''));
+        $state = (string) ($validated['state'] ?? 'active');
+        $perPage = (int) ($validated['per_page'] ?? 15);
 
-        $clients = $this->clientsBaseQuery()
+        $clientsQuery = $this->clientsBaseQuery()
             ->withCount([
                 'financeRequests as requests_count',
                 'financeRequests as active_requests_count' => fn (Builder $query) => $query->whereNotIn('status', [
@@ -135,42 +159,58 @@ class AdminRequestFilteringController extends Controller
                         ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%");
                 });
-            })
+            });
+
+        if ($state === 'active') {
+            $clientsQuery->where('is_active', true);
+        } elseif ($state === 'inactive') {
+            $clientsQuery->where('is_active', false);
+        }
+
+        $clientsWithRequests = (clone $clientsQuery)
+            ->whereHas('financeRequests')
+            ->count();
+
+        $clientsWithActiveRequests = (clone $clientsQuery)
+            ->whereHas('financeRequests', fn (Builder $query) => $query->whereNotIn('status', [
+                FinanceRequestStatus::COMPLETED->value,
+                FinanceRequestStatus::CANCELLED->value,
+                FinanceRequestStatus::REJECTED->value,
+            ]))
+            ->count();
+
+        $clientsPaginator = (clone $clientsQuery)
             ->orderByDesc('requests_count')
             ->orderBy('name')
-            ->get()
-            ->map(function (User $client) {
-                $lastRequestAt = $client->financeRequests()->max('submitted_at');
+            ->paginate($perPage);
 
-                return [
-                    'id' => $client->id,
-                    'name' => $client->name,
-                    'email' => $client->email,
-                    'phone' => $client->phone,
-                    'is_active' => (bool) $client->is_active,
-                    'requests_count' => (int) $client->requests_count,
-                    'active_requests_count' => (int) $client->active_requests_count,
-                    'last_request_at' => $this->iso($lastRequestAt),
-                    'last_login_at' => optional($client->last_login_at)?->toISOString(),
-                ];
-            })
+        $clients = collect($clientsPaginator->items())
+            ->map(fn (User $client) => $this->serializeClient($client))
             ->values();
 
         return response()->json([
             'summary' => [
-                'total_clients' => $clients->count(),
-                'clients_with_requests' => $clients->where('requests_count', '>', 0)->count(),
-                'clients_with_active_requests' => $clients->where('active_requests_count', '>', 0)->count(),
+                'total_clients' => $clientsPaginator->total(),
+                'clients_with_requests' => $clientsWithRequests,
+                'clients_with_active_requests' => $clientsWithActiveRequests,
             ],
             'clients' => $clients,
+            'pagination' => $this->paginationMeta($clientsPaginator),
         ]);
     }
 
-    public function clientRequests(User $client): JsonResponse
+    public function clientRequests(Request $request, User $client): JsonResponse
     {
         abort_unless($this->isClient($client), 404, 'Client not found.');
 
-        $requests = $client->financeRequests()
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+
+        $requestsPaginator = $client->financeRequests()
             ->with([
                 'primaryStaff:id,name,email',
                 'assignments' => fn ($query) => $query
@@ -182,12 +222,17 @@ class AdminRequestFilteringController extends Controller
             ->withCount('emails')
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
-            ->get()
+            ->paginate($perPage);
+
+        $requests = collect($requestsPaginator->items())
             ->map(function (FinanceRequest $financeRequest) {
                 return [
                     'id' => $financeRequest->id,
                     'reference_number' => $financeRequest->reference_number,
                     'approval_reference_number' => $financeRequest->approval_reference_number,
+                    'company_name' => $financeRequest->company_name ?? data_get($financeRequest->intake_details_json, 'company_name'),
+                    'country_code' => $financeRequest->country_code,
+                    'intake_details_json' => $financeRequest->intake_details_json,
                     'status' => $financeRequest->status?->value ?? $financeRequest->status,
                     'workflow_stage' => $financeRequest->workflow_stage?->value ?? $financeRequest->workflow_stage,
                     'submitted_at' => optional($financeRequest->submitted_at)?->toISOString(),
@@ -219,6 +264,26 @@ class AdminRequestFilteringController extends Controller
                 'phone' => $client->phone,
             ],
             'requests' => $requests,
+            'pagination' => $this->paginationMeta($requestsPaginator),
+        ]);
+    }
+
+    public function toggleClientActive(User $client): JsonResponse
+    {
+        abort_unless($this->isClient($client), 404, 'Client not found.');
+
+        $client->update([
+            'is_active' => ! $client->is_active,
+        ]);
+
+        $freshClient = $client->fresh();
+        abort_unless($freshClient instanceof User, 404, 'Client not found.');
+
+        return response()->json([
+            'message' => $freshClient->is_active
+                ? 'Client account activated successfully.'
+                : 'Client account deactivated successfully.',
+            'client' => $this->serializeClient($freshClient),
         ]);
     }
 
@@ -258,6 +323,9 @@ class AdminRequestFilteringController extends Controller
             'id' => $financeRequest->id,
             'reference_number' => $financeRequest->reference_number,
             'approval_reference_number' => $financeRequest->approval_reference_number,
+            'company_name' => $financeRequest->company_name ?? data_get($financeRequest->intake_details_json, 'company_name'),
+            'country_code' => $financeRequest->country_code,
+            'intake_details_json' => $financeRequest->intake_details_json,
             'status' => $financeRequest->status?->value ?? $financeRequest->status,
             'workflow_stage' => $financeRequest->workflow_stage?->value ?? $financeRequest->workflow_stage,
             'submitted_at' => optional($financeRequest->submitted_at)?->toISOString(),
@@ -413,6 +481,35 @@ class AdminRequestFilteringController extends Controller
     private function isClient(User $user): bool
     {
         return $user->account_type === UserAccountType::CLIENT || $user->hasRole('client');
+    }
+
+    private function serializeClient(User $client): array
+    {
+        $lastRequestAt = $client->financeRequests()->max('submitted_at');
+
+        return [
+            'id' => $client->id,
+            'name' => $client->name,
+            'email' => $client->email,
+            'phone' => $client->phone,
+            'is_active' => (bool) $client->is_active,
+            'requests_count' => (int) ($client->requests_count ?? 0),
+            'active_requests_count' => (int) ($client->active_requests_count ?? 0),
+            'last_request_at' => $this->iso($lastRequestAt),
+            'last_login_at' => optional($client->last_login_at)?->toISOString(),
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+        ];
     }
 
     private function iso(mixed $value): ?string

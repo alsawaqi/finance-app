@@ -4,10 +4,12 @@ import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import AdminAgentBuilderForm from './inc/AdminAgentBuilderForm.vue'
 import AdminAgentLibraryTable from './inc/AdminAgentLibraryTable.vue'
+import AppPagination from '@/components/AppPagination.vue'
 import type { AgentItem, AgentPayload } from '@/services/agents'
 import { createAgent, listAgents, toggleAgentActive, updateAgent } from '@/services/agents'
 import type { BankItem } from '@/services/banks'
 import { listBanks } from '@/services/banks'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 
 type AgentForm = {
   id: number | null
@@ -22,6 +24,7 @@ type AgentForm = {
 }
 
 const rows = ref<AgentItem[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const banks = ref<BankItem[]>([])
 const isLoading = ref(false)
 const isLoadingBanks = ref(false)
@@ -36,7 +39,7 @@ const { t } = useI18n()
 const isEditing = computed(() => form.value.id !== null)
 const activeBanks = computed(() => banks.value.filter((bank) => bank.is_active))
 const stats = computed(() => {
-  const total = rows.value.length
+  const total = pagination.value.total
   const active = rows.value.filter((item) => item.is_active).length
   const linkedBanks = new Set(rows.value.map((item) => item.bank_id).filter((id): id is number => typeof id === 'number')).size
   const withoutBank = rows.value.filter((item) => !item.bank_id).length
@@ -78,13 +81,17 @@ function resetForm() {
   form.value = createDefaultForm()
 }
 
-async function fetchRows() {
+async function fetchRows(page = pagination.value.current_page) {
   isLoading.value = true
   formError.value = ''
 
   try {
-    const { data } = await listAgents()
+    const { data } = await listAgents({
+      page,
+      per_page: pagination.value.per_page,
+    })
     rows.value = data.data
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
   } catch (error) {
     formError.value = extractErrorMessage(error, t('adminAgentsPage.errors.loadFailed'))
   } finally {
@@ -96,7 +103,7 @@ async function fetchBanks() {
   isLoadingBanks.value = true
 
   try {
-    const { data } = await listBanks()
+    const { data } = await listBanks({ page: 1, per_page: 100 })
     banks.value = data.data
   } catch (error) {
     formError.value = extractErrorMessage(error, t('adminAgentsPage.errors.loadBanksFailed'))
@@ -204,7 +211,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       </div>
     </section>
 
-    <div class="admin-question-stats-grid admin-reveal-up admin-reveal-delay-1">
+    <div class="admin-question-stats-grid admin-question-stats-grid--balanced admin-reveal-up admin-reveal-delay-1">
       <article v-for="stat in stats" :key="stat.label" class="admin-question-stat" :class="`tone-${stat.tone}`">
         <strong>{{ stat.value }}</strong>
         <span>{{ stat.label }}</span>
@@ -256,6 +263,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       </section>
     </div>
 
-    <AdminAgentLibraryTable :rows="rows" :loading="isLoading" @edit="editRow" @toggle="toggleRow" />
+    <AdminAgentLibraryTable :rows="rows" :loading="isLoading" :total-count="pagination.total" @edit="editRow" @toggle="toggleRow" />
+    <AppPagination :pagination="pagination" :disabled="isLoading" @change="fetchRows" />
   </div>
 </template>

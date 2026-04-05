@@ -5,13 +5,17 @@ import { useI18n } from 'vue-i18n'
 import AppLocaleSelect from '@/pages/public/inc/AppLocaleSelect.vue'
  
 import { listClientRequests } from '@/services/clientPortal'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 import { intakeFinanceType, intakeRequestedAmount } from '@/utils/requestIntake'
 import { getClientWorkflowStageMeta } from '@/utils/clientRequestStage'
+import { formatDateOnly } from '@/utils/dateTime'
+import { formatRequestStatus } from '@/utils/requestStatus'
 
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<any[]>([])
-const { t } = useI18n()
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 100 })
+const { t, locale } = useI18n()
 
 const documentStages = ['document_collection', 'awaiting_additional_documents', 'awaiting_client_documents']
 const processingStages = ['review', 'submitted_for_review', 'admin_contract_preparation', 'awaiting_staff_assignment', 'ready_for_processing', 'assigned_to_staff', 'awaiting_agent_assignment', 'processing']
@@ -20,8 +24,12 @@ async function load() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const data = await listClientRequests()
+    const data = await listClientRequests({
+      page: 1,
+      per_page: pagination.value.per_page,
+    })
     requests.value = data.requests ?? []
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('clientDashboard.errors.loadSummary')
   } finally {
@@ -29,7 +37,7 @@ async function load() {
   }
 }
 
-const totalRequests = computed(() => requests.value.length)
+const totalRequests = computed(() => pagination.value.total)
 const awaitingSignature = computed(() => requests.value.filter((item) => item.current_contract?.status === 'admin_signed').length)
 
 const awaitingDocuments = computed(() => requests.value.filter((item) => documentStages.includes(item.workflow_stage)).length)
@@ -52,7 +60,7 @@ const kpis = computed(() => [
 const statusCards = computed(() => {
   const counts = new Map<string, number>()
   requests.value.forEach((item) => {
-    const key = item.status || t('clientDashboard.states.unknownStatus')
+    const key = formatRequestStatus(item.status, locale, t('clientDashboard.states.unknownStatus'))
     counts.set(key, (counts.get(key) ?? 0) + 1)
   })
   return Array.from(counts.entries()).map(([label, value]) => ({ label, value }))
@@ -63,6 +71,10 @@ const recentRequests = computed(() => {
     .sort((a, b) => new Date(b.latest_activity_at || b.submitted_at || 0).getTime() - new Date(a.latest_activity_at || a.submitted_at || 0).getTime())
     .slice(0, 4)
 })
+
+const actionableRequests = computed(() =>
+  recentRequests.value.filter((entry) => requestActionLabel(entry) !== t('clientDashboard.actions.viewRequest')),
+)
 
 function requestActionRoute(item: any) {
   if (item.current_contract?.status === 'admin_signed') {
@@ -150,7 +162,7 @@ onMounted(load)
           </div>
         </div>
         <div class="client-list">
-          <div v-for="item in recentRequests.filter((entry) => requestActionLabel(entry) !== t('clientDashboard.actions.viewRequest')).slice(0, 3)" :key="item.id" class="client-list-item">
+          <div v-for="item in actionableRequests.slice(0, 3)" :key="item.id" class="client-list-item">
             <div>
               <strong>{{ item.reference_number }}</strong>
               <div class="client-list-item__meta">
@@ -159,7 +171,7 @@ onMounted(load)
             </div>
             <RouterLink :to="requestActionRoute(item)" class="client-btn-secondary">{{ requestActionLabel(item) }}</RouterLink>
           </div>
-          <div v-if="!recentRequests.filter((entry) => requestActionLabel(entry) !== t('clientDashboard.actions.viewRequest')).length" class="client-empty-state client-empty-state--inner">
+          <div v-if="!actionableRequests.length" class="client-empty-state client-empty-state--inner">
             <h3>{{ t('clientDashboard.states.noPendingActions') }}</h3>
             <p class="client-muted">{{ t('clientDashboard.states.upToDate') }}</p>
           </div>
@@ -180,12 +192,12 @@ onMounted(load)
             <div class="client-card-head">
               <div>
                 <h3>{{ item.reference_number }}</h3>
-                <p class="client-meta">{{ intakeFinanceType(item.intake_details_json) }} · {{ intakeRequestedAmount(item.intake_details_json) }}</p>
+                <p class="client-meta">{{ intakeFinanceType(item.intake_details_json, t('clientDashboard.states.emptyValue'), locale) }} · {{ intakeRequestedAmount(item.intake_details_json) }}</p>
               </div>
               <span class="client-stage-badge" :class="stageMeta(item.workflow_stage).className">{{ stageMeta(item.workflow_stage).label }}</span>
             </div>
             <div class="client-row-between">
-              <span class="client-meta">{{ item.submitted_at ? new Date(item.submitted_at).toLocaleDateString() : t('clientDashboard.states.emptyDate') }}</span>
+              <span class="client-meta">{{ formatDateOnly(item.submitted_at, locale, t('clientDashboard.states.emptyDate')) }}</span>
               <RouterLink :to="requestActionRoute(item)" class="client-btn-secondary">{{ requestActionLabel(item) }}</RouterLink>
             </div>
           </article>

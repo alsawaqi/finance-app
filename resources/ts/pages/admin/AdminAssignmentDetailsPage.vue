@@ -23,6 +23,9 @@ import {
 } from '@/utils/requestIntake'
 import AdminQuickViewModal from './inc/AdminQuickViewModal.vue'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { buildTimelineRows, formatTimelineDate } from '@/utils/requestTimeline'
+import { formatContractStatus } from '@/utils/requestStatus'
+import { formatDateTime } from '@/utils/dateTime'
 
 const route = useRoute()
 
@@ -54,6 +57,12 @@ const activityCounts = computed(() => ({
   timeline: requestItem.value?.timeline?.length ?? 0,
   assignments: requestItem.value?.assignments?.length ?? 0,
 }))
+
+const timelineRows = computed(() => buildTimelineRows(requestItem.value?.timeline, locale.value))
+
+function timelineDateLabel(value: unknown) {
+  return formatTimelineDate(value, locale.value)
+}
 
 function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
@@ -162,7 +171,7 @@ onMounted(load)
       </div>
       <div class="actions-row">
         <RouterLink :to="{ name: 'admin-assignments' }" class="ghost-btn">{{ t('adminAssignmentDetails.hero.backToQueue') }}</RouterLink>
-        <RouterLink :to="requestDetailsTarget" class="ghost-btn">Back to request details</RouterLink>
+        <RouterLink :to="requestDetailsTarget" class="ghost-btn">{{ t('adminAssignmentDetails.hero.openRequestReview') }}</RouterLink>
       </div>
     </div>
 
@@ -184,12 +193,12 @@ onMounted(load)
         </article>
         <article class="admin-workspace-stat">
           <span>{{ t('adminAssignmentDetails.summary.country') }}</span>
-          <strong>{{ countryNameFromCode(intakeCountryCode(requestItem.intake_details_json), locale) }}</strong>
-          <small>{{ intakeFinanceType(requestItem.intake_details_json) }}</small>
+          <strong>{{ countryNameFromCode(requestItem.country_code || intakeCountryCode(requestItem.intake_details_json), locale) }}</strong>
+          <small>{{ intakeFinanceType(requestItem.intake_details_json, t('adminAssignmentDetails.states.emptyValue'), locale) }}</small>
         </article>
         <article class="admin-workspace-stat">
           <span>{{ t('adminAssignmentDetails.summary.amount') }}</span>
-          <strong>{{ intakeRequestedAmount(requestItem.intake_details_json) }}</strong>
+          <strong>{{ intakeRequestedAmount(requestItem.intake_details_json, t('adminAssignmentDetails.states.emptyValue'), true) }}</strong>
           <small>{{ stageMeta(requestItem.workflow_stage).label }}</small>
         </article>
       </div>
@@ -218,7 +227,44 @@ onMounted(load)
         </div>
       </article>
 
-      <div class="admin-workspace-layout admin-workspace-layout--compact-side">
+      <div class="request-top-panel-grid">
+        <article class="panel-card slim-card">
+          <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.contractSnapshot') }}</h2></div>
+          <div class="summary-grid summary-grid--tight">
+            <div><span>{{ t('adminAssignmentDetails.summary.version') }}</span><strong>{{ requestItem.current_contract?.version_no || t('adminAssignmentDetails.states.emptyValue') }}</strong></div>
+            <div><span>{{ t('adminAssignmentDetails.summary.status') }}</span><strong>{{ formatContractStatus(requestItem.current_contract?.status, locale, t('adminAssignmentDetails.states.emptyValue')) }}</strong></div>
+            <div><span>{{ t('adminAssignmentDetails.summary.adminSigned') }}</span><strong>{{ formatDateTime(requestItem.current_contract?.admin_signed_at, locale, t('adminAssignmentDetails.states.pending')) }}</strong></div>
+            <div><span>{{ t('adminAssignmentDetails.summary.clientSigned') }}</span><strong>{{ formatDateTime(requestItem.current_contract?.client_signed_at, locale, t('adminAssignmentDetails.states.pending')) }}</strong></div>
+          </div>
+        </article>
+
+        <article class="panel-card slim-card">
+          <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.applicantDetails') }}</h2></div>
+          <div class="summary-grid summary-grid--tight">
+            <div><span>{{ t('adminAssignmentDetails.summary.email') }}</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
+            <div><span>{{ t('adminAssignmentDetails.summary.phone') }}</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
+            <div><span>{{ t('adminAssignmentDetails.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
+            <div><span>{{ t('adminAssignmentDetails.summary.nationalAddressNo') }}</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
+          </div>
+          <div class="notes-box">
+            <span>{{ t('adminAssignmentDetails.summary.address') }}</span>
+            <p>{{ intakeAddress(requestItem.intake_details_json) }}</p>
+          </div>
+        </article>
+
+        <article class="panel-card slim-card request-top-panel--span-2">
+          <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.currentOwners') }}</h2></div>
+          <div v-if="requestItem.assignments?.length" class="assignment-chip-list assignment-chip-list--stacked">
+            <div v-for="assignment in requestItem.assignments" :key="assignment.id" class="assignment-chip">
+              <strong>{{ assignment.staff?.name || t('adminAssignmentDetails.states.staffMemberFallback') }}</strong>
+              <span>{{ assignment.is_primary ? t('adminAssignmentDetails.states.leadOwner') : assignment.assignment_role || t('adminAssignmentDetails.states.support') }}</span>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ t('adminAssignmentDetails.states.noStaffAssigned') }}</p>
+        </article>
+      </div>
+
+      <div class="admin-workspace-layout admin-workspace-layout--single">
         <div class="admin-workspace-main">
           <article class="panel-card wide-card action-card">
             <div class="panel-head">
@@ -272,42 +318,6 @@ onMounted(load)
           </article>
         </div>
 
-        <aside class="admin-workspace-side">
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.contractSnapshot') }}</h2></div>
-            <div class="summary-grid summary-grid--tight">
-              <div><span>{{ t('adminAssignmentDetails.summary.version') }}</span><strong>{{ requestItem.current_contract?.version_no || t('adminAssignmentDetails.states.emptyValue') }}</strong></div>
-              <div><span>{{ t('adminAssignmentDetails.summary.status') }}</span><strong>{{ requestItem.current_contract?.status || t('adminAssignmentDetails.states.emptyValue') }}</strong></div>
-              <div><span>{{ t('adminAssignmentDetails.summary.adminSigned') }}</span><strong>{{ requestItem.current_contract?.admin_signed_at ? new Date(requestItem.current_contract.admin_signed_at).toLocaleString() : t('adminAssignmentDetails.states.pending') }}</strong></div>
-              <div><span>{{ t('adminAssignmentDetails.summary.clientSigned') }}</span><strong>{{ requestItem.current_contract?.client_signed_at ? new Date(requestItem.current_contract.client_signed_at).toLocaleString() : t('adminAssignmentDetails.states.pending') }}</strong></div>
-            </div>
-          </article>
-
-          <article class="panel-card slim-card">
-  <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.applicantDetails') }}</h2></div>
-  <div class="summary-grid summary-grid--tight">
-    <div><span>{{ t('adminAssignmentDetails.summary.email') }}</span><strong>{{ intakeEmail(requestItem.intake_details_json) }}</strong></div>
-    <div><span>{{ t('adminAssignmentDetails.summary.phone') }}</span><strong>{{ intakePhoneDisplay(requestItem.intake_details_json) }}</strong></div>
-    <div><span>{{ t('adminAssignmentDetails.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(requestItem.intake_details_json) }}</strong></div>
-    <div><span>{{ t('adminAssignmentDetails.summary.nationalAddressNo') }}</span><strong>{{ intakeNationalAddressNumber(requestItem.intake_details_json) }}</strong></div>
-  </div>
-  <div class="notes-box">
-    <span>{{ t('adminAssignmentDetails.summary.address') }}</span>
-    <p>{{ intakeAddress(requestItem.intake_details_json) }}</p>
-  </div>
-</article>
-
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.currentOwners') }}</h2></div>
-            <div v-if="requestItem.assignments?.length" class="assignment-chip-list assignment-chip-list--stacked">
-              <div v-for="assignment in requestItem.assignments" :key="assignment.id" class="assignment-chip">
-                <strong>{{ assignment.staff?.name || t('adminAssignmentDetails.states.staffMemberFallback') }}</strong>
-                <span>{{ assignment.is_primary ? t('adminAssignmentDetails.states.leadOwner') : assignment.assignment_role || t('adminAssignmentDetails.states.support') }}</span>
-              </div>
-            </div>
-            <p v-else class="empty-state">{{ t('adminAssignmentDetails.states.noStaffAssigned') }}</p>
-          </article>
-        </aside>
       </div>
 
       <AdminQuickViewModal :model-value="quickView !== null" @update:model-value="(value) => { if (!value) quickView = null }" :title="quickView === 'answers' ? t('adminAssignmentDetails.modal.questionnaireAnswers') : quickView === 'comments' ? t('adminAssignmentDetails.modal.internalComments') : t('adminAssignmentDetails.modal.timeline')" :subtitle="t('adminAssignmentDetails.modal.subtitle')" wide>
@@ -323,17 +333,22 @@ onMounted(load)
           <div v-if="requestItem.comments?.length" v-for="comment in requestItem.comments" :key="comment.id" class="timeline-item">
             <strong>{{ comment.user?.name || t('adminAssignmentDetails.states.system') }}</strong>
             <p>{{ comment.comment_text }}</p>
-            <span>{{ new Date(comment.created_at).toLocaleString() }} · {{ comment.visibility }}</span>
+                    <span>{{ formatDateTime(comment.created_at, locale, t('adminAssignmentDetails.states.emptyValue')) }} · {{ comment.visibility }}</span>
           </div>
           <p v-else class="empty-state">{{ t('adminAssignmentDetails.states.noFollowUpComments') }}</p>
         </div>
 
         <div v-else class="timeline-list">
-          <div v-if="requestItem.timeline?.length" v-for="entry in requestItem.timeline" :key="entry.id" class="timeline-item">
-            <strong>{{ entry.event_title || entry.event_type }}</strong>
-            <p>{{ entry.event_description || t('adminAssignmentDetails.states.emptyValue') }}</p>
-            <span>{{ new Date(entry.created_at).toLocaleString() }}</span>
-          </div>
+          <template v-if="timelineRows.length">
+            <template v-for="(row, index) in timelineRows" :key="row.entry.id ?? `${row.entry.event_type ?? 'timeline'}-${index}`">
+              <div v-if="row.gapLabel" class="timeline-gap-indicator">{{ row.gapLabel }}</div>
+              <div class="timeline-item timeline-item--event">
+                <strong>{{ row.entry.event_title || row.entry.event_type }}</strong>
+                <p>{{ row.entry.event_description || t('adminAssignmentDetails.states.emptyValue') }}</p>
+                <span>{{ timelineDateLabel(row.entry.created_at) }}</span>
+              </div>
+            </template>
+          </template>
           <p v-else class="empty-state">{{ t('adminAssignmentDetails.states.noTimelineEvents') }}</p>
         </div>
       </AdminQuickViewModal>

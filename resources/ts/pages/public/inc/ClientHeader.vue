@@ -1,31 +1,34 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../../stores/auth'
+import AppNotificationBell from '@/components/AppNotificationBell.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { t, locale } = useI18n()
 
-const navItems = [
+const navItems = computed(() => [
   {
-    label: 'Dashboard',
+    label: t('clientHeader.dashboard'),
     to: { name: 'client-dashboard' },
     matches: ['client-dashboard'],
   },
   {
-    label: 'New Request',
+    label: t('clientHeader.newRequest'),
     to: { name: 'client-new-request' },
     matches: ['client-new-request'],
   },
   {
-    label: 'My Requests',
+    label: t('clientHeader.myRequests'),
     to: { name: 'client-requests' },
     matches: ['client-requests', 'client-request-details', 'client-request-sign', 'client-request-documents'],
   },
-]
+])
 
-const userName = computed(() => auth.user?.name || 'Abdallah')
+const userName = computed(() => auth.user?.name || t('clientHeader.defaultUserName'))
 const userInitials = computed(() => {
   return userName.value
     .split(' ')
@@ -37,6 +40,10 @@ const userInitials = computed(() => {
 
 function isNavActive(names: string[]) {
   return names.includes(String(route.name ?? ''))
+}
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
 }
 
 async function handleLogout() {
@@ -66,7 +73,7 @@ defineEmits<{
           <div class="main_header_logo">
             <figure>
               <RouterLink to="/">
-                <img src="/financer/assets/images/logo.png" alt="Company Logo" />
+                <img src="/financer/assets/images/logo.png" :alt="t('clientHeader.logoAlt')" />
               </RouterLink>
             </figure>
           </div>
@@ -98,20 +105,22 @@ defineEmits<{
               <i class="icon-50"></i>
             </button>
 
+            <AppNotificationBell theme="client" />
+
             <RouterLink :to="{ name: 'client-new-request' }" class="btn_style_one client-header-cta">
-              <span>Create Request</span>
+              <span>{{ t('clientHeader.createRequest') }}</span>
             </RouterLink>
 
             <button type="button" class="client-header-logout" @click="handleLogout">
               <i class="fas fa-sign-out-alt"></i>
-              <span>Logout</span>
+              <span>{{ t('clientHeader.logout') }}</span>
             </button>
 
             <div class="client-user-chip">
               <div class="client-user-chip__avatar">{{ userInitials }}</div>
               <div class="client-user-chip__text">
                 <strong>{{ userName }}</strong>
-                <span>Client Portal</span>
+                <span>{{ t('clientHeader.clientPortal') }}</span>
               </div>
             </div>
           </div>
@@ -125,7 +134,7 @@ defineEmits<{
           <div class="main_header_logo">
             <figure>
               <RouterLink :to="{ name: 'client-dashboard' }">
-                <img src="/financer/assets/images/logo.png" alt="Company Logo" />
+                <img src="/financer/assets/images/logo.png" :alt="t('clientHeader.logoAlt')" />
               </RouterLink>
             </figure>
           </div>
@@ -151,20 +160,22 @@ defineEmits<{
               <i class="icon-50"></i>
             </button>
 
+            <AppNotificationBell theme="client" />
+
             <RouterLink :to="{ name: 'client-new-request' }" class="btn_style_one client-header-cta">
-              <span>Create Request</span>
+              <span>{{ t('clientHeader.createRequest') }}</span>
             </RouterLink>
 
             <button type="button" class="client-header-logout" @click="handleLogout">
               <i class="fas fa-sign-out-alt"></i>
-              <span>Logout</span>
+              <span>{{ t('clientHeader.logout') }}</span>
             </button>
 
             <div class="client-user-chip client-user-chip--compact">
               <div class="client-user-chip__avatar">{{ userInitials }}</div>
               <div class="client-user-chip__text">
                 <strong>{{ userName }}</strong>
-                <span>Client Portal</span>
+                <span>{{ t('clientHeader.clientPortal') }}</span>
               </div>
             </div>
           </div>
@@ -174,7 +185,9 @@ defineEmits<{
 
     <div class="mobile-menu" :class="{ 'mobile-menu-visible': mobileMenuOpen }">
       <div class="menu-backdrop" @click="$emit('close-mobile-menu')"></div>
-      <div class="close-btn" @click="$emit('close-mobile-menu')">X</div>
+      <button type="button" class="close-btn" :aria-label="uiText('Close menu', 'إغلاق القائمة')" @click="$emit('close-mobile-menu')">
+        ×
+      </button>
 
       <nav class="menu-box">
         <div class="nav-logo">
@@ -184,12 +197,16 @@ defineEmits<{
         </div>
 
         <div class="mobile-client-cta-group">
+          <div class="mobile-client-notification">
+            <AppNotificationBell theme="client" />
+          </div>
+
           <RouterLink
             :to="{ name: 'client-new-request' }"
             class="mobile-client-cta"
             @click="$emit('close-mobile-menu')"
           >
-            Create Request
+            {{ t('clientHeader.createRequest') }}
           </RouterLink>
 
           <button
@@ -197,14 +214,14 @@ defineEmits<{
             class="mobile-client-logout"
             @click="handleLogout"
           >
-            Logout
+            {{ t('clientHeader.logout') }}
           </button>
 
           <div class="mobile-client-user">
             <div class="client-user-chip__avatar">{{ userInitials }}</div>
             <div>
               <strong>{{ userName }}</strong>
-              <span>Client Portal</span>
+              <span>{{ t('clientHeader.clientPortal') }}</span>
             </div>
           </div>
         </div>
@@ -222,9 +239,9 @@ defineEmits<{
         </div>
 
         <div class="contact-info">
-          <h4>Client Help Desk</h4>
+          <h4>{{ t('clientHeader.helpDesk') }}</h4>
           <ul>
-            <li>Track requests, sign contracts, and upload documents only when requested.</li>
+            <li>{{ t('clientHeader.helpDeskText') }}</li>
             <li><a href="tel:+96600000000">+966 0000 0000</a></li>
             <li><a href="mailto:support@example.com">support@example.com</a></li>
           </ul>

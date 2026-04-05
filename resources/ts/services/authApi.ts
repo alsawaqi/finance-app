@@ -30,11 +30,25 @@ export function login(payload: { email: string; password: string; remember?: boo
 export function register(payload: {
   name: string
   email: string
+  phone_country_code?: string
   phone?: string
   password: string
   password_confirmation: string
 }) {
   return api.post('/api/auth/register', payload)
+}
+
+export function forgotPassword(payload: { email: string }) {
+  return api.post('/api/auth/forgot-password', payload)
+}
+
+export function resetPassword(payload: {
+  token: string
+  email: string
+  password: string
+  password_confirmation: string
+}) {
+  return api.post('/api/auth/reset-password', payload)
 }
 
 export function logout() {

@@ -142,13 +142,13 @@ function onChange(event: Event) {
 }
 
 .app-locale-select__icon {
-  left: 16px;
+  inset-inline-start: 16px;
   color: #475569;
   font-size: 14px;
 }
 
 .app-locale-select__chevron {
-  right: 16px;
+  inset-inline-end: 16px;
   color: #94a3b8;
   font-size: 13px;
 }
@@ -168,7 +168,8 @@ function onChange(event: Event) {
   letter-spacing: 0.01em;
   cursor: pointer;
   appearance: none;
-  padding: 0 42px 0 44px;
+  padding-inline-start: 44px;
+  padding-inline-end: 42px;
 }
 
 .app-locale-select--admin .app-locale-select__control {
@@ -179,23 +180,6 @@ function onChange(event: Event) {
 .app-locale-select__control option {
   color: #0f172a;
   font-weight: 700;
-}
-
-:global(html[dir='rtl']) .app-locale-select__icon,
-:global(body[dir='rtl']) .app-locale-select__icon {
-  left: auto;
-  right: 16px;
-}
-
-:global(html[dir='rtl']) .app-locale-select__chevron,
-:global(body[dir='rtl']) .app-locale-select__chevron {
-  right: auto;
-  left: 16px;
-}
-
-:global(html[dir='rtl']) .app-locale-select__control,
-:global(body[dir='rtl']) .app-locale-select__control {
-  padding: 0 44px 0 42px;
 }
 
 @media (max-width: 575px) {

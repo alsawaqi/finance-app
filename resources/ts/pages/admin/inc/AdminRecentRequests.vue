@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { formatRequestStatus } from '@/utils/requestStatus'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 
 type RequestRow = {
   code: string
@@ -13,7 +15,15 @@ defineProps<{
   rows: RequestRow[]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+function statusLabel(value: string | null | undefined) {
+  return formatRequestStatus(value, locale, '-')
+}
+
+function stageLabel(value: string | null | undefined) {
+  return getRequestWorkflowStageMeta(value).label
+}
 </script>
 
 <template>
@@ -42,8 +52,8 @@ const { t } = useI18n()
             <td><strong>{{ row.code }}</strong></td>
             <td>{{ row.client }}</td>
             <td>{{ row.type }}</td>
-            <td><span class="admin-status-pill">{{ row.status }}</span></td>
-            <td>{{ row.stage }}</td>
+            <td><span class="admin-status-pill">{{ statusLabel(row.status) }}</span></td>
+            <td>{{ stageLabel(row.stage) }}</td>
           </tr>
         </tbody>
       </table>

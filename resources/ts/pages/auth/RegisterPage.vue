@@ -14,11 +14,14 @@ const form = ref({
   firstName: '',
   lastName: '',
   email: '',
-  phone: '',
+  phoneCountryCode: '+966',
+  phoneNumber: '',
   password: '',
   confirmPassword: '',
   agree: true,
 })
+
+const countryCodeOptions = ['+966', '+971', '+965', '+973', '+974', '+968', '+20', '+962', '+1', '+44']
 
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
@@ -34,6 +37,10 @@ function resetErrors() {
 
 function firstFieldError(field: string) {
   return fieldErrors.value[field]?.[0] ?? ''
+}
+
+function digitsOnlyPhone(value: string) {
+  return value.replace(/\D/g, '')
 }
 
 async function submitRegister() {
@@ -55,7 +62,8 @@ async function submitRegister() {
     await auth.register({
       name: fullName,
       email: form.value.email,
-      phone: form.value.phone || undefined,
+      phone_country_code: form.value.phoneNumber ? form.value.phoneCountryCode : undefined,
+      phone: form.value.phoneNumber || undefined,
       password: form.value.password,
       password_confirmation: form.value.confirmPassword,
     })
@@ -154,20 +162,42 @@ async function submitRegister() {
                       <small v-if="firstFieldError('email')" class="auth-field-error">{{ firstFieldError('email') }}</small>
                     </div>
 
-                    <div class="auth-field">
-                      <label for="register-phone">{{ t('authRegister.form.phoneLabel') }}</label>
-                      <div class="auth-input-wrap">
-                        <i class="fas fa-phone-alt"></i>
-                        <input
-                          id="register-phone"
-                          v-model="form.phone"
-                          type="tel"
-                          class="auth-input"
-                          :class="{ 'auth-input--error': firstFieldError('phone') }"
-                          :placeholder="t('authRegister.form.phonePlaceholder')"
-                          autocomplete="tel"
-                        />
+                    <div class="auth-field auth-field--phone">
+                      <label for="register-phone-number">{{ t('authRegister.form.phoneNumberLabel') }}</label>
+                      <div class="auth-grid auth-grid--phone">
+                        <div class="auth-input-wrap">
+                          <i class="fas fa-globe"></i>
+                          <select
+                            id="register-phone-country"
+                            v-model="form.phoneCountryCode"
+                            class="auth-select"
+                            :class="{ 'auth-input--error': firstFieldError('phone_country_code') }"
+                          >
+                            <option v-for="code in countryCodeOptions" :key="code" :value="code">
+                              {{ code }}
+                            </option>
+                          </select>
+                        </div>
+
+                        <div class="auth-input-wrap">
+                          <i class="fas fa-phone-alt"></i>
+                          <input
+                            id="register-phone-number"
+                            :value="form.phoneNumber"
+                            type="tel"
+                            inputmode="numeric"
+                            autocomplete="tel-national"
+                            pattern="[0-9]*"
+                            class="auth-input"
+                            :class="{ 'auth-input--error': firstFieldError('phone') }"
+                            :placeholder="t('authRegister.form.phoneNumberPlaceholder')"
+                            @input="form.phoneNumber = digitsOnlyPhone(($event.target as HTMLInputElement).value)"
+                          />
+                        </div>
                       </div>
+                      <small v-if="firstFieldError('phone_country_code')" class="auth-field-error">
+                        {{ firstFieldError('phone_country_code') }}
+                      </small>
                       <small v-if="firstFieldError('phone')" class="auth-field-error">{{ firstFieldError('phone') }}</small>
                     </div>
                   </div>
@@ -251,3 +281,15 @@ async function submitRegister() {
     </section>
   </AuthPageShell>
 </template>
+
+<style scoped>
+.auth-grid--phone {
+  grid-template-columns: minmax(112px, 0.85fr) minmax(0, 1.15fr);
+}
+
+@media (max-width: 767px) {
+  .auth-grid--phone {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

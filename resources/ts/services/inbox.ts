@@ -49,6 +49,7 @@ export async function listInboxMessages(
     only_unread?: boolean
     search?: string
     page?: number
+    per_page?: number
   },
 ) {
   const url = isAdmin ? '/api/admin/inbox' : '/api/staff/inbox'
@@ -60,6 +61,8 @@ export async function listInboxMessages(
       last_page: number
       per_page: number
       total: number
+      from: number | null
+      to: number | null
     }
     staff_users?: InboxStaffUser[]
   }

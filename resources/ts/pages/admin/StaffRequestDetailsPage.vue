@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -28,15 +28,26 @@ import {
   type StaffStudyQuestion,
 } from '@/services/staffWorkspace'
 import {
+  applicantTypeLabel,
+  intakeFinanceType,
   intakeFullName,
   intakeRequestedAmount,
 } from '@/utils/requestIntake'
+import AppFilePreviewModal from '@/components/AppFilePreviewModal.vue'
+import { buildPreviewUrl } from '@/utils/filePreview'
+import AdminQuickViewModal from './inc/AdminQuickViewModal.vue'
 import RequestAnswersList from './inc/RequestAnswersList.vue'
 import RequestSummaryStatGrid from './inc/RequestSummaryStatGrid.vue'
 import RequestWorkspaceShell from './inc/RequestWorkspaceShell.vue'
 import RequestCoreDetailsCard from './inc/RequestCoreDetailsCard.vue'
-import RequestRelatedCollectionsCard from './inc/RequestRelatedCollectionsCard.vue'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import {
+  formatAdditionalDocumentStatus,
+  formatEmailDeliveryStatus,
+  formatRequestStatus,
+  formatUnderstudyStatus,
+} from '@/utils/requestStatus'
+import { formatDateTime } from '@/utils/dateTime'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -77,7 +88,27 @@ const emailSubject = ref('')
 const emailBody = ref('')
 const selectedEmailDocumentKeys = ref<string[]>([])
 const sendingEmail = ref(false)
+const recipientPickerOpen = ref(false)
+const attachmentPickerOpen = ref(false)
+const emailEditorRef = ref<HTMLElement | null>(null)
+const emailEditorFocused = ref(false)
+const quickView = ref<'updateBatch' | 'attachments' | 'shareholders' | 'answers' | 'comments' | 'additionalDocuments' | null>(null)
 const { t, locale } = useI18n()
+const filePreviewOpen = ref(false)
+const filePreviewName = ref('')
+const filePreviewMime = ref('')
+const filePreviewUrl = ref('')
+const fileDownloadUrl = ref('')
+
+function openFilePreview(fileName: string | null | undefined, downloadUrl: string, mimeType?: string | null) {
+  const targetUrl = String(downloadUrl || '').trim()
+  if (!targetUrl) return
+  filePreviewName.value = String(fileName || t('staffRequestDetails.states.emptyValue'))
+  filePreviewMime.value = String(mimeType || '')
+  fileDownloadUrl.value = targetUrl
+  filePreviewUrl.value = buildPreviewUrl(targetUrl)
+  filePreviewOpen.value = true
+}
 
 const uploadedRequiredCount = computed(() => requiredDocuments.value.filter((item) => item.is_uploaded).length)
 const pendingRequiredCount = computed(() => requiredDocuments.value.filter((item) => !item.is_uploaded).length)
@@ -98,8 +129,50 @@ const emailComposerVisible = computed(() =>
   || hasEmailAssignments.value,
 )
 const selectedAgentOption = computed(() => agents.value.find((agent) => agent.id === selectedAgentId.value) ?? null)
+const selectedBankOption = computed(() => banks.value.find((bank) => bank.id === selectedBankId.value) ?? null)
 const mailboxReady = computed(() => Boolean(auth.user?.mailbox_settings?.smtp_enabled && auth.user?.mailbox_settings?.smtp_verified_at && auth.user?.mailbox_settings?.has_smtp_password))
-const canSendEmail = computed(() => Boolean(mailboxReady.value && canEmailAssignedAgents.value && selectedAgentId.value && emailSubject.value.trim() && selectedEmailDocumentKeys.value.length > 0))
+const canComposeEmail = computed(() => Boolean(mailboxReady.value && canEmailAssignedAgents.value && selectedAgentId.value))
+const selectedEmailAttachments = computed(() =>
+  (allowedEmailDocuments.value ?? []).filter((document) => selectedEmailDocumentKeys.value.includes(document.key)),
+)
+const emailBodyTextLength = computed(() => stripHtml(emailBody.value).trim().length)
+const canSendEmail = computed(() => Boolean(
+  canComposeEmail.value
+  && emailSubject.value.trim()
+  && selectedEmailDocumentKeys.value.length > 0
+  && emailBodyTextLength.value > 0,
+))
+const activityCounts = computed(() => ({
+  attachments: requestItem.value?.attachments?.length ?? 0,
+  shareholders: requestItem.value?.shareholders?.length ?? 0,
+  answers: requestItem.value?.answers?.length ?? 0,
+  comments: requestItem.value?.comments?.length ?? 0,
+  additionalDocuments: requestItem.value?.additional_documents?.length ?? 0,
+  emails: requestItem.value?.emails?.length ?? 0,
+}))
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
+}
+
+const quickViewTitle = computed(() => {
+  switch (quickView.value) {
+    case 'updateBatch':
+      return uiText('Client update batch', 'دفعة تحديث العميل')
+    case 'attachments':
+      return t('staffRequestDetails.sections.initialUploadedFilesTitle')
+    case 'shareholders':
+      return t('staffRequestDetails.sections.shareholdersTitle')
+    case 'answers':
+      return t('staffRequestDetails.sections.questionnaireAnswers')
+    case 'comments':
+      return t('staffRequestDetails.sections.recentInternalHistory')
+    case 'additionalDocuments':
+      return t('staffRequestDetails.sections.requestedAdditionalDocuments')
+    default:
+      return uiText('Workspace details', 'تفاصيل مساحة العمل')
+  }
+})
 
 function localizedModelValue(entity: any, base: string, fallback = t('staffRequestDetails.states.emptyValue')) {
   const ar = entity?.[`${base}_ar`]
@@ -109,8 +182,8 @@ function localizedModelValue(entity: any, base: string, fallback = t('staffReque
 
 const summaryStatItems = computed(() => [
   {
-    label: 'Status',
-    value: requestItem.value?.status || t('staffRequestDetails.states.emptyValue'),
+    label: uiText('Status', 'الحالة'),
+    value: formatRequestStatus(requestItem.value?.status, locale, t('staffRequestDetails.states.emptyValue')),
     hint: requestItem.value?.reference_number || '—',
   },
   {
@@ -126,12 +199,16 @@ const summaryStatItems = computed(() => [
   {
     label: t('staffRequestDetails.summary.companyName'),
     value: requestItem.value?.company_name || requestItem.value?.intake_details_json?.company_name || t('staffRequestDetails.states.emptyValue'),
-    hint: requestItem.value?.applicant_type || t('staffRequestDetails.states.emptyValue'),
+    hint: applicantTypeLabel(requestItem.value?.applicant_type, locale, t('staffRequestDetails.states.emptyValue')),
   },
   {
     label: t('staffRequestDetails.summary.requestedAmount'),
-    value: intakeRequestedAmount(requestItem.value?.intake_details_json),
-    hint: localizedModelValue(requestItem.value?.finance_request_type, 'name', `${uploadedRequiredCount.value}/${requiredDocuments.value.length} ${t('staffRequestDetails.summary.docs')}`),
+    value: intakeRequestedAmount(requestItem.value?.intake_details_json, t('staffRequestDetails.states.emptyValue'), true),
+    hint: localizedModelValue(
+      requestItem.value?.finance_request_type,
+      'name',
+      `${intakeFinanceType(requestItem.value?.intake_details_json, t('staffRequestDetails.states.emptyValue'), locale)} · ${uploadedRequiredCount.value}/${requiredDocuments.value.length} ${t('staffRequestDetails.summary.docs')}`,
+    ),
   },
 ])
 
@@ -141,11 +218,11 @@ function stageMeta(stage: string | null | undefined) {
 
 function updateStatusLabel(status: string | null | undefined) {
   const key = String(status || '').toLowerCase()
-  if (key === 'updated') return 'Submitted for review'
-  if (key === 'approved') return 'Approved'
-  if (key === 'rejected') return 'Rejected'
-  if (key === 'pending') return 'Waiting for client'
-  return key || 'Unknown'
+  if (key === 'updated') return uiText('Submitted for review', 'تم الإرسال للمراجعة')
+  if (key === 'approved') return uiText('Approved', 'تمت الموافقة')
+  if (key === 'rejected') return uiText('Rejected', 'مرفوض')
+  if (key === 'pending') return uiText('Waiting for client', 'بانتظار العميل')
+  return key || uiText('Unknown', 'غير معروف')
 }
 
 function updateStatusClass(status: string | null | undefined) {
@@ -238,15 +315,15 @@ function studyAnswerTextValue(questionId: number) {
 
 function studyQuestionTitle(question: StaffStudyQuestion) {
   return locale.value === 'ar'
-    ? (question.question_text_ar || question.template?.question_text_ar || question.question_text_en || question.template?.question_text_en || 'Study question')
-    : (question.question_text_en || question.template?.question_text_en || question.question_text_ar || question.template?.question_text_ar || 'Study question')
+    ? (question.question_text_ar || question.template?.question_text_ar || question.question_text_en || question.template?.question_text_en || uiText('Study question', 'سؤال الدراسة'))
+    : (question.question_text_en || question.template?.question_text_en || question.question_text_ar || question.template?.question_text_ar || uiText('Study question', 'سؤال الدراسة'))
 }
 
 function studyQuestionStatusLabel(question: StaffStudyQuestion) {
   const key = String(question.status || '').toLowerCase()
-  if (key === 'closed') return 'Reviewed'
-  if (key === 'answered') return 'Saved'
-  return 'Pending'
+  if (key === 'closed') return uiText('Reviewed', 'تمت المراجعة')
+  if (key === 'answered') return uiText('Saved', 'تم الحفظ')
+  return uiText('Pending', 'قيد الانتظار')
 }
 
 function studyQuestionStatusClass(question: StaffStudyQuestion) {
@@ -281,9 +358,9 @@ async function saveStudyQuestionAnswer(question: StaffStudyQuestion) {
     requiredDocuments.value = data.required_documents ?? requiredDocuments.value
     staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
     syncUnderstudyLocalState()
-    successMessage.value = data.message || 'Study answer saved successfully.'
+    successMessage.value = data.message || uiText('Study answer saved successfully.', 'تم حفظ إجابة الدراسة بنجاح.')
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to save the study answer.'
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to save the study answer.', 'تعذر حفظ إجابة الدراسة.')
   } finally {
     savingStudyAnswer.value[question.id] = false
   }
@@ -304,9 +381,9 @@ async function saveStudyDraftNote() {
     requiredDocuments.value = data.required_documents ?? requiredDocuments.value
     staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
     syncUnderstudyLocalState()
-    successMessage.value = data.message || 'Understudy draft saved successfully.'
+    successMessage.value = data.message || uiText('Understudy draft saved successfully.', 'تم حفظ مسودة الدراسة بنجاح.')
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to save the understudy draft.'
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to save the understudy draft.', 'تعذر حفظ مسودة الدراسة.')
   } finally {
     savingUnderstudyDraftState.value = false
   }
@@ -327,9 +404,9 @@ async function submitStudyToAdmin() {
     requiredDocuments.value = data.required_documents ?? requiredDocuments.value
     staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
     syncUnderstudyLocalState()
-    successMessage.value = data.message || 'Understudy submitted to admin successfully.'
+    successMessage.value = data.message || uiText('Understudy submitted to admin successfully.', 'تم إرسال الدراسة إلى الإدارة بنجاح.')
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Failed to submit the understudy package.'
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to submit the understudy package.', 'تعذر إرسال حزمة الدراسة.')
   } finally {
     submittingUnderstudyState.value = false
   }
@@ -337,9 +414,70 @@ async function submitStudyToAdmin() {
 
 function emailStatusClass(status: string | null | undefined) {
   const key = String(status || '').toLowerCase()
+  if (key === 'delivered') return 'client-badge client-badge--green'
   if (key === 'sent') return 'client-badge client-badge--green'
   if (key === 'failed') return 'client-badge client-badge--rose'
   return 'client-badge client-badge--amber'
+}
+
+function readableDateTime(value: unknown) {
+  return formatDateTime(value, locale, t('staffRequestDetails.states.emptyValue'))
+}
+
+function readableUnderstudyStatus(status: string | null | undefined) {
+  return formatUnderstudyStatus(status, locale, t('staffRequestDetails.states.emptyValue'))
+}
+
+function readableEmailDeliveryStatus(status: string | null | undefined) {
+  return formatEmailDeliveryStatus(status, locale, uiText('queued', '\u0642\u064a\u062f \u0627\u0644\u0627\u0646\u062a\u0638\u0627\u0631'))
+}
+
+function readableAdditionalDocumentStatus(status: string | null | undefined) {
+  return formatAdditionalDocumentStatus(status, locale, t('staffRequestDetails.states.emptyValue'))
+}
+
+function stripHtml(value: string) {
+  return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')
+}
+
+function normalizeEditorHtml(value: string) {
+  const normalized = String(value || '').replace(/\u200B/g, '').trim()
+  if (!normalized || normalized === '<br>' || normalized === '<div><br></div>') {
+    return ''
+  }
+
+  return normalized
+}
+
+function syncEmailBodyFromEditor() {
+  if (!emailEditorRef.value) return
+  emailBody.value = normalizeEditorHtml(emailEditorRef.value.innerHTML)
+}
+
+function applyEmailEditorCommand(command: string, value?: string) {
+  if (!canComposeEmail.value || !emailEditorRef.value) return
+  emailEditorRef.value.focus()
+  document.execCommand(command, false, value)
+  syncEmailBodyFromEditor()
+}
+
+function clearEmailComposer() {
+  emailSubject.value = ''
+  emailBody.value = ''
+  selectedEmailDocumentKeys.value = []
+
+  if (emailEditorRef.value) {
+    emailEditorRef.value.innerHTML = ''
+  }
+}
+
+function openRecipientPicker() {
+  recipientPickerOpen.value = true
+}
+
+function openAttachmentPicker() {
+  if (!canComposeEmail.value) return
+  attachmentPickerOpen.value = true
 }
 
 function toggleEmailDocument(documentKey: string, checked: boolean) {
@@ -377,18 +515,16 @@ async function sendEmailToAssignedAgent() {
     allowedEmailDocuments.value = data.allowed_documents ?? allowedEmailDocuments.value
     hasEmailAssignments.value = Boolean(data.has_assignments)
     canEmailAssignedAgents.value = Boolean(data.can_email)
-    emailSubject.value = ''
-    emailBody.value = ''
-    selectedEmailDocumentKeys.value = []
-    successMessage.value = data.message || 'Email sent successfully.'
+    clearEmailComposer()
+    successMessage.value = data.message || uiText('Email sent successfully.', 'تم إرسال البريد بنجاح.')
   } catch (error: any) {
     const validationErrors = error?.response?.data?.errors
     if (validationErrors && typeof validationErrors === 'object') {
       const firstField = Object.keys(validationErrors)[0]
       const firstMessage = Array.isArray(validationErrors[firstField]) ? validationErrors[firstField][0] : validationErrors[firstField]
-      errorMessage.value = firstMessage || error?.response?.data?.message || 'Failed to send the email.'
+      errorMessage.value = firstMessage || error?.response?.data?.message || uiText('Failed to send the email.', 'تعذر إرسال البريد.')
     } else {
-      errorMessage.value = error?.response?.data?.message || 'Failed to send the email.'
+      errorMessage.value = error?.response?.data?.message || uiText('Failed to send the email.', 'تعذر إرسال البريد.')
     }
   } finally {
     sendingEmail.value = false
@@ -412,7 +548,7 @@ async function load() {
   errorMessage.value = ''
 
   try {
-    const [requestResponse] = await Promise.all([getStaffRequest(requestId.value), loadEmailOptions()])
+    const requestResponse = await getStaffRequest(requestId.value)
     requestItem.value = requestResponse.request ?? null
     requiredDocuments.value = requestResponse.required_documents ?? []
     staffQuestionSummary.value = requestResponse.staff_question_summary ?? null
@@ -526,6 +662,15 @@ watch(selectedAgentId, async () => {
   await loadEmailOptions()
 })
 
+watch(emailComposerVisible, async (visible) => {
+  if (!visible) return
+
+  await nextTick()
+  if (emailEditorRef.value && emailEditorRef.value.innerHTML !== emailBody.value) {
+    emailEditorRef.value.innerHTML = emailBody.value
+  }
+})
+
 onMounted(load)
 </script>
 
@@ -538,35 +683,124 @@ onMounted(load)
     :error-message="errorMessage"
     :success-message="successMessage"
     :has-record="Boolean(requestItem)"
-    layout-class=""
   >
     <template #topbar-actions>
       <RouterLink :to="{ name: 'staff-requests' }" class="ghost-btn">{{ t('staffRequestDetails.hero.backToAssignedRequests') }}</RouterLink>
-      <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="primary-btn">{{ t('staffRequestDetails.hero.downloadContractPdf') }}</a>
+      <RouterLink :to="{ name: 'staff-request-send-email', params: { id: requestId } }" class="primary-btn">{{ uiText('Send email', 'إرسال بريد') }}</RouterLink>
+      <button
+        v-if="requestItem?.current_contract?.contract_pdf_path"
+        type="button"
+        class="ghost-btn"
+        @click="openFilePreview(`contract-${requestId}.pdf`, adminContractDownloadUrl(requestId), 'application/pdf')"
+      >
+        Preview
+      </button>
+      <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.hero.downloadContractPdf') }}</a>
     </template>
 
     <template #loading>{{ t('staffRequestDetails.states.loading') }}</template>
 
     <template #summary>
-      <RequestSummaryStatGrid :items="summaryStatItems" />
+      <div class="request-summary-stack">
+        <RequestSummaryStatGrid :items="summaryStatItems" />
+
+        <div class="request-top-panel-grid">
+          <article class="panel-card slim-card">
+            <div class="panel-head"><h2>{{ uiText('Workspace snapshot', 'ملخص مساحة العمل') }}</h2></div>
+            <div class="catalog-mini-stats request-kpi-grid request-kpi-grid--two">
+              <div><span>{{ uiText('Pending docs', 'المستندات المعلقة') }}</span><strong>{{ pendingRequiredCount }}</strong></div>
+              <div><span>{{ uiText('Study ready', 'جاهزية الدراسة') }}</span><strong>{{ staffQuestionSummary?.all_required_answered ? uiText('Yes', 'نعم') : uiText('No', 'لا') }}</strong></div>
+              <div><span>{{ t('staffRequestDetails.sections.recentInternalHistory') }}</span><strong>{{ activityCounts.comments }}</strong></div>
+              <div><span>{{ uiText('Sent emails', 'الرسائل المرسلة') }}</span><strong>{{ activityCounts.emails }}</strong></div>
+            </div>
+          </article>
+
+          <article class="panel-card slim-card">
+            <div class="panel-head"><h2>{{ uiText('Read-only details', 'تفاصيل للعرض') }}</h2></div>
+            <p class="subtext">{{ uiText('Use the quick views to inspect uploads, shareholders, answers, comments, and email history without stretching the page.', 'استخدم العروض السريعة لمراجعة الملفات والمساهمين والإجابات والتعليقات وسجل البريد دون إطالة الصفحة.') }}</p>
+            <div class="approve-actions request-footer-actions">
+              <button type="button" class="ghost-btn" @click="quickView = 'answers'">{{ t('staffRequestDetails.sections.questionnaireAnswers') }}</button>
+              <button type="button" class="ghost-btn" @click="quickView = 'comments'">{{ t('staffRequestDetails.sections.recentInternalHistory') }}</button>
+              <RouterLink class="ghost-btn" :to="{ name: 'staff-request-emails', params: { id: requestId } }">{{ uiText('Sent email history', 'سجل الرسائل المرسلة') }}</RouterLink>
+            </div>
+          </article>
+        </div>
+      </div>
     </template>
 
     <template #main>
+      <div class="request-workspace-stack">
       <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
 
-      <article style="margin: 1.25rem 0;">
-        <RequestRelatedCollectionsCard :request="requestItem" :required-documents="requiredDocuments" />
+      <article class="panel-card request-quick-panel">
+        <div class="panel-head">
+          <div>
+            <h2>{{ uiText('Quick access', 'وصول سريع') }}</h2>
+            <p class="subtext">{{ uiText('Keep the long read-only details one tap away while you work through the request.', 'احتفظ بالتفاصيل الطويلة للقراءة فقط على بعد ضغطة واحدة أثناء إنجاز الطلب.') }}</p>
+          </div>
+        </div>
+
+        <div class="catalog-mini-stats request-kpi-grid">
+          <div>
+            <span>{{ t('staffRequestDetails.sections.requiredChecklistTitle') }}</span>
+            <strong>{{ uploadedRequiredCount }}/{{ requiredDocuments.length }}</strong>
+          </div>
+          <div>
+            <span>{{ uiText('Study progress', 'تقدم الدراسة') }}</span>
+            <strong>{{ staffQuestionSummary?.answered_total || 0 }}/{{ staffQuestionSummary?.total || 0 }}</strong>
+          </div>
+          <div>
+            <span>{{ t('staffRequestDetails.sections.recentInternalHistory') }}</span>
+            <strong>{{ activityCounts.comments }}</strong>
+          </div>
+          <div>
+            <span>{{ t('staffRequestDetails.sections.emailComposerTitle') }}</span>
+            <strong>{{ activityCounts.emails }}</strong>
+          </div>
+        </div>
+
+        <div class="admin-quick-actions request-quick-actions-grid">
+          <button v-if="activeUpdateBatch" type="button" class="admin-quick-action" @click="quickView = 'updateBatch'">
+            <strong>{{ uiText('Client update batch', 'دفعة تحديث العميل') }}</strong>
+            <span>{{ activeUpdateBatch.items?.length || 0 }} {{ uiText('items', 'عنصر') }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'attachments'">
+            <strong>{{ t('staffRequestDetails.sections.initialUploadedFilesTitle') }}</strong>
+            <span>{{ activityCounts.attachments }} {{ uiText('files', 'ملفات') }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'shareholders'">
+            <strong>{{ t('staffRequestDetails.sections.shareholdersTitle') }}</strong>
+            <span>{{ activityCounts.shareholders }} {{ uiText('records', 'سجلات') }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'answers'">
+            <strong>{{ t('staffRequestDetails.sections.questionnaireAnswers') }}</strong>
+            <span>{{ activityCounts.answers }} {{ uiText('answers', 'إجابات') }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'comments'">
+            <strong>{{ t('staffRequestDetails.sections.recentInternalHistory') }}</strong>
+            <span>{{ activityCounts.comments }} {{ uiText('notes', 'ملاحظات') }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'additionalDocuments'">
+            <strong>{{ t('staffRequestDetails.sections.requestedAdditionalDocuments') }}</strong>
+            <span>{{ activityCounts.additionalDocuments }} {{ uiText('requests', 'طلبات') }}</span>
+          </button>
+          <RouterLink class="admin-quick-action" :to="{ name: 'staff-request-emails', params: { id: requestId } }">
+            <strong>{{ uiText('Sent email history', 'سجل الرسائل المرسلة') }}</strong>
+            <span>{{ activityCounts.emails }} {{ uiText('emails', 'رسائل') }}</span>
+          </RouterLink>
+        </div>
       </article>
-          <details v-if="activeUpdateBatch" class="admin-accordion-card" open>
+
+          <details v-if="false && activeUpdateBatch" class="admin-accordion-card" open>
             <summary>
               <div>
-                <h2>Client update batch</h2>
-                <p>Read-only view of the currently open client corrections and submitted items.</p>
+                <h2>{{ uiText('Client update batch', 'دفعة تحديث العميل') }}</h2>
+                <p>{{ uiText('Read-only view of the currently open client corrections and submitted items.', 'عرض للقراءة فقط للتصحيحات المفتوحة حاليًا التي طُلبت من العميل والعناصر المرسلة.') }}</p>
               </div>
             </summary>
             <div class="admin-accordion-card__body">
               <div class="notes-box" v-if="activeUpdateBatch.reason_en || activeUpdateBatch.reason_ar">
-                <span>Reason</span>
+                <span>{{ uiText('Reason', 'السبب') }}</span>
                 <p>{{ locale === 'ar' ? (activeUpdateBatch.reason_ar || activeUpdateBatch.reason_en) : (activeUpdateBatch.reason_en || activeUpdateBatch.reason_ar) }}</p>
               </div>
 
@@ -574,7 +808,7 @@ onMounted(load)
                 <div v-for="item in activeUpdateBatch.items" :key="item.id" class="panel-card slim-card" style="padding: 1rem; margin-bottom: 1rem;">
                   <div class="client-card-head">
                     <div>
-                      <h3>{{ locale === 'ar' ? (item.label_ar || item.label_en || 'Requested update') : (item.label_en || item.label_ar || 'Requested update') }}</h3>
+                      <h3>{{ locale === 'ar' ? (item.label_ar || item.label_en || uiText('Requested update', 'التحديث المطلوب')) : (item.label_en || item.label_ar || uiText('Requested update', 'التحديث المطلوب')) }}</h3>
                       <p class="client-subtext">{{ locale === 'ar' ? (item.instruction_ar || item.instruction_en || '—') : (item.instruction_en || item.instruction_ar || '—') }}</p>
                     </div>
                     <span :class="updateStatusClass(item.status)">{{ updateStatusLabel(item.status) }}</span>
@@ -601,6 +835,13 @@ onMounted(load)
                   </div>
                   <p>{{ item.is_uploaded || item.is_change_requested ? t('staffRequestDetails.states.latestFileLabel', { file: item.upload?.file_name || t('staffRequestDetails.states.uploadedFile') }) : t('staffRequestDetails.states.waitingForClientUpload') }}</p>
                   <div v-if="item.upload?.id" class="approve-actions">
+                    <button
+                      type="button"
+                      class="ghost-btn"
+                      @click="openFilePreview(item.upload?.file_name, requiredDocumentDownloadUrl(item.upload.id))"
+                    >
+                      Preview
+                    </button>
                     <a :href="requiredDocumentDownloadUrl(item.upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadLatestFile') }}</a>
                   </div>
                   <p v-if="item.rejection_reason" class="form-help form-help--error">{{ t('staffRequestDetails.states.reasonLabel') }}: {{ item.rejection_reason }}</p>
@@ -629,73 +870,28 @@ onMounted(load)
             </div>
           </details>
 
-
           <details class="admin-accordion-card">
-  <summary>
-    <div>
-      <h2>{{ t('staffRequestDetails.sections.initialUploadedFilesTitle') }}</h2>
-      <p>{{ t('staffRequestDetails.sections.initialUploadedFilesSubtitle') }}</p>
-    </div>
-  </summary>
-  <div class="admin-accordion-card__body">
-    <div v-if="requestItem.attachments?.length" class="file-list">
-      <div v-for="file in requestItem.attachments" :key="file.id" class="file-item">
-        <div>
-          <strong>{{ file.file_name }}</strong>
-          <span>{{ file.category }}</span>
-        </div>
-        <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
-      </div>
-    </div>
-    <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInitialFilesUploaded') }}</p>
-  </div>
-</details>
-
-<details class="admin-accordion-card">
-  <summary>
-    <div>
-      <h2>{{ t('staffRequestDetails.sections.shareholdersTitle') }}</h2>
-      <p>{{ t('staffRequestDetails.sections.shareholdersSubtitle') }}</p>
-    </div>
-  </summary>
-  <div class="admin-accordion-card__body">
-    <div v-if="requestItem.shareholders?.length" class="file-list">
-      <div v-for="shareholder in requestItem.shareholders" :key="shareholder.id" class="file-item">
-        <div>
-          <strong>{{ shareholder.shareholder_name }}</strong>
-          <span v-if="shareholder.phone_number">{{ [shareholder.phone_country_code, shareholder.phone_number].filter(Boolean).join(' ') }}</span>
-          <span v-if="shareholder.id_number">{{ t('staffRequestDetails.states.idNumberLabel', { id: shareholder.id_number }) }}</span>
-          <span>{{ shareholder.id_file_name }}</span>
-        </div>
-        <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadIdFile') }}</a>
-      </div>
-    </div>
-    <p v-else class="empty-state">{{ t('staffRequestDetails.states.noShareholdersRecorded') }}</p>
-  </div>
-</details>
-
-          <details class="admin-accordion-card" open>
             <summary>
               <div>
-                <h2>Understudy package</h2>
-                <p>Answer the study questions, save your understanding note, then submit the full package to admin.</p>
+                <h2>{{ uiText('Understudy package', 'حزمة الدراسة') }}</h2>
+                <p>{{ uiText('Answer the study questions, save your understanding note, then submit the full package to admin.', 'أجب عن أسئلة الدراسة، ثم احفظ ملاحظتك، وبعدها أرسل الحزمة الكاملة إلى الإدارة.') }}</p>
               </div>
             </summary>
             <div class="admin-accordion-card__body">
               <div class="notes-box" style="margin-bottom: 1rem;">
-                <span>Progress</span>
+                <span>{{ uiText('Progress', 'التقدم') }}</span>
                 <p>
-                  {{ staffQuestionSummary?.answered_total || 0 }}/{{ staffQuestionSummary?.total || 0 }} answered ·
-                  {{ staffQuestionSummary?.pending_required_total || 0 }} required questions still pending
+                  {{ staffQuestionSummary?.answered_total || 0 }}/{{ staffQuestionSummary?.total || 0 }} {{ uiText('answered', 'تمت الإجابة') }} ·
+                  {{ staffQuestionSummary?.pending_required_total || 0 }} {{ uiText('required questions still pending', 'أسئلة إلزامية ما زالت بانتظار الإجابة') }}
                 </p>
               </div>
 
               <div v-if="requestItem?.understudy_submitted_at" class="notes-box" style="margin-bottom: 1rem;">
-                <span>Submission status</span>
+                <span>{{ uiText('Submission status', 'حالة الإرسال') }}</span>
                 <p>
-                  {{ String(requestItem?.understudy_status || 'draft').toUpperCase() }}
+                  {{ readableUnderstudyStatus(requestItem?.understudy_status || 'draft') }}
                   <template v-if="requestItem?.understudy_submitted_by?.name"> · Submitted by {{ requestItem.understudy_submitted_by.name }}</template>
-                  <template v-if="requestItem?.understudy_submitted_at"> · {{ new Date(requestItem.understudy_submitted_at).toLocaleString() }}</template>
+                  <template v-if="requestItem?.understudy_submitted_at"> · {{ readableDateTime(requestItem.understudy_submitted_at) }}</template>
                 </p>
               </div>
 
@@ -705,8 +901,8 @@ onMounted(load)
                     <div>
                       <h3>{{ studyQuestionTitle(question) }}</h3>
                       <p class="client-subtext">
-                        <template v-if="question.is_required">Required question</template>
-                        <template v-else>Optional question</template>
+                        <template v-if="question.is_required">{{ uiText('Required question', 'سؤال إلزامي') }}</template>
+                        <template v-else>{{ uiText('Optional question', 'سؤال اختياري') }}</template>
                         <template v-if="question.assigned_staff?.name"> · Assigned to {{ question.assigned_staff.name }}</template>
                       </p>
                     </div>
@@ -741,7 +937,7 @@ onMounted(load)
                     :value="Array.isArray(studyAnswers[question.id]) ? '' : studyAnswerTextValue(question.id)"
                     @change="updateStudyQuestionValue(question.id, ($event.target as HTMLSelectElement).value)"
                   >
-                    <option value="">Choose an option</option>
+                    <option value="">{{ uiText('Choose an option', 'اختر خيارًا') }}</option>
                     <option v-for="option in studyQuestionOptions(question)" :key="option" :value="option">
                       {{ option }}
                     </option>
@@ -797,10 +993,10 @@ onMounted(load)
                   </div>
                 </article>
               </div>
-              <p v-else class="empty-state">No staff study questions are available for this request yet.</p>
+              <p v-else class="empty-state">{{ uiText('No staff study questions are available for this request yet.', 'لا توجد أسئلة دراسة متاحة للموظف لهذا الطلب حتى الآن.') }}</p>
 
               <article class="panel-card slim-card" style="margin-top: 1rem;">
-                <div class="panel-head"><h3>What you understood</h3></div>
+                <div class="panel-head"><h3>{{ uiText('What you understood', 'ما الذي فهمته') }}</h3></div>
                 <textarea
                   v-model="understudyNote"
                   rows="5"
@@ -808,7 +1004,7 @@ onMounted(load)
                   :disabled="understudyLocked"
                   placeholder="Add a short study note for the admin"
                 ></textarea>
-                <p class="client-subtext" style="margin-top: 0.5rem;">This note is internal between staff and admin. The client will only continue seeing Understudy.</p>
+                <p class="client-subtext" style="margin-top: 0.5rem;">{{ uiText('This note is internal between staff and admin. The client will only continue seeing Understudy.', 'هذه الملاحظة داخلية بين الموظف والإدارة. وسيستمر العميل في رؤية مرحلة الدراسة فقط.') }}</p>
                 <div class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
                   <button type="button" class="ghost-btn" :disabled="understudyLocked || savingUnderstudyDraftState" @click="saveStudyDraftNote">
                     {{ savingUnderstudyDraftState ? 'Saving...' : 'Save draft note' }}
@@ -821,7 +1017,7 @@ onMounted(load)
             </div>
           </details>
 
-          <details class="admin-accordion-card" open>
+          <details class="admin-accordion-card followup-workspace-card" open>
             <summary>
               <div>
                 <h2>{{ t('staffRequestDetails.sections.followUpTitle') }}</h2>
@@ -829,18 +1025,8 @@ onMounted(load)
               </div>
             </summary>
             <div class="admin-accordion-card__body">
-              <div v-if="!mailboxReady" class="notes-box" style="margin-bottom: 1rem;">
-                <span>{{ t('staffRequestDetails.mailboxSetup.title') }}</span>
-                <p>The admin still needs to save and verify your mailbox before you can send request emails from this workspace.</p>
-              </div>
-
-              <div v-if="!hasEmailAssignments" class="notes-box" style="margin-bottom: 1rem;">
-                <span>Waiting for admin setup</span>
-                <p>The admin still needs to approve the bank-agent assignment phase before you can prepare a controlled email for this request.</p>
-              </div>
-
-              <div class="admin-inline-block-grid">
-                <article class="panel-card slim-card">
+              <div class="admin-inline-block-grid followup-workspace-grid">
+                <article class="panel-card slim-card followup-card">
                   <div class="panel-head"><h3>{{ t('staffRequestDetails.sections.addInternalComment') }}</h3></div>
                   <div class="field-block field-block--grow">
                     <span>{{ t('staffRequestDetails.form.visibility') }}</span>
@@ -857,7 +1043,7 @@ onMounted(load)
                   </div>
                 </article>
 
-                <article class="panel-card slim-card">
+                <article class="panel-card slim-card followup-card">
                   <div class="panel-head"><h3>{{ t('staffRequestDetails.sections.requestAdditionalDocument') }}</h3></div>
                   <input v-model="additionalDocumentTitle" type="text" class="admin-input" :placeholder="t('staffRequestDetails.placeholders.documentTitle')" />
                   <textarea v-model="additionalDocumentReason" rows="5" class="admin-textarea" :placeholder="t('staffRequestDetails.placeholders.additionalReason')"></textarea>
@@ -869,14 +1055,21 @@ onMounted(load)
                 </article>
               </div>
 
-              <article class="panel-card slim-card">
+              <article v-if="false" class="panel-card slim-card">
                 <div class="panel-head"><h3>{{ t('staffRequestDetails.sections.requestedAdditionalDocuments') }}</h3></div>
                 <div v-if="requestItem.additional_documents?.length" class="timeline-list compact-list">
                   <div v-for="item in requestItem.additional_documents" :key="item.id" class="timeline-item">
                     <strong>{{ item.title }}</strong>
                     <p>{{ item.reason || t('staffRequestDetails.states.noReasonAdded') }}</p>
-                    <span>{{ item.status }}<template v-if="item.file_name"> · {{ item.file_name }}</template></span>
+                    <span>{{ readableAdditionalDocumentStatus(item.status) }}<template v-if="item.file_name"> · {{ item.file_name }}</template></span>
                     <div v-if="item.file_name" class="approve-actions">
+                      <button
+                        type="button"
+                        class="ghost-btn"
+                        @click="openFilePreview(item.file_name, additionalDocumentDownloadUrl(item.id))"
+                      >
+                        Preview
+                      </button>
                       <a :href="additionalDocumentDownloadUrl(item.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadFile') }}</a>
                     </div>
                   </div>
@@ -886,7 +1079,7 @@ onMounted(load)
             </div>
           </details>
 
-          <details v-if="emailComposerVisible" class="admin-accordion-card">
+          <details v-if="false && emailComposerVisible" class="admin-accordion-card">
             <summary>
               <div>
                 <h2>{{ t('staffRequestDetails.sections.emailComposerTitle') }}</h2>
@@ -896,15 +1089,15 @@ onMounted(load)
             <div class="admin-accordion-card__body">
               <div v-if="!mailboxReady" class="notes-box" style="margin-bottom: 1rem;">
                 <span>{{ t('staffRequestDetails.mailboxSetup.title') }}</span>
-                <p>The admin still needs to save and verify your mailbox before you can send request emails from this workspace.</p>
+                <p>{{ uiText('The admin still needs to save and verify your mailbox before you can send request emails from this workspace.', 'لا تزال الإدارة بحاجة إلى حفظ بريدك والتحقق منه قبل أن تتمكن من إرسال رسائل الطلب من مساحة العمل هذه.') }}</p>
               </div>
 
               <div v-if="!hasEmailAssignments" class="notes-box" style="margin-bottom: 1rem;">
-                <span>Waiting for admin setup</span>
-                <p>The admin still needs to approve the bank-agent assignment phase before you can prepare a controlled email for this request.</p>
+                <span>{{ uiText('Waiting for admin setup', 'بانتظار إعداد الإدارة') }}</span>
+                <p>{{ uiText('The admin still needs to approve the bank-agent assignment phase before you can prepare a controlled email for this request.', 'لا تزال الإدارة بحاجة لاعتماد مرحلة تعيين البنك والوكيل قبل أن تتمكن من إعداد بريد مُتحكم به لهذا الطلب.') }}</p>
               </div>
 
-              <div class="admin-inline-block-grid">
+              <div v-if="false" class="admin-inline-block-grid">
                 <article class="panel-card slim-card">
                   <div class="panel-head"><h3>{{ t('staffRequestDetails.sections.recipients') }}</h3></div>
                   <div class="field-block field-block--grow">
@@ -917,7 +1110,7 @@ onMounted(load)
                   <div class="field-block field-block--grow">
                     <span>{{ t('staffRequestDetails.form.agents') }}</span>
                     <select v-model="selectedAgentId" class="admin-select">
-                      <option :value="null">Select an assigned agent</option>
+                      <option :value="null">{{ uiText('Select an assigned agent', 'اختر وكيلاً مُسندًا') }}</option>
                       <option v-for="agent in agents" :key="agent.id" :value="agent.id">
                         {{ agent.name }}<template v-if="agent.bank_name"> · {{ agent.bank_name }}</template>
                       </option>
@@ -934,9 +1127,9 @@ onMounted(load)
                   <textarea v-model="emailBody" rows="7" class="admin-textarea" :placeholder="t('staffRequestDetails.placeholders.emailBody')" :disabled="!canEmailAssignedAgents || !selectedAgentId"></textarea>
 
                   <div class="notes-box" style="margin-top: 0.75rem;">
-                    <span>Allowed request files</span>
+                    <span>{{ uiText('Allowed request files', 'ملفات الطلب المسموح بها') }}</span>
                     <p v-if="selectedAgentOption">Choose the approved files that should be attached when sending to {{ selectedAgentOption.name }}.</p>
-                    <p v-else>Select an assigned agent to see the exact files approved by the admin.</p>
+                    <p v-else>{{ uiText('Select an assigned agent to see the exact files approved by the admin.', 'اختر وكيلاً مُسندًا لرؤية الملفات المعتمدة من الإدارة.') }}</p>
                   </div>
 
                   <div v-if="allowedEmailDocuments.length" class="timeline-list compact-list" style="margin-top: 0.75rem;">
@@ -953,79 +1146,471 @@ onMounted(load)
                           <p>{{ document.group_label || 'Request file' }}</p>
                           <span>{{ document.file_name }}</span>
                           <div v-if="document.download_url" class="approve-actions" style="margin-top: 0.45rem;">
-                            <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">Preview file</a>
+                            <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ uiText('Preview file', 'معاينة الملف') }}</a>
                           </div>
                         </div>
                       </div>
                     </label>
                   </div>
-                  <p v-else class="empty-state" style="margin-top: 0.75rem;">No files have been assigned to the selected agent yet.</p>
+                  <p v-else class="empty-state" style="margin-top: 0.75rem;">{{ uiText('No files have been assigned to the selected agent yet.', 'لم يتم تعيين ملفات للوكيل المحدد حتى الآن.') }}</p>
 
                   <div class="approve-actions" style="margin-top: 1rem;">
                     <button class="primary-btn" type="button" :disabled="sendingEmail || !canSendEmail" @click="sendEmailToAssignedAgent">
-                      {{ sendingEmail ? 'Sending...' : 'Send email now' }}
+                      {{ sendingEmail ? uiText('Sending...', 'جارٍ الإرسال...') : uiText('Send email now', 'إرسال البريد الآن') }}
                     </button>
                   </div>
                 </article>
               </div>
 
-              <article class="panel-card slim-card" style="margin-top: 1rem;">
-                <div class="panel-head"><h3>Sent email history</h3></div>
+              <article class="panel-card slim-card staff-email-composer-card">
+                <div class="panel-head staff-email-composer-head">
+                  <div>
+                    <h3>{{ t('staffRequestDetails.sections.emailBody') }}</h3>
+                    <p class="client-subtext">{{ uiText('Set recipients first, then compose a complete request email with your selected attachments.', 'حدّد المستلمين أولاً ثم اكتب رسالة الطلب كاملة مع المرفقات المحددة.') }}</p>
+                  </div>
+                  <div class="staff-email-composer-actions">
+                    <button type="button" class="ghost-btn" @click="openRecipientPicker">
+                      <i class="fas fa-user-check"></i>
+                      {{ t('staffRequestDetails.sections.recipients') }}
+                    </button>
+                    <button type="button" class="ghost-btn" :disabled="!canComposeEmail" @click="openAttachmentPicker">
+                      <i class="fas fa-paperclip"></i>
+                      Attachments ({{ selectedEmailAttachments.length }})
+                    </button>
+                  </div>
+                </div>
+
+                <div class="staff-email-recipient-summary" :class="{ 'is-ready': canComposeEmail }">
+                  <p v-if="canComposeEmail">
+                    Sending to:
+                    <strong>{{ selectedAgentOption?.name || 'Selected agent' }}</strong>
+                    <template v-if="selectedBankOption?.name"> - {{ selectedBankOption.name }}</template>
+                  </p>
+                  <p v-else>{{ uiText('Select a recipient before entering your email content.', 'اختر مستلمًا قبل إدخال محتوى البريد.') }}</p>
+                </div>
+
+                <div class="staff-email-input-stack">
+                  <label class="client-form-group">
+                    <span class="client-form-label">{{ t('staffRequestDetails.placeholders.emailSubject') }}</span>
+                    <input
+                      v-model="emailSubject"
+                      type="text"
+                      class="admin-input"
+                      :placeholder="t('staffRequestDetails.placeholders.emailSubject')"
+                      :disabled="!canComposeEmail"
+                    />
+                  </label>
+
+                  <div class="staff-email-editor-shell" :class="{ 'is-disabled': !canComposeEmail, 'is-focused': emailEditorFocused }">
+                    <div class="staff-email-editor-toolbar">
+                      <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('bold')"><strong>B</strong></button>
+                      <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('italic')"><em>I</em></button>
+                      <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('insertUnorderedList')"><i class="fas fa-list-ul"></i></button>
+                      <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('insertOrderedList')"><i class="fas fa-list-ol"></i></button>
+                      <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('removeFormat')"><i class="fas fa-eraser"></i></button>
+                    </div>
+
+                    <div
+                      ref="emailEditorRef"
+                      class="staff-email-editor-surface"
+                      :contenteditable="canComposeEmail ? 'true' : 'false'"
+                      :data-placeholder="t('staffRequestDetails.placeholders.emailBody')"
+                      @focus="emailEditorFocused = true"
+                      @blur="emailEditorFocused = false; syncEmailBodyFromEditor()"
+                      @input="syncEmailBodyFromEditor"
+                    ></div>
+                  </div>
+
+                  <div class="staff-email-attachments-meta">
+                    <span class="count-pill">{{ selectedEmailAttachments.length }} selected</span>
+                    <p v-if="selectedEmailAttachments.length" class="client-subtext">
+                      {{ selectedEmailAttachments.map((document) => document.label).join(', ') }}
+                    </p>
+                    <p v-else class="client-subtext">{{ uiText('No attachments selected yet.', 'لم يتم اختيار أي مرفقات بعد.') }}</p>
+                  </div>
+                </div>
+
+                <div class="approve-actions staff-email-send-row">
+                  <button class="primary-btn" type="button" :disabled="sendingEmail || !canSendEmail" @click="sendEmailToAssignedAgent">
+                    {{ sendingEmail ? uiText('Sending...', 'جارٍ الإرسال...') : uiText('Send email now', 'إرسال البريد الآن') }}
+                  </button>
+                </div>
+              </article>
+
+              <article v-if="false" class="panel-card slim-card" style="margin-top: 1rem;">
+                <div class="panel-head"><h3>{{ uiText('Sent email history', 'سجل الرسائل المرسلة') }}</h3></div>
                 <div v-if="requestItem.emails?.length" class="timeline-list compact-list">
                   <div v-for="email in requestItem.emails" :key="email.id" class="timeline-item">
                     <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;">
                       <div>
                         <strong>{{ email.subject }}</strong>
-                        <p>From: {{ email.sender?.name || 'System' }} · {{ email.from_email || email.sender?.email || '—' }}</p>
-                        <p>To: {{ email.agents?.map((agent: any) => agent.name).join(', ') || '—' }}</p>
+                        <p>{{ uiText('From', 'من') }}: {{ email.sender?.name || uiText('System', 'النظام') }} · {{ email.from_email || email.sender?.email || '—' }}</p>
+                        <p>{{ uiText('To', 'إلى') }}: {{ email.agents?.map((agent: any) => agent.name).join(', ') || '—' }}</p>
                         <p v-if="email.body">{{ email.body }}</p>
-                        <span>{{ email.attachments?.length || 0 }} attachment(s) · {{ email.sent_at ? new Date(email.sent_at).toLocaleString() : new Date(email.created_at || '').toLocaleString() }}</span>
+                        <span>{{ email.attachments?.length || 0 }} {{ uiText('attachments', 'مرفقات') }} · {{ readableDateTime(email.sent_at || email.created_at) }}</span>
                       </div>
-                      <span :class="emailStatusClass(email.delivery_status)">{{ email.delivery_status || 'queued' }}</span>
+                      <span :class="emailStatusClass(email.delivery_status)">{{ readableEmailDeliveryStatus(email.delivery_status) }}</span>
                     </div>
                   </div>
                 </div>
-                <p v-else class="empty-state">No outbound emails have been sent for this request yet.</p>
+                <p v-else class="empty-state">{{ uiText('No outbound emails have been sent for this request yet.', 'لم يتم إرسال أي رسائل خارجية لهذا الطلب بعد.') }}</p>
               </article>
             </div>
           </details>
-    </template>
 
-    <template #side>
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>Request information parity</h2></div>
-            <p class="subtext">The shared overview cards now show the same request information for admin and staff. Role-specific actions remain below.</p>
-          </article>
+          <AdminQuickViewModal
+            v-if="false"
+            :model-value="recipientPickerOpen"
+            @update:model-value="(value) => { recipientPickerOpen = value }"
+            :title="t('staffRequestDetails.sections.recipients')"
+            :subtitle="uiText('Pick bank and agent before composing.', 'اختر البنك والوكيل قبل بدء كتابة البريد.')"
+            wide
+          >
+            <div class="staff-picker-grid">
+              <label class="client-form-group">
+                <span class="client-form-label">{{ t('staffRequestDetails.form.bank') }}</span>
+                <select v-model="selectedBankId" class="admin-select">
+                  <option :value="null">{{ t('staffRequestDetails.form.allBanks') }}</option>
+                  <option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.name }}</option>
+                </select>
+              </label>
 
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>{{ t('staffRequestDetails.sections.recentInternalHistory') }}</h2></div>
-            <div v-if="requestItem.comments?.length" class="timeline-list compact-list">
-              <div v-for="comment in requestItem.comments.slice(0, 4)" :key="comment.id" class="timeline-item">
-                <strong>{{ comment.user?.name || t('staffRequestDetails.states.system') }}</strong>
-                <p>{{ comment.comment_text }}</p>
-                <span>{{ new Date(comment.created_at).toLocaleString() }}</span>
+              <label class="client-form-group">
+                <span class="client-form-label">{{ t('staffRequestDetails.form.agents') }}</span>
+                <select v-model="selectedAgentId" class="admin-select">
+                  <option :value="null">{{ uiText('Select an assigned agent', 'اختر وكيلاً مُسندًا') }}</option>
+                  <option v-for="agent in agents" :key="agent.id" :value="agent.id">
+                    {{ agent.name }}<template v-if="agent.bank_name"> - {{ agent.bank_name }}</template>
+                  </option>
+                </select>
+              </label>
+
+              <p class="client-subtext">{{ uiText('Only admin-approved agents appear in this list.', 'تظهر في هذه القائمة فقط الوكلاء المعتمدون من الإدارة.') }}</p>
+              <div class="approve-actions">
+                <button type="button" class="primary-btn" :disabled="!selectedAgentId" @click="recipientPickerOpen = false">{{ uiText('Use this recipient', 'استخدام هذا المستلم') }}</button>
               </div>
             </div>
-            <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInternalComments') }}</p>
+          </AdminQuickViewModal>
+
+          <AdminQuickViewModal
+            v-if="false"
+            :model-value="attachmentPickerOpen"
+            @update:model-value="(value) => { attachmentPickerOpen = value }"
+            :title="uiText('Choose attachments', 'اختيار المرفقات')"
+            :subtitle="uiText('Select approved files to include with this email.', 'اختر الملفات المعتمدة لإرفاقها مع هذا البريد.')"
+            wide
+          >
+            <div v-if="allowedEmailDocuments.length" class="timeline-list compact-list">
+              <label v-for="document in allowedEmailDocuments" :key="document.key" class="timeline-item staff-picker-item">
+                <input
+                  type="checkbox"
+                  :checked="isEmailDocumentChecked(document.key)"
+                  :disabled="!canComposeEmail"
+                  @change="toggleEmailDocument(document.key, ($event.target as HTMLInputElement).checked)"
+                >
+                <div>
+                  <strong>{{ document.label }}</strong>
+                  <p>{{ document.group_label || 'Request file' }}</p>
+                  <span>{{ document.file_name }}</span>
+                  <div v-if="document.download_url" class="approve-actions staff-picker-preview">
+                    <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ uiText('Preview file', 'معاينة الملف') }}</a>
+                  </div>
+                </div>
+              </label>
+            </div>
+            <p v-else class="empty-state">{{ uiText('No files are currently assigned to this agent.', 'لا توجد ملفات مُسندة لهذا الوكيل حالياً.') }}</p>
+            <div class="approve-actions" style="margin-top: 0.85rem;">
+              <button type="button" class="primary-btn" @click="attachmentPickerOpen = false">{{ uiText('Done', 'تم') }}</button>
+            </div>
+          </AdminQuickViewModal>
+      </div>
+    </template>
+
+    <template #after>
+      <div v-if="false" class="request-side-stack">
+          <article class="panel-card slim-card">
+            <div class="panel-head"><h2>{{ uiText('Workspace snapshot', 'ملخص مساحة العمل') }}</h2></div>
+            <div class="catalog-mini-stats request-kpi-grid request-kpi-grid--two">
+              <div><span>{{ uiText('Pending docs', 'المستندات المعلقة') }}</span><strong>{{ pendingRequiredCount }}</strong></div>
+              <div><span>{{ uiText('Study ready', 'جاهزية الدراسة') }}</span><strong>{{ staffQuestionSummary?.all_required_answered ? uiText('Yes', 'نعم') : uiText('No', 'لا') }}</strong></div>
+              <div><span>{{ t('staffRequestDetails.sections.recentInternalHistory') }}</span><strong>{{ activityCounts.comments }}</strong></div>
+              <div><span>{{ uiText('Sent emails', 'الرسائل المرسلة') }}</span><strong>{{ activityCounts.emails }}</strong></div>
+            </div>
           </article>
 
-          <details class="admin-accordion-card slim-accordion">
-            <summary>
+          <article class="panel-card slim-card">
+            <div class="panel-head"><h2>{{ uiText('Read-only details', 'تفاصيل للعرض') }}</h2></div>
+            <p class="subtext">{{ uiText('Use the quick views to inspect uploads, shareholders, answers, comments, and email history without stretching the page.', 'استخدم العروض السريعة لمراجعة الملفات والمساهمين والإجابات والتعليقات وسجل البريد دون إطالة الصفحة.') }}</p>
+            <div class="approve-actions request-footer-actions">
+              <button type="button" class="ghost-btn" @click="quickView = 'answers'">{{ t('staffRequestDetails.sections.questionnaireAnswers') }}</button>
+              <button type="button" class="ghost-btn" @click="quickView = 'comments'">{{ t('staffRequestDetails.sections.recentInternalHistory') }}</button>
+              <RouterLink class="ghost-btn" :to="{ name: 'staff-request-emails', params: { id: requestId } }">{{ uiText('Sent email history', 'سجل الرسائل المرسلة') }}</RouterLink>
+            </div>
+          </article>
+      </div>
+
+      <AdminQuickViewModal
+        :model-value="quickView !== null"
+        @update:model-value="(value) => { if (!value) quickView = null }"
+        :title="quickViewTitle"
+        :subtitle="uiText('Reference information for this request.', 'معلومات مرجعية لهذا الطلب.')"
+        wide
+      >
+        <div v-if="quickView === 'updateBatch'" class="qa-list">
+          <div v-if="activeUpdateBatch?.reason_en || activeUpdateBatch?.reason_ar" class="notes-box">
+            <span>{{ uiText('Reason', 'السبب') }}</span>
+            <p>{{ locale === 'ar' ? (activeUpdateBatch?.reason_ar || activeUpdateBatch?.reason_en) : (activeUpdateBatch?.reason_en || activeUpdateBatch?.reason_ar) }}</p>
+          </div>
+          <div v-if="activeUpdateBatch?.items?.length" v-for="item in activeUpdateBatch.items" :key="item.id" class="panel-card slim-card request-draft-item">
+            <div class="client-card-head request-card-head-compact">
               <div>
-                <h2>{{ t('staffRequestDetails.sections.questionnaireAnswers') }}</h2>
-                <p>{{ t('staffRequestDetails.sections.expandWhenNeeded') }}</p>
+                <h3>{{ locale === 'ar' ? (item.label_ar || item.label_en || uiText('Requested update', 'التحديث المطلوب')) : (item.label_en || item.label_ar || uiText('Requested update', 'التحديث المطلوب')) }}</h3>
+                <p class="client-subtext">{{ locale === 'ar' ? (item.instruction_ar || item.instruction_en || '—') : (item.instruction_en || item.instruction_ar || '—') }}</p>
               </div>
-            </summary>
-            <div class="admin-accordion-card__body">
-              <RequestAnswersList
-                :answers="requestItem.answers || []"
-                :empty-text="t('staffRequestDetails.states.noAnswersRecorded')"
-                :question-fallback="t('staffRequestDetails.states.questionFallback')"
-                :format-answer="answerText"
-                compact
-              />
+              <span :class="updateStatusClass(item.status)">{{ updateStatusLabel(item.status) }}</span>
             </div>
-          </details>
+          </div>
+          <p v-else class="empty-state">{{ uiText('No active client update batch.', 'لا توجد دفعة تحديث عميل نشطة.') }}</p>
+        </div>
+
+        <div v-else-if="quickView === 'attachments'" class="file-list">
+          <div v-if="requestItem.attachments?.length" v-for="file in requestItem.attachments" :key="file.id" class="file-item">
+            <div>
+              <strong>{{ file.file_name }}</strong>
+              <span>{{ file.category }}</span>
+            </div>
+            <div class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))"
+              >
+                Preview
+              </button>
+              <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInitialFilesUploaded') }}</p>
+        </div>
+
+        <div v-else-if="quickView === 'shareholders'" class="file-list">
+          <div v-if="requestItem.shareholders?.length" v-for="shareholder in requestItem.shareholders" :key="shareholder.id" class="file-item">
+            <div>
+              <strong>{{ shareholder.shareholder_name }}</strong>
+              <span v-if="shareholder.phone_number">{{ [shareholder.phone_country_code, shareholder.phone_number].filter(Boolean).join(' ') }}</span>
+              <span v-if="shareholder.id_number">{{ t('staffRequestDetails.states.idNumberLabel', { id: shareholder.id_number }) }}</span>
+              <span>{{ shareholder.id_file_name }}</span>
+            </div>
+            <div class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                @click="openFilePreview(shareholder.id_file_name, shareholderIdDownloadUrl(shareholder.id))"
+              >
+                Preview
+              </button>
+              <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadIdFile') }}</a>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ t('staffRequestDetails.states.noShareholdersRecorded') }}</p>
+        </div>
+
+        <RequestAnswersList
+          v-else-if="quickView === 'answers'"
+          :answers="requestItem.answers || []"
+          :empty-text="t('staffRequestDetails.states.noAnswersRecorded')"
+          :question-fallback="t('staffRequestDetails.states.questionFallback')"
+          :format-answer="answerText"
+        />
+
+        <div v-else-if="quickView === 'comments'" class="timeline-list compact-list">
+          <div v-if="requestItem.comments?.length" v-for="comment in requestItem.comments" :key="comment.id" class="timeline-item">
+            <strong>{{ comment.user?.name || t('staffRequestDetails.states.system') }}</strong>
+            <p>{{ comment.comment_text }}</p>
+            <span>{{ readableDateTime(comment.created_at) }}</span>
+          </div>
+          <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInternalComments') }}</p>
+        </div>
+
+        <div v-else-if="quickView === 'additionalDocuments'" class="timeline-list compact-list">
+          <div v-if="requestItem.additional_documents?.length" v-for="item in requestItem.additional_documents" :key="item.id" class="timeline-item">
+            <strong>{{ item.title }}</strong>
+            <p>{{ item.reason || t('staffRequestDetails.states.noReasonAdded') }}</p>
+            <span>{{ readableAdditionalDocumentStatus(item.status) }}<template v-if="item.file_name"> · {{ item.file_name }}</template></span>
+            <div v-if="item.file_name" class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                @click="openFilePreview(item.file_name, additionalDocumentDownloadUrl(item.id))"
+              >
+                Preview
+              </button>
+              <a :href="additionalDocumentDownloadUrl(item.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadFile') }}</a>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ t('staffRequestDetails.states.noAdditionalDocumentsRequested') }}</p>
+        </div>
+
+        <div v-else class="timeline-list compact-list">
+          <div v-if="requestItem.emails?.length" v-for="email in requestItem.emails" :key="email.id" class="timeline-item">
+            <div class="request-modal-meta">
+              <div>
+                <strong>{{ email.subject }}</strong>
+                <p>{{ uiText('From', 'من') }}: {{ email.sender?.name || uiText('System', 'النظام') }} · {{ email.from_email || email.sender?.email || '—' }}</p>
+                <p>{{ uiText('To', 'إلى') }}: {{ email.agents?.map((agent: any) => agent.name).join(', ') || '—' }}</p>
+                <p v-if="email.body" class="request-prewrap-text">{{ email.body }}</p>
+                <span>{{ email.attachments?.length || 0 }} {{ uiText('attachments', 'مرفقات') }} · {{ readableDateTime(email.sent_at || email.created_at) }}</span>
+              </div>
+              <span :class="emailStatusClass(email.delivery_status)">{{ readableEmailDeliveryStatus(email.delivery_status) }}</span>
+            </div>
+          </div>
+          <p v-if="!requestItem.emails?.length" class="empty-state">{{ uiText('No outbound emails have been sent for this request yet.', 'لم يتم إرسال أي رسائل خارجية لهذا الطلب بعد.') }}</p>
+        </div>
+      </AdminQuickViewModal>
     </template>
+
+    <AppFilePreviewModal
+      :model-value="filePreviewOpen"
+      @update:model-value="(value) => { filePreviewOpen = value }"
+      :title="uiText('File preview', 'معاينة الملف')"
+      :file-name="filePreviewName"
+      :mime-type="filePreviewMime"
+      :preview-url="filePreviewUrl"
+      :download-url="fileDownloadUrl"
+    />
   </RequestWorkspaceShell>
 </template>
+
+<style scoped>
+.followup-workspace-grid {
+  gap: 1.1rem;
+}
+
+.followup-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.staff-email-composer-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.staff-email-composer-head {
+  align-items: flex-start;
+}
+
+.staff-email-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.staff-email-recipient-summary {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.staff-email-recipient-summary.is-ready {
+  border-style: solid;
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(236, 253, 245, 0.8);
+}
+
+.staff-email-recipient-summary p {
+  margin: 0;
+}
+
+.staff-email-input-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.staff-email-editor-shell {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.staff-email-editor-shell.is-focused {
+  border-color: rgba(79, 70, 229, 0.45);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+}
+
+.staff-email-editor-shell.is-disabled {
+  opacity: 0.78;
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.staff-email-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.staff-email-editor-surface {
+  min-height: 260px;
+  padding: 1rem;
+  outline: none;
+  line-height: 1.6;
+  color: var(--admin-text);
+}
+
+.staff-email-editor-surface:empty::before {
+  content: attr(data-placeholder);
+  color: var(--admin-text-light);
+}
+
+.staff-email-attachments-meta {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.staff-email-send-row {
+  margin-top: 0.4rem;
+}
+
+.staff-picker-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.staff-picker-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.8rem;
+  cursor: pointer;
+}
+
+.staff-picker-item > input {
+  margin-top: 0.2rem;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--admin-primary);
+}
+
+.staff-picker-preview {
+  margin-top: 0.45rem;
+}
+
+@media (max-width: 768px) {
+  .staff-email-editor-surface {
+    min-height: 200px;
+  }
+
+  .staff-email-composer-actions {
+    width: 100%;
+  }
+
+  .staff-email-composer-actions .ghost-btn {
+    width: 100%;
+  }
+}
+</style>

@@ -94,6 +94,16 @@ function handleEditorInput() {
   draftContractHtml.value = editorRef.value?.innerHTML || ''
 }
 
+function hasVisibleContractContent(value: unknown) {
+  const normalized = String(value ?? '')
+    .replace(/<br\s*\/?>/gi, '')
+    .replace(/&nbsp;/gi, '')
+    .replace(/<[^>]*>/g, '')
+    .trim()
+
+  return normalized.length > 0
+}
+
 async function load() {
   loading.value = true
   errorMessage.value = ''
@@ -103,17 +113,28 @@ async function load() {
     financeRequest.value = data.request ?? null
     contract.value = data.contract ?? null
     contractTemplate.value = data.contract_template ?? null
-    draftContractHtml.value = data.contract?.contract_content || data.draft_contract_html || ''
-    initialDraftContractHtml.value = data.draft_contract_html || draftContractHtml.value
+    const savedContractBody = data.contract?.contract_content ?? ''
+    const generatedDraftBody = data.draft_contract_html ?? ''
 
-    await nextTick()
-    syncEditorHtml()
-    await initSignatureSurface()
+    draftContractHtml.value = hasVisibleContractContent(savedContractBody)
+      ? String(savedContractBody)
+      : hasVisibleContractContent(generatedDraftBody)
+        ? String(generatedDraftBody)
+        : String(savedContractBody || generatedDraftBody || '')
+    initialDraftContractHtml.value = hasVisibleContractContent(generatedDraftBody)
+      ? String(generatedDraftBody)
+      : draftContractHtml.value
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminContractBuilderPage.errors.loadFailed')
   } finally {
     loading.value = false
   }
+
+  if (!financeRequest.value) return
+
+  await nextTick()
+  syncEditorHtml()
+  await initSignatureSurface()
 }
 
 function clearSignature() {
@@ -195,9 +216,9 @@ onUnmounted(() => {
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.requestRef') }}</span><strong>{{ financeRequest.reference_number }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.approvalRef') }}</span><strong>{{ financeRequest.approval_reference_number || t('adminContractBuilderPage.states.pendingApproval') }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.client') }}</span><strong>{{ intakeFullName(financeRequest.intake_details_json, financeRequest.client?.name || t('adminContractBuilderPage.states.clientFallback')) }}</strong></div>
-          <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json), locale) }}</strong></div>
-          <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(financeRequest.intake_details_json) }}</strong></div>
-          <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.financeType') }}</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json) }}</strong></div>
+          <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.country') }}</span><strong>{{ countryNameFromCode(financeRequest.country_code || intakeCountryCode(financeRequest.intake_details_json), locale) }}</strong></div>
+              <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(financeRequest.intake_details_json, '-', true) }}</strong></div>
+          <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.financeType') }}</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json, t('adminContractBuilderPage.states.emptyValue'), locale) }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(financeRequest.intake_details_json) }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.companyCrNumber') }}</span><strong>{{ intakeCompanyCrNumber(financeRequest.intake_details_json) }}</strong></div>
         </div>
@@ -211,7 +232,7 @@ onUnmounted(() => {
         <div class="contract-editor-toolbar">
           <div class="contract-editor-meta">
             <span class="editor-pill">{{ contractTemplate?.name || t('adminContractBuilderPage.states.defaultTemplate') }}</span>
-            <span class="editor-pill">{{ t('adminContractBuilderPage.sections.applicantType') }}: {{ intakeFinanceType(financeRequest.intake_details_json) }}</span>
+            <span class="editor-pill">{{ t('adminContractBuilderPage.sections.applicantType') }}: {{ intakeFinanceType(financeRequest.intake_details_json, t('adminContractBuilderPage.states.emptyValue'), locale) }}</span>
           </div>
           <button type="button" class="ghost-btn small-btn" @click="resetToTemplate">{{ t('adminContractBuilderPage.actions.resetEditor') }}</button>
         </div>
@@ -222,10 +243,10 @@ onUnmounted(() => {
           <div
             ref="editorRef"
             class="contract-editor-surface contract-doc"
-            dir="rtl"
+            :dir="locale === 'ar' ? 'rtl' : 'ltr'"
             contenteditable="true"
             spellcheck="false"
-                        @input="handleEditorInput"
+            @input="handleEditorInput"
           ></div>
         </div>
       </article>
@@ -246,3 +267,123 @@ onUnmounted(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.contract-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.7fr);
+  gap: 1.4rem;
+  align-items: start;
+}
+
+.contract-grid > .signature-card {
+  grid-column: 1 / -1;
+}
+
+.contract-form-card {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.contract-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.contract-editor-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.editor-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(248, 250, 252, 0.86);
+  color: var(--admin-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.contract-editor-shell {
+  min-height: 520px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  overflow: auto;
+}
+
+.contract-editor-surface {
+  min-height: 500px;
+  padding: 1.25rem;
+  outline: none;
+  line-height: 1.85;
+  color: var(--admin-text);
+}
+
+.signature-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.signature-pad-shell {
+  width: 100%;
+  min-height: 300px;
+  padding: 8px;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.signature-canvas {
+  width: 100%;
+  height: 280px;
+  display: block;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.signature-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+@media (max-width: 1200px) {
+  .contract-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .contract-editor-shell {
+    min-height: 430px;
+  }
+
+  .contract-editor-surface {
+    min-height: 410px;
+    padding: 1rem;
+  }
+
+  .signature-pad-shell {
+    min-height: 252px;
+  }
+
+  .signature-canvas {
+    height: 232px;
+  }
+
+  .signature-actions .ghost-btn,
+  .signature-actions .primary-btn {
+    width: 100%;
+  }
+}
+</style>

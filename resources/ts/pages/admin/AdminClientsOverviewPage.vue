@@ -1,25 +1,42 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import {
   getAdminClientRequests,
   getAdminClientsOverview,
+  toggleAdminClientActive,
   type ClientOverviewItem,
   type ClientOverviewRequest,
 } from '@/services/adminRequestFiltering'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
+import { intakeCompanyName } from '@/utils/requestIntake'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { formatDateTime } from '@/utils/dateTime'
+import { formatRequestStatus } from '@/utils/requestStatus'
+
+const route = useRoute()
+const { t, locale } = useI18n()
 
 const loading = ref(true)
 const detailLoading = ref(false)
+const actionLoadingId = ref<number | null>(null)
 const errorMessage = ref('')
 const detailErrorMessage = ref('')
+const actionMessage = ref('')
 const search = ref('')
 const clients = ref<ClientOverviewItem[]>([])
 const selectedClient = ref<ClientOverviewItem | null>(null)
 const selectedClientRequests = ref<ClientOverviewRequest[]>([])
 const summary = ref({ total_clients: 0, clients_with_requests: 0, clients_with_active_requests: 0 })
-const { t } = useI18n()
+const clientsPagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
+const requestsPagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
+
+const currentState = computed<'active' | 'inactive'>(() =>
+  route.name === 'admin-clients-overview-deactivated' ? 'inactive' : 'active',
+)
+const isDeactivatedView = computed(() => currentState.value === 'inactive')
 
 function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
@@ -29,17 +46,24 @@ const statCards = computed(() => [
   { label: t('adminClientsOverview.stats.clients'), value: summary.value.total_clients, tone: 'emerald' },
   { label: t('adminClientsOverview.stats.withRequests'), value: summary.value.clients_with_requests, tone: 'blue' },
   { label: t('adminClientsOverview.stats.withActiveRequests'), value: summary.value.clients_with_active_requests, tone: 'violet' },
-  { label: t('adminClientsOverview.stats.selectedClientRequests'), value: selectedClientRequests.value.length, tone: 'amber' },
+  { label: t('adminClientsOverview.stats.selectedClientRequests'), value: requestsPagination.value.total, tone: 'amber' },
 ])
 
-async function load() {
+async function loadClients(page = clientsPagination.value.current_page) {
   loading.value = true
   errorMessage.value = ''
 
   try {
-    const data = await getAdminClientsOverview({ search: search.value || undefined })
+    const data = await getAdminClientsOverview({
+      search: search.value || undefined,
+      state: currentState.value,
+      page,
+      per_page: clientsPagination.value.per_page,
+    })
+
     clients.value = data.clients ?? []
     summary.value = data.summary ?? summary.value
+    clientsPagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: clientsPagination.value.per_page }
 
     if (selectedClient.value) {
       const refreshed = clients.value.find((item) => item.id === selectedClient.value?.id) || null
@@ -47,6 +71,7 @@ async function load() {
 
       if (!refreshed) {
         selectedClientRequests.value = []
+        requestsPagination.value = { ...DEFAULT_PAGINATION, per_page: requestsPagination.value.per_page }
       }
     }
   } catch (error: any) {
@@ -56,15 +81,22 @@ async function load() {
   }
 }
 
-async function viewClient(client: ClientOverviewItem) {
+async function loadClientRequests(client: ClientOverviewItem | null = selectedClient.value, page = requestsPagination.value.current_page) {
+  if (!client) {
+    return
+  }
+
   selectedClient.value = client
-  selectedClientRequests.value = []
   detailLoading.value = true
   detailErrorMessage.value = ''
 
   try {
-    const data = await getAdminClientRequests(client.id)
+    const data = await getAdminClientRequests(client.id, {
+      page,
+      per_page: requestsPagination.value.per_page,
+    })
     selectedClientRequests.value = data.requests ?? []
+    requestsPagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: requestsPagination.value.per_page }
   } catch (error: any) {
     detailErrorMessage.value = error?.response?.data?.message || t('adminClientsOverview.errors.loadClientRequestsFailed')
   } finally {
@@ -72,8 +104,35 @@ async function viewClient(client: ClientOverviewItem) {
   }
 }
 
+async function toggleClient(client: ClientOverviewItem) {
+  actionLoadingId.value = client.id
+  actionMessage.value = ''
+  errorMessage.value = ''
+
+  try {
+    const data = await toggleAdminClientActive(client.id)
+    actionMessage.value = data.message
+
+    if (selectedClient.value?.id === client.id) {
+      selectedClient.value = data.client
+    }
+
+    await loadClients(clientsPagination.value.current_page)
+
+    if (selectedClient.value && selectedClient.value.id === client.id && selectedClient.value.is_active === isDeactivatedView.value) {
+      selectedClient.value = null
+      selectedClientRequests.value = []
+      requestsPagination.value = { ...DEFAULT_PAGINATION, per_page: requestsPagination.value.per_page }
+    }
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || t('adminClientsOverview.errors.toggleClientFailed')
+  } finally {
+    actionLoadingId.value = null
+  }
+}
+
 function dateText(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : t('adminClientsOverview.states.emptyValue')
+  return formatDateTime(value, locale, t('adminClientsOverview.states.emptyValue'))
 }
 
 function staffPreview(item: ClientOverviewRequest) {
@@ -86,7 +145,25 @@ function staffPreview(item: ClientOverviewRequest) {
   return staff.map((entry) => entry.name).join(', ')
 }
 
-onMounted(load)
+function companyName(item: ClientOverviewRequest) {
+  return item.company_name || intakeCompanyName(item.intake_details_json, t('adminClientsOverview.states.emptyValue'))
+}
+
+function applySearch() {
+  loadClients(1)
+}
+
+watch(
+  () => route.name,
+  () => {
+    selectedClient.value = null
+    selectedClientRequests.value = []
+    clientsPagination.value.current_page = 1
+    requestsPagination.value = { ...DEFAULT_PAGINATION, per_page: requestsPagination.value.per_page }
+    loadClients(1)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -94,13 +171,19 @@ onMounted(load)
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('adminClientsOverview.hero.eyebrow') }}</p>
-        <h1>{{ t('adminClientsOverview.hero.title') }}</h1>
+        <h1>{{ isDeactivatedView ? t('adminClientsOverview.hero.deactivatedTitle') : t('adminClientsOverview.hero.title') }}</h1>
         <p class="subtext">
-          {{ t('adminClientsOverview.hero.subtitle') }}
+          {{ isDeactivatedView ? t('adminClientsOverview.hero.deactivatedSubtitle') : t('adminClientsOverview.hero.subtitle') }}
         </p>
       </div>
       <div class="actions-row">
-        <button class="ghost-btn" type="button" @click="load">{{ t('adminClientsOverview.hero.refresh') }}</button>
+        <RouterLink
+          class="ghost-btn"
+          :to="isDeactivatedView ? { name: 'admin-clients-overview' } : { name: 'admin-clients-overview-deactivated' }"
+        >
+          {{ isDeactivatedView ? t('adminClientsOverview.actions.viewActiveClients') : t('adminClientsOverview.actions.viewDeactivatedClients') }}
+        </RouterLink>
+        <button class="ghost-btn" type="button" @click="loadClients()">{{ t('adminClientsOverview.hero.refresh') }}</button>
       </div>
     </div>
 
@@ -110,6 +193,9 @@ onMounted(load)
         <span>{{ stat.label }}</span>
       </article>
     </div>
+
+    <div v-if="errorMessage" class="admin-alert admin-alert--error">{{ errorMessage }}</div>
+    <div v-if="actionMessage" class="admin-alert admin-alert--success">{{ actionMessage }}</div>
 
     <article class="panel-card">
       <div class="panel-head">
@@ -125,19 +211,18 @@ onMounted(load)
           <input v-model="search" type="text" class="admin-input" :placeholder="t('adminClientsOverview.search.placeholder')" />
         </div>
         <div class="filter-actions">
-          <button class="primary-btn" type="button" @click="load">{{ t('adminClientsOverview.search.apply') }}</button>
+          <button class="primary-btn" type="button" @click="applySearch">{{ t('adminClientsOverview.search.apply') }}</button>
         </div>
       </div>
     </article>
 
     <article class="panel-card">
       <div class="panel-head">
-        <h2>{{ t('adminClientsOverview.table.clientsTitle') }}</h2>
-        <span class="count-pill">{{ t('adminClientsOverview.table.clientsCount', { count: clients.length }) }}</span>
+        <h2>{{ isDeactivatedView ? t('adminClientsOverview.table.deactivatedClientsTitle') : t('adminClientsOverview.table.clientsTitle') }}</h2>
+        <span class="count-pill">{{ t('adminClientsOverview.table.clientsCount', { count: clientsPagination.total }) }}</span>
       </div>
 
       <p v-if="loading" class="empty-state">{{ t('adminClientsOverview.states.loadingDirectory') }}</p>
-      <p v-else-if="errorMessage" class="error-state">{{ errorMessage }}</p>
       <p v-else-if="!clients.length" class="empty-state">{{ t('adminClientsOverview.states.noClients') }}</p>
 
       <div v-else class="table-wrap">
@@ -147,6 +232,7 @@ onMounted(load)
               <th>{{ t('adminClientsOverview.table.client') }}</th>
               <th>{{ t('adminClientsOverview.table.totalRequests') }}</th>
               <th>{{ t('adminClientsOverview.table.activeRequests') }}</th>
+              <th>{{ t('adminClientsOverview.table.status') }}</th>
               <th>{{ t('adminClientsOverview.table.lastRequest') }}</th>
               <th>{{ t('adminClientsOverview.table.lastLogin') }}</th>
               <th></th>
@@ -160,24 +246,40 @@ onMounted(load)
               </td>
               <td>{{ client.requests_count }}</td>
               <td>{{ client.active_requests_count }}</td>
+              <td>
+                <span class="status-badge">{{ client.is_active ? t('adminClientsOverview.states.active') : t('adminClientsOverview.states.inactive') }}</span>
+              </td>
               <td>{{ dateText(client.last_request_at) }}</td>
               <td>{{ dateText(client.last_login_at) }}</td>
               <td>
-                <button class="primary-btn small-btn" type="button" @click="viewClient(client)">{{ t('adminClientsOverview.actions.viewRequests') }}</button>
+                <div class="actions-row">
+                  <button class="primary-btn small-btn" type="button" @click="loadClientRequests(client, 1)">{{ t('adminClientsOverview.actions.viewRequests') }}</button>
+                  <button class="ghost-btn small-btn" type="button" :disabled="actionLoadingId === client.id" @click="toggleClient(client)">
+                    {{
+                      actionLoadingId === client.id
+                        ? t('adminClientsOverview.actions.processing')
+                        : client.is_active
+                          ? t('adminClientsOverview.actions.deactivate')
+                          : t('adminClientsOverview.actions.activate')
+                    }}
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <AppPagination :pagination="clientsPagination" :disabled="loading" @change="loadClients" />
     </article>
 
     <article v-if="selectedClient" class="panel-card">
       <div class="panel-head">
         <div>
           <h2>{{ selectedClient.name }}</h2>
-          <p class="subtext">{{ selectedClient.email }} · {{ selectedClient.phone || t('adminClientsOverview.states.noPhoneSaved') }}</p>
+          <p class="subtext">{{ selectedClient.email }} | {{ selectedClient.phone || t('adminClientsOverview.states.noPhoneSaved') }}</p>
         </div>
-        <span class="count-pill">{{ t('adminClientsOverview.table.requestsCount', { count: selectedClientRequests.length }) }}</span>
+        <span class="count-pill">{{ t('adminClientsOverview.table.requestsCount', { count: requestsPagination.total }) }}</span>
       </div>
 
       <p v-if="detailLoading" class="empty-state">{{ t('adminClientsOverview.states.loadingClientRequests') }}</p>
@@ -189,6 +291,7 @@ onMounted(load)
           <thead>
             <tr>
               <th>{{ t('adminClientsOverview.table.request') }}</th>
+              <th>{{ t('adminClientsOverview.table.company') }}</th>
               <th>{{ t('adminClientsOverview.table.assignedStaff') }}</th>
               <th>{{ t('adminClientsOverview.table.emailRecords') }}</th>
               <th>{{ t('adminClientsOverview.table.submitted') }}</th>
@@ -203,12 +306,13 @@ onMounted(load)
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('adminClientsOverview.states.awaitingApprovalRef') }}</div>
               </td>
+              <td>{{ companyName(item) }}</td>
               <td>{{ staffPreview(item) }}</td>
               <td>{{ item.emails_count }}</td>
               <td>{{ dateText(item.submitted_at) }}</td>
               <td>{{ dateText(item.latest_activity_at) }}</td>
               <td>
-                <span class="status-badge">{{ item.status }}</span>
+                <span class="status-badge">{{ formatRequestStatus(item.status, locale, t('adminClientsOverview.states.emptyValue')) }}</span>
                 <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
               <td>
@@ -218,6 +322,8 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+
+      <AppPagination :pagination="requestsPagination" :disabled="detailLoading" @change="(page) => loadClientRequests(selectedClient, page)" />
     </article>
   </section>
 </template>

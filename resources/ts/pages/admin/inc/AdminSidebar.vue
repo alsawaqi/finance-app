@@ -20,10 +20,14 @@ const { t } = useI18n()
 
 const displayName = computed(() => auth.user?.name || t('adminSidebar.defaultUserName'))
 const displayEmail = computed(() => auth.user?.email || 'admin@finance.test')
+const isStaffWorkspace = computed(() => auth.isStaff && !auth.isAdmin)
+const workspaceTitle = computed(() => isStaffWorkspace.value ? t('adminSidebar.brand.staff') : t('adminSidebar.brand.admin'))
+const workspaceSubtitle = computed(() => isStaffWorkspace.value ? t('adminSidebar.brand.staffSubtitle') : t('adminSidebar.brand.adminSubtitle'))
 
 const menuItems = computed(() => {
   const items = [
     {
+      group: 'workspace',
       label: t('adminSidebar.menu.dashboard'),
       icon: 'fas fa-chart-pie',
       to: { name: 'admin-dashboard' },
@@ -32,6 +36,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin,
     },
     {
+      group: 'workspace',
       label: auth.isAdmin ? t('adminSidebar.menu.newRequests') : t('adminSidebar.menu.reviewQueue'),
       icon: 'fas fa-inbox',
       to: { name: 'admin-new-requests' },
@@ -40,6 +45,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin,
     },
     {
+      group: 'workspace',
       label: t('adminSidebar.menu.assignments'),
       icon: 'fas fa-user-check',
       to: { name: 'admin-assignments' },
@@ -48,6 +54,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin && auth.can('assign staff'),
     },
     {
+      group: 'workspace',
       label: t('adminSidebar.menu.assignedRequests'),
       icon: 'fas fa-clipboard-check',
       to: { name: 'staff-requests' },
@@ -56,6 +63,7 @@ const menuItems = computed(() => {
       show:   auth.can('view assigned requests'),
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.requestQuestions'),
       icon: 'fas fa-list-check',
       to: { name: 'admin-request-questions' },
@@ -64,22 +72,25 @@ const menuItems = computed(() => {
       show: auth.can('manage questions'),
     },
     {
-  label: t('adminSidebar.menu.staffQuestionTemplates'),
-  icon: 'fas fa-clipboard-question',
-  to: { name: 'admin-staff-question-templates' },
-  active: route.name === 'admin-staff-question-templates',
-  badge: t('adminSidebar.badges.setup'),
-  show: auth.isAdmin,
-},
-{
-  label: t('adminSidebar.menu.financeRequestTypes'),
-  icon: 'fas fa-tags',
-  to: { name: 'admin-finance-request-types' },
-  active: route.name === 'admin-finance-request-types',
-  badge: t('adminSidebar.badges.master'),
-  show: auth.isAdmin,
-},
+      group: 'setup',
+      label: t('adminSidebar.menu.staffQuestionTemplates'),
+      icon: 'fas fa-clipboard-question',
+      to: { name: 'admin-staff-question-templates' },
+      active: route.name === 'admin-staff-question-templates',
+      badge: t('adminSidebar.badges.setup'),
+      show: auth.isAdmin,
+    },
     {
+      group: 'setup',
+      label: t('adminSidebar.menu.financeRequestTypes'),
+      icon: 'fas fa-tags',
+      to: { name: 'admin-finance-request-types' },
+      active: route.name === 'admin-finance-request-types',
+      badge: t('adminSidebar.badges.master'),
+      show: auth.isAdmin,
+    },
+    {
+      group: 'setup',
       label: t('adminSidebar.menu.documentSteps'),
       icon: 'fas fa-folder-open',
       to: { name: 'admin-document-upload-steps' },
@@ -88,6 +99,7 @@ const menuItems = computed(() => {
       show: auth.can('manage document steps'),
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.staff'),
       icon: 'fas fa-user-shield',
       to: { name: 'admin-staff' },
@@ -96,6 +108,7 @@ const menuItems = computed(() => {
       show: auth.can('manage staff'),
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.banks'),
       icon: 'fas fa-building-columns',
       to: { name: 'admin-banks' },
@@ -104,6 +117,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin,
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.categorization'),
       icon: 'fas fa-layer-group',
       to: { name: 'admin-categorization' },
@@ -112,6 +126,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin,
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.requestFiltration'),
       icon: 'fas fa-filter',
       to: { name: 'admin-request-filtration' },
@@ -120,6 +135,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin,
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.clientsDirectory'),
       icon: 'fas fa-users',
       to: { name: 'admin-clients-overview' },
@@ -128,6 +144,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin,
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.agents'),
       icon: 'fas fa-user-tie',
       to: { name: 'admin-agents' },
@@ -136,6 +153,7 @@ const menuItems = computed(() => {
       show: auth.can('manage agents'),
     },
     {
+      group: 'workspace',
       label: t('adminSidebar.menu.inbox'),
       icon: 'fas fa-envelope-open-text',
       to: { name: 'admin-inbox' },
@@ -144,6 +162,7 @@ const menuItems = computed(() => {
       show: auth.isAdmin || auth.isStaff,
     },
     {
+      group: 'setup',
       label: t('adminSidebar.menu.mailSettings'),
       icon: 'fas fa-envelope-circle-check',
       to: { name: 'admin-mail-settings' },
@@ -155,6 +174,9 @@ const menuItems = computed(() => {
 
   return items.filter((item) => item.show)
 })
+
+const primaryItems = computed(() => menuItems.value.filter((item) => item.group === 'workspace'))
+const setupItems = computed(() => menuItems.value.filter((item) => item.group === 'setup'))
 
 async function handleLogout() {
   await auth.logout()
@@ -173,8 +195,8 @@ function handleNavClick() {
       <RouterLink to="/admin" class="admin-sidebar__brand-link" @click="handleNavClick">
         <span class="admin-sidebar__brand-logo">F</span>
         <div>
-          <strong>{{ auth.isStaff && !auth.isAdmin ? t('adminSidebar.brand.staff') : t('adminSidebar.brand.admin') }}</strong>
-          <small>{{ auth.isStaff && !auth.isAdmin ? t('adminSidebar.brand.staffSubtitle') : t('adminSidebar.brand.adminSubtitle') }}</small>
+          <strong>{{ workspaceTitle }}</strong>
+          <small>{{ workspaceSubtitle }}</small>
         </div>
       </RouterLink>
 
@@ -202,11 +224,31 @@ function handleNavClick() {
     </div>
 
     <div class="admin-sidebar__body">
+      <section class="admin-sidebar__intro">
+        <span class="admin-sidebar__intro-kicker">{{ t('adminTopbar.eyebrow') }}</span>
+        <h2>{{ workspaceTitle }}</h2>
+        <p>{{ workspaceSubtitle }}</p>
+      </section>
+
       <div class="admin-sidebar__section">
         <span class="admin-sidebar__label">{{ t('adminSidebar.mainNavigation') }}</span>
 
         <nav class="admin-sidebar__nav">
-          <template v-for="item in menuItems" :key="item.label">
+          <template v-for="item in primaryItems" :key="item.label">
+            <RouterLink v-if="item.to" :to="item.to" class="admin-sidebar__link" :class="{ 'is-active': item.active }" @click="handleNavClick">
+              <span class="admin-sidebar__link-icon"><i :class="item.icon"></i></span>
+              <span class="admin-sidebar__link-text">{{ item.label }}</span>
+              <span v-if="item.badge" class="admin-sidebar__link-badge">{{ item.badge }}</span>
+            </RouterLink>
+          </template>
+        </nav>
+      </div>
+
+      <div v-if="setupItems.length" class="admin-sidebar__section admin-sidebar__section--secondary">
+        <span class="admin-sidebar__label">{{ t('adminSidebar.badges.setup') }}</span>
+
+        <nav class="admin-sidebar__nav">
+          <template v-for="item in setupItems" :key="`${item.label}-setup`">
             <RouterLink v-if="item.to" :to="item.to" class="admin-sidebar__link" :class="{ 'is-active': item.active }" @click="handleNavClick">
               <span class="admin-sidebar__link-icon"><i :class="item.icon"></i></span>
               <span class="admin-sidebar__link-text">{{ item.label }}</span>

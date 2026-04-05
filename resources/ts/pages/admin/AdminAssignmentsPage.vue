@@ -2,27 +2,35 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import {
   listReadyForAssignment,
   type AssignmentReadyRequest,
 } from '@/services/adminRequests'
-import { intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
+import { intakeCompanyName, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { formatDateTime } from '@/utils/dateTime'
 
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<AssignmentReadyRequest[]>([])
-const { t } = useI18n()
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
+const { t, locale } = useI18n()
 
 const signedCount = computed(() => requests.value.filter((item) => Boolean(item.current_contract?.client_signed_at)).length)
 
-async function load() {
+async function load(page = pagination.value.current_page) {
   loading.value = true
   errorMessage.value = ''
 
   try {
-    const data = await listReadyForAssignment()
+    const data = await listReadyForAssignment({
+      page,
+      per_page: pagination.value.per_page,
+    })
     requests.value = data.requests ?? []
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminAssignments.errors.loadFailed')
   } finally {
@@ -57,7 +65,7 @@ onMounted(load)
 
     <div class="admin-question-stats-grid admin-reveal-up">
       <article class="admin-question-stat tone-blue">
-        <strong>{{ requests.length }}</strong>
+        <strong>{{ pagination.total }}</strong>
         <span>{{ t('adminAssignments.stats.readyRequests') }}</span>
       </article>
       <article class="admin-question-stat tone-emerald">
@@ -80,7 +88,7 @@ onMounted(load)
           <h2>{{ t('adminAssignments.table.title') }}</h2>
           <p class="subtext">{{ t('adminAssignments.table.subtitle') }}</p>
         </div>
-        <span class="count-pill">{{ t('adminAssignments.table.count', { count: requests.length }) }}</span>
+        <span class="count-pill">{{ t('adminAssignments.table.count', { count: pagination.total }) }}</span>
       </div>
 
       <p v-if="loading" class="empty-state">{{ t('adminAssignments.states.loading') }}</p>
@@ -93,6 +101,7 @@ onMounted(load)
             <tr>
               <th>{{ t('adminAssignments.table.request') }}</th>
               <th>{{ t('adminAssignments.table.client') }}</th>
+              <th>{{ t('adminAssignments.table.company') }}</th>
               <th>{{ t('adminAssignments.table.financeType') }}</th>
               <th>{{ t('adminAssignments.table.signed') }}</th>
               <th>{{ t('adminAssignments.table.currentHandling') }}</th>
@@ -109,11 +118,12 @@ onMounted(load)
                 <strong>{{ intakeFullName(item.intake_details_json, item.client?.name || t('adminAssignments.states.clientFallback')) }}</strong>
                 <div class="muted-small">{{ item.client?.email || t('adminAssignments.states.emptyValue') }}</div>
               </td>
+              <td>{{ item.company_name || intakeCompanyName(item.intake_details_json, t('adminAssignments.states.emptyValue')) }}</td>
               <td>
-                <div>{{ intakeFinanceType(item.intake_details_json) }}</div>
+                <div>{{ intakeFinanceType(item.intake_details_json, t('adminAssignments.states.emptyValue'), locale) }}</div>
                 <div class="muted-small">{{ intakeRequestedAmount(item.intake_details_json) }}</div>
               </td>
-              <td>{{ item.current_contract?.client_signed_at ? new Date(item.current_contract.client_signed_at).toLocaleString() : t('adminAssignments.states.pending') }}</td>
+              <td>{{ formatDateTime(item.current_contract?.client_signed_at, locale, t('adminAssignments.states.pending')) }}</td>
               <td>
                 <span class="status-badge">{{ stageMeta(item.workflow_stage).label }}</span>
                 <div class="muted-small">{{ staffPreview(item) }}</div>
@@ -127,6 +137,8 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+
+      <AppPagination :pagination="pagination" :disabled="loading" @change="load" />
     </article>
   </section>
 </template>

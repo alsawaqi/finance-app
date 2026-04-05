@@ -10,6 +10,7 @@ class StoreFinanceRequestUpdateBatchRequest extends FormRequest
     private const INTAKE_FIELD_KEYS = [
         'finance_request_type_id',
         'country',
+        'country_code',
         'requested_amount',
         'company_name',
         'company_cr_number',

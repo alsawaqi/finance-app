@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import {
   getAdminRequestFilterData,
   type FilterAgentOption,
@@ -11,12 +12,17 @@ import {
   type FilteredRequestItem,
   type FilterStaffOption,
 } from '@/services/adminRequestFiltering'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
+import { intakeCompanyName } from '@/utils/requestIntake'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { formatDateTime } from '@/utils/dateTime'
+import { formatRequestStatus } from '@/utils/requestStatus'
 
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<FilteredRequestItem[]>([])
-const statuses = ref<Array<{ value: string; label: string }>>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 15 })
+const stages = ref<Array<{ value: string; label: string }>>([])
 const staffOptions = ref<FilterStaffOption[]>([])
 const bankOptions = ref<FilterBankOption[]>([])
 const agentOptions = ref<FilterAgentOption[]>([])
@@ -24,11 +30,15 @@ const bankBreakdown = ref<FilterBreakdownBank[]>([])
 const agentBreakdown = ref<FilterBreakdownAgent[]>([])
 const summary = ref({ total_requests: 0, unique_clients: 0, unique_staff: 0, unique_agents: 0, total_emails: 0 })
 
-const selectedStatus = ref('')
+const selectedStage = ref('')
 const selectedStaffId = ref<number | ''>('')
 const selectedBankId = ref<number | ''>('')
 const selectedAgentId = ref<number | ''>('')
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
+}
 
 const usingStaffFilter = computed(() => selectedStaffId.value !== '')
 const usingBankAgentFilter = computed(() => selectedBankId.value !== '' || selectedAgentId.value !== '')
@@ -49,7 +59,7 @@ const statCards = computed(() => [
   { label: t('adminRequestFiltering.stats.clientsInResult'), value: summary.value.unique_clients, tone: 'blue' },
   { label: t('adminRequestFiltering.stats.staffInResult'), value: summary.value.unique_staff, tone: 'violet' },
   { label: t('adminRequestFiltering.stats.agentsInResult'), value: summary.value.unique_agents, tone: 'amber' },
-  { label: 'Emails in result', value: summary.value.total_emails, tone: 'slate' },
+  { label: uiText('Emails in result', 'الرسائل ضمن النتائج'), value: summary.value.total_emails, tone: 'slate' },
 ])
 
 watch(selectedStaffId, (value) => {
@@ -75,19 +85,21 @@ watch(selectedAgentId, (value) => {
   }
 })
 
-async function load() {
+async function load(page = pagination.value.current_page) {
   loading.value = true
   errorMessage.value = ''
 
   try {
     const data = await getAdminRequestFilterData({
-      status: selectedStatus.value || undefined,
+      stage: selectedStage.value || undefined,
       staff_id: selectedStaffId.value === '' ? undefined : Number(selectedStaffId.value),
       bank_id: selectedBankId.value === '' ? undefined : Number(selectedBankId.value),
       agent_id: selectedAgentId.value === '' ? undefined : Number(selectedAgentId.value),
+      page,
+      per_page: pagination.value.per_page,
     })
 
-    statuses.value = data.filters?.statuses ?? []
+    stages.value = data.filters?.stages ?? []
     staffOptions.value = data.filters?.staff ?? []
     bankOptions.value = data.filters?.banks ?? []
     agentOptions.value = data.filters?.agents ?? []
@@ -95,6 +107,7 @@ async function load() {
     bankBreakdown.value = data.bank_breakdown ?? []
     agentBreakdown.value = data.agent_breakdown ?? []
     requests.value = data.requests ?? []
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminRequestFiltering.errors.loadFailed')
   } finally {
@@ -102,16 +115,20 @@ async function load() {
   }
 }
 
+function applyFilters() {
+  load(1)
+}
+
 function resetFilters() {
-  selectedStatus.value = ''
+  selectedStage.value = ''
   selectedStaffId.value = ''
   selectedBankId.value = ''
   selectedAgentId.value = ''
-  load()
+  load(1)
 }
 
 function dateText(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : t('adminRequestFiltering.states.emptyValue')
+  return formatDateTime(value, locale, t('adminRequestFiltering.states.emptyValue'))
 }
 
 function staffPreview(item: FilteredRequestItem) {
@@ -134,6 +151,10 @@ function agentPreview(item: FilteredRequestItem) {
   return agents.slice(0, 2).map((entry) => entry.name).join(', ')
 }
 
+function companyName(item: FilteredRequestItem) {
+  return item.company_name || intakeCompanyName(item.intake_details_json, t('adminRequestFiltering.states.emptyValue'))
+}
+
 onMounted(load)
 </script>
 
@@ -149,7 +170,7 @@ onMounted(load)
       </div>
       <div class="actions-row">
         <button class="ghost-btn" type="button" @click="resetFilters">{{ t('adminRequestFiltering.actions.reset') }}</button>
-        <button class="primary-btn" type="button" @click="load">{{ t('adminRequestFiltering.actions.applyFilters') }}</button>
+        <button class="primary-btn" type="button" @click="applyFilters">{{ t('adminRequestFiltering.actions.applyFilters') }}</button>
       </div>
     </div>
 
@@ -170,10 +191,10 @@ onMounted(load)
 
       <div class="filter-bar filter-bar--dense">
         <div class="field-block">
-          <span>{{ t('adminRequestFiltering.filters.status') }}</span>
-          <select v-model="selectedStatus" class="admin-select">
-            <option value="">{{ t('adminRequestFiltering.filters.allStatuses') }}</option>
-            <option v-for="status in statuses" :key="status.value" :value="status.value">{{ status.label }}</option>
+          <span>{{ t('adminRequestFiltering.filters.stage') }}</span>
+          <select v-model="selectedStage" class="admin-select">
+            <option value="">{{ t('adminRequestFiltering.filters.allStages') }}</option>
+            <option v-for="stage in stages" :key="stage.value" :value="stage.value">{{ stageMeta(stage.value).label }}</option>
           </select>
         </div>
 
@@ -221,19 +242,19 @@ onMounted(load)
     <div class="admin-dashboard-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
       <article class="panel-card">
         <div class="panel-head">
-          <h2>Bank traffic breakdown</h2>
+          <h2>{{ uiText('Bank traffic breakdown', 'تفصيل حركة البنوك') }}</h2>
           <span class="count-pill">{{ bankBreakdown.length }}</span>
         </div>
 
-        <p v-if="!bankBreakdown.length" class="empty-state">No bank activity found for the current filter.</p>
+        <p v-if="!bankBreakdown.length" class="empty-state">{{ uiText('No bank activity found for the current filter.', 'لا توجد حركة بنكية ضمن الفلتر الحالي.') }}</p>
         <div v-else class="table-wrap">
           <table class="request-table">
             <thead>
               <tr>
-                <th>Bank</th>
-                <th>Agents</th>
-                <th>Requests</th>
-                <th>Emails</th>
+                <th>{{ uiText('Bank', 'البنك') }}</th>
+                <th>{{ uiText('Agents', 'الوكلاء') }}</th>
+                <th>{{ uiText('Requests', 'الطلبات') }}</th>
+                <th>{{ uiText('Emails', 'الرسائل') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -253,28 +274,28 @@ onMounted(load)
 
       <article class="panel-card">
         <div class="panel-head">
-          <h2>Agent traffic breakdown</h2>
+          <h2>{{ uiText('Agent traffic breakdown', 'تفصيل حركة الوكلاء') }}</h2>
           <span class="count-pill">{{ agentBreakdown.length }}</span>
         </div>
 
-        <p v-if="!agentBreakdown.length" class="empty-state">No agent activity found for the current filter.</p>
+        <p v-if="!agentBreakdown.length" class="empty-state">{{ uiText('No agent activity found for the current filter.', 'لا توجد حركة وكلاء ضمن الفلتر الحالي.') }}</p>
         <div v-else class="table-wrap">
           <table class="request-table">
             <thead>
               <tr>
-                <th>Agent</th>
-                <th>Bank</th>
-                <th>Requests</th>
-                <th>Emails</th>
+                <th>{{ uiText('Agent', 'الوكيل') }}</th>
+                <th>{{ uiText('Bank', 'البنك') }}</th>
+                <th>{{ uiText('Requests', 'الطلبات') }}</th>
+                <th>{{ uiText('Emails', 'الرسائل') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="agent in agentBreakdown.slice(0, 8)" :key="agent.id">
                 <td>
                   <strong>{{ agent.name }}</strong>
-                  <div class="muted-small">{{ agent.email || '—' }}</div>
+                  <div class="muted-small">{{ agent.email || t('adminRequestFiltering.states.emptyValue') }}</div>
                 </td>
-                <td>{{ agent.bank_short_name || agent.bank_name || '—' }}</td>
+                <td>{{ agent.bank_short_name || agent.bank_name || t('adminRequestFiltering.states.emptyValue') }}</td>
                 <td>{{ agent.requests_count }}</td>
                 <td>{{ agent.emails_count }}</td>
               </tr>
@@ -287,7 +308,7 @@ onMounted(load)
     <article class="panel-card">
       <div class="panel-head">
         <h2>{{ t('adminRequestFiltering.table.title') }}</h2>
-        <span class="count-pill">{{ t('adminRequestFiltering.table.count', { count: requests.length }) }}</span>
+        <span class="count-pill">{{ t('adminRequestFiltering.table.count', { count: pagination.total }) }}</span>
       </div>
 
       <p v-if="loading" class="empty-state">{{ t('adminRequestFiltering.states.loading') }}</p>
@@ -300,6 +321,7 @@ onMounted(load)
             <tr>
               <th>{{ t('adminRequestFiltering.table.request') }}</th>
               <th>{{ t('adminRequestFiltering.table.client') }}</th>
+              <th>{{ t('adminRequestFiltering.table.company') }}</th>
               <th>{{ t('adminRequestFiltering.table.assignedStaff') }}</th>
               <th>{{ t('adminRequestFiltering.table.bankAgent') }}</th>
               <th>{{ t('adminRequestFiltering.table.emailRecords') }}</th>
@@ -318,6 +340,7 @@ onMounted(load)
                 <strong>{{ item.client?.name || t('adminRequestFiltering.states.clientFallback') }}</strong>
                 <div class="muted-small">{{ item.client?.email || t('adminRequestFiltering.states.emptyValue') }}</div>
               </td>
+              <td>{{ companyName(item) }}</td>
               <td>
                 <div>{{ staffPreview(item) }}</div>
                 <div class="muted-small">{{ t('adminRequestFiltering.table.primary') }}: {{ item.primary_staff?.name || t('adminRequestFiltering.states.notAssigned') }}</div>
@@ -332,7 +355,7 @@ onMounted(load)
               </td>
               <td>{{ dateText(item.latest_activity_at || item.submitted_at) }}</td>
               <td>
-                <span class="status-badge">{{ item.status }}</span>
+                <span class="status-badge">{{ formatRequestStatus(item.status, locale, t('adminRequestFiltering.states.emptyValue')) }}</span>
                 <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
               <td>
@@ -342,6 +365,8 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+
+      <AppPagination :pagination="pagination" :disabled="loading" @change="load" />
     </article>
   </section>
 </template>

@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export interface BankItem {
   id: number
@@ -20,8 +21,8 @@ export interface BankPayload {
   is_active?: boolean
 }
 
-export async function listBanks() {
-  return api.get<{ data: BankItem[] }>('/api/admin/banks')
+export async function listBanks(params?: { page?: number; per_page?: number }) {
+  return api.get<{ data: BankItem[]; pagination: PaginationMeta }>('/api/admin/banks', { params })
 }
 
 export async function createBank(payload: BankPayload) {

@@ -2,6 +2,7 @@
 import axios from 'axios'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatDateTime } from '@/utils/dateTime'
 import {
   getMailboxSettings,
   listStaffMailboxUsers,
@@ -11,7 +12,11 @@ import {
   type StaffMailboxDirectoryItem,
 } from '@/services/mailSettings'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
+}
 
 const loading = ref(true)
 const directoryLoading = ref(true)
@@ -34,7 +39,7 @@ const form = ref({
 const stats = computed(() => {
   const verified = settings.value?.smtp_enabled && settings.value?.smtp_verified_at
   return [
-    { label: 'Selected mailbox', value: settings.value?.sender_email || settings.value?.default_sender_email || '—', tone: 'blue' },
+    { label: uiText('Selected mailbox', 'البريد المحدد'), value: settings.value?.sender_email || settings.value?.default_sender_email || '—', tone: 'blue' },
     { label: t('mailSettingsPage.stats.status'), value: verified ? t('mailSettingsPage.status.verified') : t('mailSettingsPage.status.pending'), tone: verified ? 'emerald' : 'amber' },
     { label: t('mailSettingsPage.stats.password'), value: settings.value?.has_smtp_password ? t('mailSettingsPage.status.saved') : t('mailSettingsPage.status.missing'), tone: settings.value?.has_smtp_password ? 'violet' : 'rose' },
     { label: t('mailSettingsPage.stats.transport'), value: `${settings.value?.smtp_host || '—'}:${settings.value?.smtp_port || '—'}`, tone: 'slate' },
@@ -191,9 +196,9 @@ function extractErrorMessage(error: unknown, fallback: string) {
   <div class="admin-question-page">
     <section class="admin-hero admin-reveal-up">
       <div class="admin-hero__content">
-        <span class="admin-hero__eyebrow">Admin managed mailboxes</span>
+        <span class="admin-hero__eyebrow">{{ uiText('Admin managed mailboxes', 'صناديق بريد تُدار من الإدارة') }}</span>
         <h2>{{ t('mailSettingsPage.hero.title') }}</h2>
-        <p>Configure Hostinger mailbox credentials for staff accounts here. Staff users can only send request emails after their mailbox is saved and tested by the admin.</p>
+        <p>{{ uiText('Configure Hostinger mailbox credentials for staff accounts here. Staff users can only send request emails after their mailbox is saved and tested by the admin.', 'قم بإعداد بيانات بريد Hostinger للموظفين من هنا. لا يمكن للموظف إرسال رسائل الطلب إلا بعد حفظ البريد واختباره من الإدارة.') }}</p>
       </div>
 
       <div class="admin-hero__actions">
@@ -206,7 +211,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       </div>
     </section>
 
-    <div class="admin-question-stats-grid admin-reveal-up admin-reveal-delay-1">
+    <div class="admin-question-stats-grid admin-question-stats-grid--balanced admin-reveal-up admin-reveal-delay-1">
       <article v-for="stat in stats" :key="stat.label" class="admin-question-stat" :class="`tone-${stat.tone}`">
         <strong>{{ stat.value }}</strong>
         <span>{{ stat.label }}</span>
@@ -220,28 +225,28 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <section class="admin-panel admin-reveal-up admin-reveal-delay-1">
         <div class="admin-panel__head">
           <div>
-            <span class="admin-panel__eyebrow">Staff mailbox directory</span>
-            <h2>Select the staff mailbox to configure</h2>
+            <span class="admin-panel__eyebrow">{{ uiText('Staff mailbox directory', 'دليل بريد الموظفين') }}</span>
+            <h2>{{ uiText('Select the staff mailbox to configure', 'اختر بريد الموظف لإعداده') }}</h2>
           </div>
         </div>
 
-        <div v-if="directoryLoading" class="empty-state">Loading staff mailbox directory…</div>
+        <div v-if="directoryLoading" class="empty-state">{{ uiText('Loading staff mailbox directory…', 'جارٍ تحميل دليل بريد الموظفين…') }}</div>
         <template v-else>
           <label class="admin-field admin-field--full">
-            <span>Staff account</span>
+            <span>{{ uiText('Staff account', 'حساب الموظف') }}</span>
             <select v-model="selectedStaffId" class="admin-select">
               <option v-for="staff in staffUsers" :key="staff.id" :value="staff.id">
                 {{ staff.name }} · {{ staff.email }}
               </option>
             </select>
-            <small class="admin-helper-text">Configured and verified mailboxes: {{ activeMailboxCount }} / {{ staffUsers.length }}</small>
+            <small class="admin-helper-text">{{ uiText('Configured and verified mailboxes', 'صناديق البريد المُعدة والمُوثقة') }}: {{ activeMailboxCount }} / {{ staffUsers.length }}</small>
           </label>
 
-          <div v-if="selectedStaff" class="summary-grid summary-grid--tight" style="margin-top: 1rem;">
-            <div><span>Staff name</span><strong>{{ selectedStaff.name }}</strong></div>
-            <div><span>Login email</span><strong>{{ selectedStaff.email }}</strong></div>
-            <div><span>Account status</span><strong>{{ selectedStaff.is_active ? 'Active' : 'Inactive' }}</strong></div>
-            <div><span>Mailbox state</span><strong>{{ selectedStaff.mailbox_settings?.smtp_enabled ? 'Verified' : 'Pending' }}</strong></div>
+          <div v-if="selectedStaff" class="summary-grid summary-grid--tight admin-mail-summary-grid">
+            <div><span>{{ uiText('Staff name', 'اسم الموظف') }}</span><strong>{{ selectedStaff.name }}</strong></div>
+            <div><span>{{ uiText('Login email', 'بريد تسجيل الدخول') }}</span><strong>{{ selectedStaff.email }}</strong></div>
+            <div><span>{{ uiText('Account status', 'حالة الحساب') }}</span><strong>{{ selectedStaff.is_active ? uiText('Active', 'نشط') : uiText('Inactive', 'غير نشط') }}</strong></div>
+            <div><span>{{ uiText('Mailbox state', 'حالة البريد') }}</span><strong>{{ selectedStaff.mailbox_settings?.smtp_enabled ? uiText('Verified', 'موثّق') : uiText('Pending', 'قيد الانتظار') }}</strong></div>
           </div>
         </template>
       </section>
@@ -249,30 +254,30 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <section class="admin-panel admin-reveal-up admin-reveal-delay-1">
         <div class="admin-panel__head">
           <div>
-            <span class="admin-panel__eyebrow">Mailbox credentials</span>
+            <span class="admin-panel__eyebrow">{{ uiText('Mailbox credentials', 'بيانات اعتماد البريد') }}</span>
             <h2>{{ t('mailSettingsPage.form.title') }}</h2>
           </div>
         </div>
 
         <div v-if="loading" class="empty-state">{{ t('mailSettingsPage.states.loading') }}</div>
-        <div v-else-if="!selectedStaffId" class="empty-state">Choose a staff account first.</div>
+        <div v-else-if="!selectedStaffId" class="empty-state">{{ uiText('Choose a staff account first.', 'اختر حساب موظف أولاً.') }}</div>
         <div v-else class="admin-form-grid">
           <label class="admin-field admin-field--full">
             <span>{{ t('mailSettingsPage.form.loginEmail') }}</span>
             <input class="admin-input" :value="settings?.default_sender_email || selectedStaff?.email || ''" type="text" readonly>
-            <small class="admin-helper-text">This is the staff login email stored on the user record.</small>
+            <small class="admin-helper-text">{{ uiText('This is the staff login email stored on the user record.', 'هذا هو بريد تسجيل دخول الموظف المحفوظ في سجل المستخدم.') }}</small>
           </label>
 
           <label class="admin-field admin-field--full">
             <span>{{ t('mailSettingsPage.form.smtpUsername') }}</span>
             <input v-model="form.smtp_username" class="admin-input" type="email" :placeholder="settings?.default_sender_email || selectedStaff?.email || 'staff@domain.com'">
             <small v-if="firstError('smtp_username')" class="admin-field__error">{{ firstError('smtp_username') }}</small>
-            <small class="admin-helper-text">Save the full Hostinger mailbox email used for SMTP login.</small>
+            <small class="admin-helper-text">{{ uiText('Save the full Hostinger mailbox email used for SMTP login.', 'احفظ عنوان بريد Hostinger الكامل المستخدم لتسجيل دخول SMTP.') }}</small>
           </label>
 
           <label class="admin-field admin-field--full">
             <span>{{ t('mailSettingsPage.form.senderName') }}</span>
-            <input v-model="form.smtp_sender_name" class="admin-input" type="text" :placeholder="selectedStaff?.name || 'Finance Staff'">
+            <input v-model="form.smtp_sender_name" class="admin-input" type="text" :placeholder="selectedStaff?.name || uiText('Finance Staff', 'موظف التمويل')">
             <small v-if="firstError('smtp_sender_name')" class="admin-field__error">{{ firstError('smtp_sender_name') }}</small>
           </label>
 
@@ -280,7 +285,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
             <span>{{ t('mailSettingsPage.form.smtpPassword') }}</span>
             <input v-model="form.smtp_password" class="admin-input" type="password" :placeholder="t('mailSettingsPage.form.smtpPasswordPlaceholder')">
             <small v-if="firstError('smtp_password')" class="admin-field__error">{{ firstError('smtp_password') }}</small>
-            <small class="admin-helper-text">This password is stored encrypted and is only used for request email sending.</small>
+            <small class="admin-helper-text">{{ uiText('This password is stored encrypted and is only used for request email sending.', 'يتم حفظ كلمة المرور هذه بشكل مشفر وتُستخدم فقط لإرسال رسائل الطلب.') }}</small>
           </label>
 
           <label class="admin-checkbox-field admin-field--full">
@@ -293,7 +298,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
         <div class="admin-panel__head">
           <div>
-            <span class="admin-panel__eyebrow">Selected staff summary</span>
+            <span class="admin-panel__eyebrow">{{ uiText('Selected staff summary', 'ملخص الموظف المحدد') }}</span>
             <h2>{{ t('mailSettingsPage.summary.title') }}</h2>
           </div>
         </div>
@@ -313,16 +318,16 @@ function extractErrorMessage(error: unknown, fallback: string) {
           </div>
           <div class="admin-info-row">
             <strong>{{ t('mailSettingsPage.summary.verifiedAt') }}</strong>
-            <span>{{ settings?.smtp_verified_at ? new Date(settings.smtp_verified_at).toLocaleString() : t('mailSettingsPage.status.notVerified') }}</span>
+            <span>{{ formatDateTime(settings?.smtp_verified_at, locale, t('mailSettingsPage.status.notVerified')) }}</span>
           </div>
         </div>
 
-        <div class="notes-box" style="margin-top: 1rem;">
-          <span>Admin-only reminder</span>
-          <p>Save the mailbox details first, then run the mailbox test. Staff will only see whether their mailbox is ready when they open the request email composer.</p>
+        <div class="notes-box">
+          <span>{{ uiText('Admin-only reminder', 'تذكير خاص بالإدارة') }}</span>
+          <p>{{ uiText('Save the mailbox details first, then run the mailbox test. Staff will only see whether their mailbox is ready when they open the request email composer.', 'احفظ إعدادات البريد أولاً ثم شغّل اختبار البريد. سيرى الموظف فقط ما إذا كان بريده جاهزًا عند فتح مُحرر إرسال رسائل الطلب.') }}</p>
         </div>
 
-        <div v-if="settings?.smtp_last_error" class="admin-alert admin-alert--warning" style="margin-top: 1rem;">
+        <div v-if="settings?.smtp_last_error" class="admin-alert admin-alert--warning admin-mail-warning">
           {{ settings.smtp_last_error }}
         </div>
       </section>

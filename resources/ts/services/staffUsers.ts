@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export interface StaffUserItem {
   id: number
@@ -29,13 +30,14 @@ export interface StaffUserPayload {
 
 export interface StaffUserListResponse {
   data: StaffUserItem[]
+  pagination: PaginationMeta
   meta: {
     available_permissions: string[]
   }
 }
 
-export async function listStaffUsers() {
-  return api.get<StaffUserListResponse>('/api/admin/staff-users')
+export async function listStaffUsers(params?: { page?: number; per_page?: number }) {
+  return api.get<StaffUserListResponse>('/api/admin/staff-users', { params })
 }
 
 export async function createStaffUser(payload: StaffUserPayload) {

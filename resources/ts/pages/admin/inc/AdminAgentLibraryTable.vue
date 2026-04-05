@@ -5,6 +5,7 @@ import type { AgentItem } from '@/services/agents'
 defineProps<{
   rows: AgentItem[]
   loading: boolean
+  totalCount?: number
 }>()
 
 defineEmits<{
@@ -21,7 +22,7 @@ const { t } = useI18n()
         <span class="admin-panel__eyebrow">{{ t('adminAgentLibrary.eyebrow') }}</span>
         <h2>{{ t('adminAgentLibrary.title') }}</h2>
       </div>
-      <span class="admin-panel__action is-static">{{ t('adminAgentLibrary.count', { count: rows.length }) }}</span>
+      <span class="admin-panel__action is-static">{{ t('adminAgentLibrary.count', { count: totalCount ?? rows.length }) }}</span>
     </div>
 
     <div v-if="loading" class="admin-table-empty">{{ t('adminAgentLibrary.states.loading') }}</div>
@@ -49,7 +50,7 @@ const { t } = useI18n()
               <td>
                 <div class="admin-question-table__text">
                   <strong>{{ row.name }}</strong>
-                  <small>{{ row.email || t('adminAgentLibrary.states.noEmail') }} · {{ row.phone || t('adminAgentLibrary.states.noPhone') }}</small>
+                  <small>{{ row.email || t('adminAgentLibrary.states.noEmail') }} | {{ row.phone || t('adminAgentLibrary.states.noPhone') }}</small>
                 </div>
               </td>
               <td>
@@ -69,7 +70,7 @@ const { t } = useI18n()
               </td>
               <td>
                 <div class="admin-question-table__text">
-                  <strong>{{ row.notes ? row.notes.slice(0, 44) + (row.notes.length > 44 ? '…' : '') : t('adminAgentLibrary.states.noNotes') }}</strong>
+                  <strong>{{ row.notes ? row.notes.slice(0, 44) + (row.notes.length > 44 ? '...' : '') : t('adminAgentLibrary.states.noNotes') }}</strong>
                   <small>{{ row.creator_name || t('adminAgentLibrary.states.system') }}</small>
                 </div>
               </td>

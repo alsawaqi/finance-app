@@ -765,6 +765,118 @@
   justify-content: flex-start;
 }
 
+.financer-client .client-upload-drop {
+  position: relative;
+}
+
+.financer-client .client-file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.financer-client .client-upload-drop__surface {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  min-height: 120px;
+  padding: 20px 18px;
+  border-radius: 16px;
+  border: 1px dashed rgba(124, 58, 237, 0.38);
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.06) 0%, rgba(255, 255, 255, 0.96) 100%);
+  color: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.financer-client .client-upload-drop__surface:hover {
+  border-color: rgba(124, 58, 237, 0.55);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.08);
+}
+
+.financer-client .client-upload-drop__surface:focus-within {
+  outline: none;
+  border-color: rgba(124, 58, 237, 0.65);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
+}
+
+.financer-client .client-upload-drop__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+}
+
+.financer-client .client-upload-drop__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.financer-client .client-upload-drop__hint {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.financer-client .client-upload-drop__formats {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+.financer-client .client-upload-file-list {
+  margin-top: 12px;
+}
+
+.financer-client .client-upload-file-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.financer-client .client-upload-file-row__name {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.financer-client .client-upload-file-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.financer-client .client-upload-file-row__remove {
+  color: #b91c1c;
+}
+
 .financer-client .client-review-card {
   margin-top: 22px;
   padding: 18px;
@@ -1866,3 +1978,113 @@
       grid-column: span 12;
     }
   }
+
+/* 2026-04-05 client dashboard + request details refresh */
+.financer-client .client-hero-card::after {
+  pointer-events: none;
+}
+
+.financer-client .client-hero-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.financer-client .client-dashboard-locale,
+.financer-client .client-dashboard-locale .app-locale-select,
+.financer-client .client-dashboard-locale .app-locale-select__control {
+  position: relative;
+  z-index: 5;
+}
+
+[dir='rtl'] .financer-client .client-dashboard-locale {
+  justify-content: flex-start;
+}
+
+.financer-client .client-request-detail-shell .client-status-chip-grid--summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.financer-client .client-request-detail-shell .client-accordion-card {
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.financer-client .client-request-detail-shell .summary-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.financer-client .client-request-detail-shell .client-doc-grid--detail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.financer-client .client-request-detail-shell .client-doc-grid--detail > .client-doc-card {
+  grid-column: auto;
+}
+
+.financer-client .client-request-detail-shell .client-update-card {
+  display: grid;
+  gap: 14px;
+}
+
+.financer-client .client-request-detail-shell .client-update-editor,
+.financer-client .client-request-detail-shell .client-update-actions {
+  margin-top: 2px;
+}
+
+.financer-client .client-request-detail-shell .notes-box {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  background: rgba(59, 130, 246, 0.07);
+}
+
+.financer-client .client-request-detail-shell .notes-box span {
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.financer-client .client-request-detail-shell .notes-box p {
+  margin: 0;
+  color: #334155;
+}
+
+@media (max-width: 1200px) {
+  .financer-client .client-request-detail-shell .client-status-chip-grid--summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .financer-client .client-request-detail-shell .summary-grid--three,
+  .financer-client .client-request-detail-shell .client-doc-grid--detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .financer-client .client-dashboard-locale {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .financer-client .client-dashboard-locale .app-locale-select {
+    width: 100%;
+    max-width: 240px;
+  }
+
+  .financer-client .client-request-detail-shell .client-status-chip-grid--summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.financer-client .mobile-client-notification {
+  display: flex;
+  justify-content: flex-start;
+}

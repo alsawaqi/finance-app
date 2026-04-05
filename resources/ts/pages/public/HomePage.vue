@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PublicPageShell from './inc/PublicPageShell.vue'
 
@@ -256,8 +256,10 @@ onMounted(() => {
     showPreloader.value = false
   }, 1200)
 
-  setupCounters()
-  setupAOSLikeAnimation()
+  void nextTick(() => {
+    setupCounters()
+    setupAOSLikeAnimation()
+  })
   startTestimonials()
 })
 
@@ -636,11 +638,6 @@ onBeforeUnmount(() => {
 
 
 <style>
-.financer-home [data-aos].aos-init {
-  opacity: 1;
-  transform: none;
-}
-
 .financer-home .home-testimonial-track {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

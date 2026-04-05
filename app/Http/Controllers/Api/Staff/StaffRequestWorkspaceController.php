@@ -30,6 +30,7 @@ use App\Services\FinanceRequestWorkflowService;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class StaffRequestWorkspaceController extends Controller
@@ -47,6 +48,13 @@ class StaffRequestWorkspaceController extends Controller
     {
         $user = $request->user();
         abort_unless($user && ($user->hasRole('admin') || $user->can('view assigned requests')), 403);
+
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
 
         $query = FinanceRequest::query()
             ->with([
@@ -99,7 +107,7 @@ class StaffRequestWorkspaceController extends Controller
             $query->where('workflow_stage', (string) $request->input('workflow_stage'));
         }
 
-        $requests = $query
+        $requestsPaginator = $query
             ->orderByRaw("CASE 
                 WHEN workflow_stage = ? THEN 0 
                 WHEN workflow_stage = ? THEN 1 
@@ -119,10 +127,11 @@ class StaffRequestWorkspaceController extends Controller
             ])
             ->orderByDesc('latest_activity_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
-            'requests' => $requests,
+            'requests' => collect($requestsPaginator->items())->values(),
+            'pagination' => $this->paginationMeta($requestsPaginator),
         ]);
     }
 
@@ -514,5 +523,17 @@ class StaffRequestWorkspaceController extends Controller
                 ->exists();
 
         abort_unless($isAssigned, 403, 'You are not assigned to this request.');
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+        ];
     }
 }

@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export interface DocumentUploadStepItem {
   id: number
@@ -27,8 +28,8 @@ export interface DocumentUploadStepPayload {
   is_active?: boolean
 }
 
-export async function listDocumentUploadSteps() {
-  return api.get<{ data: DocumentUploadStepItem[] }>('/api/admin/document-upload-steps')
+export async function listDocumentUploadSteps(params?: { page?: number; per_page?: number }) {
+  return api.get<{ data: DocumentUploadStepItem[]; pagination: PaginationMeta }>('/api/admin/document-upload-steps', { params })
 }
 
 export async function createDocumentUploadStep(payload: DocumentUploadStepPayload) {

@@ -83,7 +83,7 @@ function onDrop(targetId: number) {
             @dragover.prevent
             @drop="onDrop(row.id)"
           >
-              <td class="document-step-drag">↕</td>
+            <td class="document-step-drag">::</td>
             <td>#{{ row.sort_order }}</td>
             <td>
               <strong>{{ row.name }}</strong>

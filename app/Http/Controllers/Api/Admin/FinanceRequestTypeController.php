@@ -7,7 +7,9 @@ use App\Http\Requests\Admin\StoreFinanceRequestTypeRequest;
 use App\Http\Requests\Admin\UpdateFinanceRequestTypeRequest;
 use App\Models\FinanceRequestType;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 
 class FinanceRequestTypeController extends Controller
@@ -25,15 +27,24 @@ class FinanceRequestTypeController extends Controller
         ]);
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+        $paginator = FinanceRequestType::query()
+            ->orderBy('sort_order')
+            ->orderBy('name_en')
+            ->paginate($perPage);
+
         return response()->json([
-            'data' => $this->serializeCollection(
-                FinanceRequestType::query()
-                    ->orderBy('sort_order')
-                    ->orderBy('name_en')
-                    ->get()
-            ),
+            'data' => collect($paginator->items())
+                ->map(fn (FinanceRequestType $type) => $this->serializeItem($type))
+                ->values(),
+            'pagination' => $this->paginationMeta($paginator),
         ]);
     }
 
@@ -128,6 +139,18 @@ class FinanceRequestTypeController extends Controller
             'sort_order' => (int) $type->sort_order,
             'created_at' => optional($type->created_at)?->toISOString(),
             'updated_at' => optional($type->updated_at)?->toISOString(),
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 }

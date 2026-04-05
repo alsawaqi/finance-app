@@ -28,6 +28,7 @@ use App\Services\FinanceRequestWorkflowService;
 use App\Services\FinanceRequestUpdateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -72,7 +73,14 @@ class ClientRequestController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $requests = FinanceRequest::query()
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+
+        $requestsPaginator = FinanceRequest::query()
             ->with([
                 'currentContract:id,finance_request_id,version_no,status,admin_signed_at,client_signed_at,contract_pdf_path',
                 'financeRequestType:id,slug,name_en,name_ar,description_en,description_ar,is_active,sort_order',
@@ -82,11 +90,15 @@ class ClientRequestController extends Controller
             ->where('user_id', $request->user()->id)
             ->latest('submitted_at')
             ->latest('id')
-            ->get()
-            ->map(fn (FinanceRequest $financeRequest) => $this->transformRequestSummary($financeRequest));
+            ->paginate($perPage);
+
+        $requests = collect($requestsPaginator->items())
+            ->map(fn (FinanceRequest $financeRequest) => $this->transformRequestSummary($financeRequest))
+            ->values();
 
         return response()->json([
             'requests' => $requests,
+            'pagination' => $this->paginationMeta($requestsPaginator),
         ]);
     }
 
@@ -102,7 +114,7 @@ class ClientRequestController extends Controller
     $financeRequest = DB::transaction(function () use ($request, $user, $details, $answers, $shareholders, $now) {
         $applicantType = (string) Arr::get($details, 'finance_type', 'individual');
         $applicantName = $this->resolveApplicantName($user);
-        $country = trim((string) Arr::get($details, 'country', ''));
+        $countryCode = strtoupper(trim((string) Arr::get($details, 'country', '')));
         $requestedAmount = (float) Arr::get($details, 'requested_amount', 0);
         $companyName = trim((string) Arr::get($details, 'company_name', '')) ?: null;
         $email = trim((string) Arr::get($details, 'email', ''));
@@ -121,6 +133,7 @@ class ClientRequestController extends Controller
             'finance_request_type_id' => $financeRequestTypeId ? (int) $financeRequestTypeId : null,
             'applicant_type' => $applicantType,
             'company_name' => $companyName,
+            'country_code' => $countryCode ?: null,
             'status' => FinanceRequestStatus::SUBMITTED,
             'workflow_stage' => FinanceRequestWorkflowStage::SUBMITTED_FOR_REVIEW,
             'priority' => FinanceRequestPriority::NORMAL,
@@ -130,8 +143,6 @@ class ClientRequestController extends Controller
                     'applicant_name' => $applicantName,
                     'full_name' => $applicantName,
                     'name' => $applicantName,
-                    'country' => $country,
-                    'country_code' => $country,
                     'requested_amount' => $requestedAmount,
                     'finance_type' => $applicantType,
                     'finance_request_type_id' => $financeRequestTypeId ? (int) $financeRequestTypeId : null,
@@ -258,7 +269,7 @@ class ClientRequestController extends Controller
                 'shareholder_count' => count($storedShareholders),
                 'applicant_type' => $applicantType,
                 'requested_amount' => $requestedAmount,
-                'country' => $country,
+                'country_code' => $countryCode ?: null,
                 'company_name' => $companyName,
                 'email' => $email,
                 'phone_country_code' => $phoneCountryCode,
@@ -503,6 +514,7 @@ class ClientRequestController extends Controller
             'applicant_type' => $financeRequest->applicant_type,
             'finance_request_type' => $this->serializeFinanceRequestType($financeRequest->financeRequestType),
             'company_name' => $financeRequest->company_name,
+            'country_code' => $financeRequest->country_code,
             'submitted_at' => optional($financeRequest->submitted_at)->toISOString(),
             'latest_activity_at' => optional($financeRequest->latest_activity_at)->toISOString(),
             'intake_details' => $details,
@@ -571,6 +583,7 @@ class ClientRequestController extends Controller
             'applicant_type' => $financeRequest->applicant_type,
             'finance_request_type' => $this->serializeFinanceRequestType($financeRequest->financeRequestType),
             'company_name' => $financeRequest->company_name,
+            'country_code' => $financeRequest->country_code,
             'submitted_at' => optional($financeRequest->submitted_at)->toISOString(),
             'approved_at' => optional($financeRequest->approved_at)->toISOString(),
             'latest_activity_at' => optional($financeRequest->latest_activity_at)->toISOString(),
@@ -731,6 +744,18 @@ class ClientRequestController extends Controller
             'description_ar' => $financeRequestType->description_ar,
             'is_active' => (bool) $financeRequestType->is_active,
             'sort_order' => (int) $financeRequestType->sort_order,
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 

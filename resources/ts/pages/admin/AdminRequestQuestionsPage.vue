@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import AdminQuestionBuilderForm from './inc/AdminQuestionBuilderForm.vue'
 import AdminQuestionPreviewCard from './inc/AdminQuestionPreviewCard.vue'
 import AdminQuestionLibraryTable from './inc/AdminQuestionLibraryTable.vue'
@@ -13,6 +14,7 @@ import {
   toggleRequestQuestionActive,
   updateRequestQuestion,
 } from '@/services/requestQuestions'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 
 type QuestionForm = {
   id: number | null
@@ -44,6 +46,7 @@ const questionTypeOptions = computed<Array<{ value: QuestionType; label: string;
 ])
 
 const questions = ref<RequestQuestionItem[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 20 })
 const isLoading = ref(false)
 const isSaving = ref(false)
 const isReordering = ref(false)
@@ -65,7 +68,7 @@ const parsedOptions = computed(() =>
 const needsOptions = computed(() => optionDrivenTypes.includes(form.value.question_type))
 
 const stats = computed(() => {
-  const total = questions.value.length
+  const total = pagination.value.total
   const active = questions.value.filter((item) => item.is_active).length
   const required = questions.value.filter((item) => item.is_required).length
   const choiceBased = questions.value.filter((item) => optionDrivenTypes.includes(item.question_type)).length
@@ -108,16 +111,20 @@ function clearMessages() {
   fieldErrors.value = {}
 }
 
-async function fetchQuestions() {
+async function fetchQuestions(page = pagination.value.current_page) {
   isLoading.value = true
   formError.value = ''
 
   try {
-    const { data } = await listRequestQuestions()
+    const { data } = await listRequestQuestions({
+      page,
+      per_page: pagination.value.per_page,
+    })
     questions.value = data.data
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
 
     if (!isEditing.value) {
-      form.value.sort_order = questions.value.length + 1
+      form.value.sort_order = Math.max(pagination.value.total, questions.value.length) + 1
     }
   } catch (error) {
     formError.value = extractErrorMessage(error, t('adminRequestQuestionsPage.errors.loadFailed'))
@@ -205,6 +212,11 @@ async function toggleQuestion(row: RequestQuestionItem) {
 }
 
 async function reorderQuestions(orderedIds: number[]) {
+  if (pagination.value.last_page > 1) {
+    formError.value = t('adminRequestQuestionsPage.errors.reorderNeedsSinglePage')
+    return
+  }
+
   clearMessages()
   isReordering.value = true
 
@@ -223,8 +235,8 @@ async function reorderQuestions(orderedIds: number[]) {
 
   try {
     const { data } = await reorderRequestQuestions(orderedIds)
-    questions.value = data.data
     successMessage.value = data.message
+    await fetchQuestions(pagination.value.current_page)
   } catch (error) {
     questions.value = previous
     formError.value = extractErrorMessage(error, t('adminRequestQuestionsPage.errors.reorderFailed'))
@@ -271,7 +283,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       {{ successMessage }}
     </div>
 
-    <section class="admin-question-stats-grid admin-reveal-up admin-reveal-delay-1">
+    <section class="admin-question-stats-grid admin-question-stats-grid--balanced admin-reveal-up admin-reveal-delay-1">
       <article
         v-for="stat in stats"
         :key="stat.label"
@@ -331,6 +343,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
         @toggle="toggleQuestion"
         @reorder="reorderQuestions"
       />
+      <AppPagination :pagination="pagination" :disabled="isLoading || isReordering" @change="fetchQuestions" />
     </section>
   </div>
 </template>

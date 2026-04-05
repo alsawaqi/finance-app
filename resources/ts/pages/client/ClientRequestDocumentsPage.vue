@@ -2,12 +2,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppFilePreviewModal from '@/components/AppFilePreviewModal.vue'
 import {
   getClientRequest,
   submitClientUpdateFile,
   uploadClientAdditionalDocument,
   uploadClientRequiredDocument,
 } from '@/services/clientPortal'
+import { getClientWorkflowStageMeta } from '@/utils/clientRequestStage'
 
 const route = useRoute()
 const requestId = computed(() => route.params.id as string)
@@ -17,6 +19,8 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const requestItem = ref<any | null>(null)
 const { t, locale } = useI18n()
+const isArabic = computed(() => locale.value === 'ar')
+const emptyValueLabel = computed(() => t('clientDocuments.states.emptyValue'))
 
 const uploadingRequired = ref<Record<number, boolean>>({})
 const uploadingAdditional = ref<Record<number, boolean>>({})
@@ -25,6 +29,16 @@ const uploadingUpdateFiles = ref<Record<number, boolean>>({})
 const requiredFileInputs = ref<Record<number, HTMLInputElement | null>>({})
 const additionalFileInputs = ref<Record<number, HTMLInputElement | null>>({})
 const updateFileInputs = ref<Record<number, HTMLInputElement | null>>({})
+
+type PendingUpload = {
+  kind: 'required' | 'additional' | 'update'
+  id: number
+  file: File
+  title: string
+}
+
+const pendingUpload = ref<PendingUpload | null>(null)
+const uploadPreviewOpen = ref(false)
 
 const requiredPendingCount = computed(() =>
   (requestItem.value?.required_documents ?? []).filter((item: any) => !item.is_uploaded).length,
@@ -38,25 +52,57 @@ const activeUpdateBatch = computed(() => requestItem.value?.active_update_batch 
 const fileUpdateItems = computed(() => (activeUpdateBatch.value?.items ?? []).filter((item: any) => item.item_type === 'attachment'))
 const pendingFileUpdateCount = computed(() => fileUpdateItems.value.filter((item: any) => item.status !== 'approved').length)
 
-function localizedText(en?: string | null, ar?: string | null, fallback = '—') {
-  if (locale.value === 'ar') return ar || en || fallback
-  return en || ar || fallback
+function uiText(en: string, ar: string) {
+  return isArabic.value ? ar : en
+}
+
+function localizedText(en?: string | null, ar?: string | null, fallback?: string) {
+  const resolvedFallback = fallback ?? emptyValueLabel.value
+  if (isArabic.value) return ar || en || resolvedFallback
+  return en || ar || resolvedFallback
+}
+
+function stageMeta(stage: string | null | undefined) {
+  return getClientWorkflowStageMeta(stage)
 }
 
 function updateStatusLabel(status: string | null | undefined) {
   const key = String(status || '').toLowerCase()
-  if (key === 'updated') return 'Submitted for review'
-  if (key === 'approved') return 'Approved'
-  if (key === 'rejected') return 'Needs another upload'
-  if (key === 'pending') return 'Waiting for your file'
-  return key || 'Unknown'
+  if (key === 'updated') return uiText('Submitted for review', 'تم الإرسال للمراجعة')
+  if (key === 'approved') return uiText('Approved', 'معتمد')
+  if (key === 'rejected') return uiText('Needs another upload', 'يتطلب إعادة الرفع')
+  if (key === 'pending') return uiText('Waiting for your file', 'بانتظار ملفك')
+  return key || uiText('Unknown', 'غير معروف')
 }
 
 function updateStatusClass(status: string | null | undefined) {
   const key = String(status || '').toLowerCase()
   if (key === 'approved') return 'client-badge client-badge--green'
   if (key === 'updated') return 'client-badge client-badge--blue'
+  if (key === 'rejected') return 'client-badge client-badge--red'
   return 'client-badge client-badge--amber'
+}
+
+function updateUploadButtonLabel(item: any) {
+  if (uploadingUpdateFiles.value[item.id]) return t('clientDocuments.actions.uploading')
+  if (item.status === 'rejected') return uiText('Upload replacement again', 'إعادة رفع الملف البديل')
+  if (item.status === 'updated') return uiText('Upload revised file', 'رفع ملف معدل')
+  return t('clientDocuments.actions.uploadFile')
+}
+
+function additionalStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'uploaded') return t('clientDocuments.states.uploaded')
+  if (key === 'pending') return t('clientDocuments.states.pending')
+  if (key === 'rejected') return uiText('Rejected', 'مرفوض')
+  return key || emptyValueLabel.value
+}
+
+function additionalStatusClass(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'uploaded') return 'client-badge--green'
+  if (key === 'rejected') return 'client-badge--red'
+  return 'client-badge--amber'
 }
 
 async function load() {
@@ -122,11 +168,19 @@ function applyRequestFromResponse(data: any) {
   }
 }
 
+function clearUploadPreview() {
+  uploadPreviewOpen.value = false
+  pendingUpload.value = null
+}
+
 async function onRequiredFileChange(stepId: number, event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
 
   if (!file) return
+
+  pendingUpload.value = { kind: 'required', id: stepId, file, title: t('clientDocuments.sections.requiredTitle') }
+  uploadPreviewOpen.value = true
 
   uploadingRequired.value = {
     ...uploadingRequired.value,
@@ -162,6 +216,9 @@ async function onAdditionalFileChange(documentId: number, event: Event) {
 
   if (!file) return
 
+  pendingUpload.value = { kind: 'additional', id: documentId, file, title: t('clientDocuments.sections.additionalTitle') }
+  uploadPreviewOpen.value = true
+
   uploadingAdditional.value = {
     ...uploadingAdditional.value,
     [documentId]: true,
@@ -193,6 +250,9 @@ async function onUpdateFileChange(itemId: number, event: Event) {
 
   if (!file) return
 
+  pendingUpload.value = { kind: 'update', id: itemId, file, title: uiText('Requested file replacement', 'استبدال ملف مطلوب') }
+  uploadPreviewOpen.value = true
+
   uploadingUpdateFiles.value = {
     ...uploadingUpdateFiles.value,
     [itemId]: true,
@@ -204,9 +264,9 @@ async function onUpdateFileChange(itemId: number, event: Event) {
   try {
     const data = await submitClientUpdateFile(requestId.value, itemId, { file })
     applyRequestFromResponse(data)
-    successMessage.value = data.message || 'Requested file update submitted successfully.'
+    successMessage.value = data.message || uiText('Requested file update submitted successfully.', 'تم إرسال تحديث الملف المطلوب بنجاح.')
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || 'Unable to submit the requested file update.'
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to submit the requested file update.', 'تعذر إرسال تحديث الملف المطلوب.')
   } finally {
     uploadingUpdateFiles.value = {
       ...uploadingUpdateFiles.value,
@@ -221,7 +281,7 @@ onMounted(load)
 
 <template>
   <section class="client-shell client-request-detail-shell">
-    <div class="hero-card">
+    <div class="hero-card client-reveal-up">
       <div>
         <p class="eyebrow">{{ t('clientDocuments.hero.eyebrow') }}</p>
         <h1>{{ t('clientDocuments.hero.title') }}</h1>
@@ -240,9 +300,11 @@ onMounted(load)
     <p v-if="errorMessage && requestItem" class="error-state">{{ errorMessage }}</p>
 
     <template v-else-if="requestItem">
-      <div class="client-status-chip-grid client-status-chip-grid--summary">
+      <div class="client-status-chip-grid client-status-chip-grid--summary client-reveal-up">
         <div class="client-status-chip-card">
-          <strong>{{ requestItem.workflow_stage || t('clientDocuments.states.emptyValue') }}</strong>
+          <strong>
+            <span class="client-stage-badge" :class="stageMeta(requestItem.workflow_stage).className">{{ stageMeta(requestItem.workflow_stage).label }}</span>
+          </strong>
           <span>{{ t('clientDocuments.summary.currentStage') }}</span>
         </div>
         <div class="client-status-chip-card">
@@ -255,44 +317,44 @@ onMounted(load)
         </div>
         <div class="client-status-chip-card">
           <strong>{{ pendingFileUpdateCount }}</strong>
-          <span>Requested file updates</span>
+          <span>{{ uiText('Requested file updates', 'تحديثات الملفات المطلوبة') }}</span>
         </div>
       </div>
 
       <div class="client-accordion-stack">
-        <details v-if="fileUpdateItems.length" class="client-accordion-card" open>
+        <details v-if="fileUpdateItems.length" class="client-accordion-card client-reveal-left" open>
           <summary>
             <div>
-              <h2>Requested file replacements</h2>
-              <p>Upload only the files the team specifically asked you to replace.</p>
+              <h2>{{ uiText('Requested file replacements', 'استبدال الملفات المطلوبة') }}</h2>
+              <p>{{ uiText('Upload only the files the team specifically asked you to replace.', 'قم برفع الملفات التي طلب الفريق استبدالها فقط.') }}</p>
             </div>
           </summary>
 
           <div class="client-accordion-card__body">
             <div v-if="localizedText(activeUpdateBatch?.reason_en, activeUpdateBatch?.reason_ar, '') !== ''" class="notes-box">
-              <span>Reason from the team</span>
-              <p>{{ localizedText(activeUpdateBatch?.reason_en, activeUpdateBatch?.reason_ar, '—') }}</p>
+              <span>{{ uiText('Reason from the team', 'ملاحظة الفريق') }}</span>
+              <p>{{ localizedText(activeUpdateBatch?.reason_en, activeUpdateBatch?.reason_ar, emptyValueLabel) }}</p>
             </div>
 
-            <div class="client-doc-grid">
-              <article v-for="item in fileUpdateItems" :key="item.id" class="client-doc-card">
+            <div class="client-doc-grid client-doc-grid--detail">
+              <article v-for="item in fileUpdateItems" :key="item.id" class="client-doc-card client-update-card">
                 <div class="client-card-head">
                   <div>
-                    <h3>{{ localizedText(item.label_en, item.label_ar, 'Requested file update') }}</h3>
-                    <p class="client-subtext">{{ localizedText(item.instruction_en, item.instruction_ar, 'Please upload the replacement file requested by the team.') }}</p>
+                    <h3>{{ localizedText(item.label_en, item.label_ar, uiText('Requested file update', 'تحديث ملف مطلوب')) }}</h3>
+                    <p class="client-subtext">{{ localizedText(item.instruction_en, item.instruction_ar, uiText('Please upload the replacement file requested by the team.', 'يرجى رفع الملف البديل الذي طلبه الفريق.')) }}</p>
                   </div>
 
                   <span :class="updateStatusClass(item.status)">{{ updateStatusLabel(item.status) }}</span>
                 </div>
 
                 <p class="client-subtext" v-if="item.old_value_json?.file_name">
-                  Current file: {{ item.old_value_json.file_name }}
+                  {{ uiText('Current file', 'الملف الحالي') }}: {{ item.old_value_json.file_name }}
                 </p>
                 <p class="client-subtext" v-if="item.new_value_json?.file_name">
-                  Last submitted: {{ item.new_value_json.file_name }}
+                  {{ uiText('Last submitted', 'آخر ملف مرسل') }}: {{ item.new_value_json.file_name }}
                 </p>
 
-                <div class="client-inline-actions client-inline-actions--stackable">
+                <div class="client-inline-actions client-inline-actions--stackable client-update-actions">
                   <input
                     :id="`update-file-${item.id}`"
                     :ref="(el) => setUpdateFileRef(item.id, el)"
@@ -307,15 +369,7 @@ onMounted(load)
                     :disabled="uploadingUpdateFiles[item.id] || item.status === 'approved' || !requestItem.can_submit_client_updates"
                     @click.stop.prevent="openUpdatePicker(item.id)"
                   >
-                    {{
-                      uploadingUpdateFiles[item.id]
-                        ? 'Uploading...'
-                        : item.status === 'rejected'
-                          ? 'Upload replacement again'
-                          : item.status === 'updated'
-                            ? 'Upload revised file'
-                            : 'Upload file'
-                    }}
+                    {{ updateUploadButtonLabel(item) }}
                   </button>
                 </div>
               </article>
@@ -323,7 +377,7 @@ onMounted(load)
           </div>
         </details>
 
-        <details class="client-accordion-card" open>
+        <details class="client-accordion-card client-reveal-up" open>
           <summary>
             <div>
               <h2>{{ t('clientDocuments.sections.requiredTitle') }}</h2>
@@ -337,7 +391,7 @@ onMounted(load)
               <p class="client-muted">{{ t('clientDocuments.states.uploadUnavailableBody') }}</p>
             </div>
 
-            <div v-else-if="requestItem?.required_documents?.length" class="client-doc-grid">
+            <div v-else-if="requestItem?.required_documents?.length" class="client-doc-grid client-doc-grid--detail">
               <article
                 v-for="item in requestItem.required_documents"
                 :key="item.document_upload_step_id"
@@ -373,7 +427,7 @@ onMounted(load)
                   {{ t('clientDocuments.states.lockedAfterUpload') }}
                 </p>
 
-                <div class="client-inline-actions client-inline-actions--stackable">
+                <div class="client-inline-actions client-inline-actions--stackable client-update-actions">
                   <input
                     :id="`required-file-${item.document_upload_step_id}`"
                     :ref="(el) => setRequiredFileRef(item.document_upload_step_id, el)"
@@ -398,7 +452,7 @@ onMounted(load)
           </div>
         </details>
 
-        <details class="client-accordion-card" open>
+        <details class="client-accordion-card client-reveal-up">
           <summary>
             <div>
               <h2>{{ t('clientDocuments.sections.additionalTitle') }}</h2>
@@ -407,7 +461,7 @@ onMounted(load)
           </summary>
 
           <div class="client-accordion-card__body">
-            <div v-if="requestItem?.additional_document_requests?.length" class="client-doc-grid">
+            <div v-if="requestItem?.additional_document_requests?.length" class="client-doc-grid client-doc-grid--detail">
               <article
                 v-for="item in requestItem.additional_document_requests"
                 :key="item.id"
@@ -419,11 +473,8 @@ onMounted(load)
                     <p class="client-subtext">{{ item.reason || t('clientDocuments.states.noReasonAdded') }}</p>
                   </div>
 
-                  <span
-                    class="client-badge"
-                    :class="item.status === 'uploaded' ? 'client-badge--green' : 'client-badge--amber'"
-                  >
-                    {{ item.status }}
+                  <span class="client-badge" :class="additionalStatusClass(item.status)">
+                    {{ additionalStatusLabel(item.status) }}
                   </span>
                 </div>
 
@@ -437,7 +488,7 @@ onMounted(load)
                   {{ t('clientDocuments.states.lockedAfterUpload') }}
                 </p>
 
-                <div class="client-inline-actions client-inline-actions--stackable">
+                <div class="client-inline-actions client-inline-actions--stackable client-update-actions">
                   <input
                     :id="`additional-file-${item.id}`"
                     :ref="(el) => setAdditionalFileRef(item.id, el)"
@@ -463,5 +514,14 @@ onMounted(load)
         </details>
       </div>
     </template>
+
+    <AppFilePreviewModal
+      :model-value="uploadPreviewOpen"
+      @update:model-value="(value) => { if (!value) clearUploadPreview() }"
+      :title="pendingUpload?.title || uiText('Selected file preview', 'معاينة الملف المحدد')"
+      :file-name="pendingUpload?.file?.name || ''"
+      :mime-type="pendingUpload?.file?.type || ''"
+      :local-file="pendingUpload?.file || null"
+    />
   </section>
 </template>

@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\FinanceRequest;
 use App\Models\RequestTimeline;
+use App\Services\RequestNotificationService;
+use Throwable;
 
 class RequestTimelineLogger
 {
@@ -18,7 +20,7 @@ class RequestTimelineLogger
         array $metadata = [],
         $createdAt = null,
     ): RequestTimeline {
-        return RequestTimeline::create([
+        $timeline = RequestTimeline::create([
             'finance_request_id' => $financeRequest->id,
             'actor_user_id' => $actorUserId,
             'event_type' => $eventType,
@@ -31,5 +33,13 @@ class RequestTimelineLogger
             'metadata_json' => $metadata,
             'created_at' => $createdAt ?: now(),
         ]);
+
+        try {
+            app(RequestNotificationService::class)->dispatchFromTimeline($financeRequest, $timeline);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        return $timeline;
     }
 }

@@ -4,8 +4,10 @@ import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import AdminStaffBuilderForm from './inc/AdminStaffBuilderForm.vue'
 import AdminStaffLibraryTable from './inc/AdminStaffLibraryTable.vue'
+import AppPagination from '@/components/AppPagination.vue'
 import type { StaffUserItem, StaffUserPayload } from '@/services/staffUsers'
 import { createStaffUser, listStaffUsers, toggleStaffUserActive, updateStaffUser } from '@/services/staffUsers'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 
 type StaffForm = {
   id: number | null
@@ -19,6 +21,7 @@ type StaffForm = {
 }
 
 const rows = ref<StaffUserItem[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const availablePermissions = ref<string[]>([])
 const isLoading = ref(false)
 const isSaving = ref(false)
@@ -31,7 +34,7 @@ const isEditing = computed(() => form.value.id !== null)
 const { t } = useI18n()
 
 const stats = computed(() => {
-  const total = rows.value.length
+  const total = pagination.value.total
   const active = rows.value.filter((item) => item.is_active).length
   const withDirectPermissions = rows.value.filter((item) => item.permissions_count > 0).length
   const loggedIn = rows.value.filter((item) => !!item.last_login_at).length
@@ -67,13 +70,17 @@ function clearMessages() {
   fieldErrors.value = {}
 }
 
-async function fetchRows() {
+async function fetchRows(page = pagination.value.current_page) {
   isLoading.value = true
   formError.value = ''
 
   try {
-    const { data } = await listStaffUsers()
+    const { data } = await listStaffUsers({
+      page,
+      per_page: pagination.value.per_page,
+    })
     rows.value = data.data
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
     availablePermissions.value = data.meta.available_permissions ?? []
   } catch (error) {
     formError.value = extractErrorMessage(error, t('adminStaffPage.errors.loadFailed'))
@@ -189,7 +196,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       </div>
     </section>
 
-    <div class="admin-question-stats-grid admin-reveal-up admin-reveal-delay-1">
+    <div class="admin-question-stats-grid admin-question-stats-grid--balanced admin-reveal-up admin-reveal-delay-1">
       <article v-for="stat in stats" :key="stat.label" class="admin-question-stat" :class="`tone-${stat.tone}`">
         <strong>{{ stat.value }}</strong>
         <span>{{ stat.label }}</span>
@@ -244,8 +251,10 @@ function extractErrorMessage(error: unknown, fallback: string) {
     <AdminStaffLibraryTable
       :rows="rows"
       :loading="isLoading"
+      :total-count="pagination.total"
       @edit="editRow"
       @toggle="toggleRow"
     />
+    <AppPagination :pagination="pagination" :disabled="isLoading" @change="fetchRows" />
   </div>
 </template>

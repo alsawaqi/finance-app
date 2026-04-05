@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import type {
   FinanceStaffQuestionTemplateItem,
   FinanceStaffQuestionTemplatePayload,
@@ -14,6 +15,7 @@ import {
   toggleFinanceStaffQuestionTemplateActive,
   updateFinanceStaffQuestionTemplate,
 } from '@/services/financeStaffQuestionTemplates'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 
 type StaffQuestionForm = {
   id: number | null
@@ -50,6 +52,7 @@ const questionTypeOptions = computed<Array<{ value: StaffQuestionType; label: st
 const optionDrivenTypes: StaffQuestionType[] = ['select', 'radio', 'checkbox']
 
 const templates = ref<FinanceStaffQuestionTemplateItem[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 20 })
 const isLoading = ref(false)
 const isSaving = ref(false)
 const isReordering = ref(false)
@@ -69,7 +72,7 @@ const parsedOptions = computed(() =>
 )
 
 const stats = computed(() => {
-  const total = templates.value.length
+  const total = pagination.value.total
   const active = templates.value.filter((item) => item.is_active).length
   const required = templates.value.filter((item) => item.is_required).length
   const bilingual = templates.value.filter((item) => !!item.question_text_ar?.trim()).length
@@ -133,16 +136,37 @@ function firstFieldError(field: string) {
   return fieldErrors.value[field]?.[0] ?? ''
 }
 
-async function fetchTemplates() {
+function localizedQuestionText(row: FinanceStaffQuestionTemplateItem) {
+  const en = String(row.question_text_en || '').trim()
+  const ar = String(row.question_text_ar || '').trim()
+  return locale.value === 'ar' ? (ar || en || '—') : (en || ar || '—')
+}
+
+function secondaryQuestionText(row: FinanceStaffQuestionTemplateItem) {
+  const en = String(row.question_text_en || '').trim()
+  const ar = String(row.question_text_ar || '').trim()
+  return locale.value === 'ar' ? (en || ar || '—') : (ar || en || '—')
+}
+
+function questionTypeLabel(type: StaffQuestionType) {
+  const matched = questionTypeOptions.value.find((option) => option.value === type)
+  return matched?.label || type
+}
+
+async function fetchTemplates(page = pagination.value.current_page) {
   isLoading.value = true
   formError.value = ''
 
   try {
-    const { data } = await listFinanceStaffQuestionTemplates()
+    const { data } = await listFinanceStaffQuestionTemplates({
+      page,
+      per_page: pagination.value.per_page,
+    })
     templates.value = data.data
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
 
     if (!isEditing.value) {
-      form.value.sort_order = templates.value.length + 1
+      form.value.sort_order = Math.max(pagination.value.total, templates.value.length) + 1
     }
   } catch (error) {
     formError.value = extractErrorMessage(error, t('adminStaffQuestionTemplatesPage.errors.loadFailed'))
@@ -236,6 +260,11 @@ async function toggleTemplate(row: FinanceStaffQuestionTemplateItem) {
 }
 
 async function reorderTemplates(direction: 'up' | 'down', currentIndex: number) {
+  if (pagination.value.last_page > 1) {
+    formError.value = t('adminStaffQuestionTemplatesPage.errors.reorderNeedsSinglePage')
+    return
+  }
+
   if (
     isReordering.value ||
     (direction === 'up' && currentIndex === 0) ||
@@ -261,8 +290,8 @@ async function reorderTemplates(direction: 'up' | 'down', currentIndex: number) 
   try {
     const orderedIds = templates.value.map((item) => item.id)
     const { data } = await reorderFinanceStaffQuestionTemplates(orderedIds)
-    templates.value = data.data
     successMessage.value = data.message
+    await fetchTemplates(pagination.value.current_page)
   } catch (error) {
     templates.value = previous
     formError.value = extractErrorMessage(error, t('adminStaffQuestionTemplatesPage.errors.reorderFailed'))
@@ -307,266 +336,333 @@ function extractErrorMessage(error: unknown, fallback: string) {
       </div>
     </section>
 
-    <section class="admin-stats-grid admin-reveal-up">
+    <section class="admin-question-stats-grid admin-question-stats-grid--balanced admin-reveal-up admin-reveal-delay-1">
       <article
         v-for="stat in stats"
         :key="stat.label"
-        class="admin-stat-card"
-        :class="`admin-stat-card--${stat.tone}`"
+        class="admin-question-stat"
+        :class="`tone-${stat.tone}`"
       >
-        <div class="admin-stat-card__label">{{ stat.label }}</div>
-        <div class="admin-stat-card__value">{{ stat.value }}</div>
+        <strong>{{ stat.value }}</strong>
+        <span>{{ stat.label }}</span>
       </article>
     </section>
 
-    <section v-if="formError" class="admin-feedback admin-feedback--error admin-reveal-up">
-      <i class="fas fa-circle-exclamation"></i>
-      <span>{{ formError }}</span>
-    </section>
+    <div v-if="formError" class="admin-alert admin-alert--error">{{ formError }}</div>
+    <div v-if="successMessage" class="admin-alert admin-alert--success">{{ successMessage }}</div>
 
-    <section v-if="successMessage" class="admin-feedback admin-feedback--success admin-reveal-up">
-      <i class="fas fa-circle-check"></i>
-      <span>{{ successMessage }}</span>
-    </section>
-
-    <div class="admin-question-layout admin-reveal-up">
-      <section class="admin-question-form-card">
-        <header class="admin-section-heading">
+    <section class="admin-question-builder-grid">
+      <section class="admin-panel admin-reveal-up admin-reveal-delay-1">
+        <div class="admin-panel__head">
           <div>
-            <span class="admin-section-heading__eyebrow">{{ t('adminStaffQuestionTemplatesPage.form.eyebrow') }}</span>
-            <h3>{{ t('adminStaffQuestionTemplatesPage.form.title') }}</h3>
+            <span class="admin-panel__eyebrow">{{ t('adminStaffQuestionTemplatesPage.form.eyebrow') }}</span>
+            <h2>{{ t('adminStaffQuestionTemplatesPage.form.title') }}</h2>
           </div>
-          <span class="admin-chip">{{ isEditing ? t('adminStaffQuestionTemplatesPage.form.editing') : t('adminStaffQuestionTemplatesPage.form.creating') }}</span>
-        </header>
+          <button type="button" class="admin-panel__action" @click="resetForm">
+            {{ isEditing ? t('adminStaffQuestionTemplatesPage.actions.cancelEdit') : t('adminStaffQuestionTemplatesPage.actions.resetForm') }}
+          </button>
+        </div>
 
         <div class="admin-form-grid admin-form-grid--2">
-          <label class="admin-field">
+          <label class="admin-form-field">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.code') }}</span>
-            <input v-model="form.code" type="text" class="admin-input" />
-            <small class="admin-field__hint">{{ firstFieldError('code') }}</small>
+            <input v-model="form.code" type="text" class="admin-form-input" :class="{ 'has-error': firstFieldError('code') }">
+            <small v-if="firstFieldError('code')" class="admin-form-error">{{ firstFieldError('code') }}</small>
           </label>
 
-          <label class="admin-field">
+          <label class="admin-form-field">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.type') }}</span>
-            <select v-model="form.question_type" class="admin-input">
+            <select v-model="form.question_type" class="admin-form-select" :class="{ 'has-error': firstFieldError('question_type') }">
               <option v-for="type in questionTypeOptions" :key="type.value" :value="type.value">
                 {{ type.label }}
               </option>
             </select>
-            <small class="admin-field__hint">{{ firstFieldError('question_type') }}</small>
+            <small v-if="firstFieldError('question_type')" class="admin-form-error">{{ firstFieldError('question_type') }}</small>
           </label>
 
-          <label class="admin-field admin-field--full">
+          <label class="admin-form-field admin-form-field--full">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.questionEn') }}</span>
-            <textarea v-model="form.question_text_en" rows="3" class="admin-input admin-input--textarea" />
-            <small class="admin-field__hint">{{ firstFieldError('question_text_en') }}</small>
+            <textarea v-model="form.question_text_en" rows="3" class="admin-form-textarea" :class="{ 'has-error': firstFieldError('question_text_en') }"></textarea>
+            <small v-if="firstFieldError('question_text_en')" class="admin-form-error">{{ firstFieldError('question_text_en') }}</small>
           </label>
 
-          <label class="admin-field admin-field--full">
+          <label class="admin-form-field admin-form-field--full">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.questionAr') }}</span>
-            <textarea v-model="form.question_text_ar" rows="3" class="admin-input admin-input--textarea" dir="rtl" />
-            <small class="admin-field__hint">{{ firstFieldError('question_text_ar') }}</small>
+            <textarea v-model="form.question_text_ar" rows="3" class="admin-form-textarea" :class="{ 'has-error': firstFieldError('question_text_ar') }" dir="rtl"></textarea>
+            <small v-if="firstFieldError('question_text_ar')" class="admin-form-error">{{ firstFieldError('question_text_ar') }}</small>
           </label>
 
-          <label class="admin-field">
+          <label class="admin-form-field">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.placeholderEn') }}</span>
-            <input v-model="form.placeholder_en" type="text" class="admin-input" />
-            <small class="admin-field__hint">{{ firstFieldError('placeholder_en') }}</small>
+            <input v-model="form.placeholder_en" type="text" class="admin-form-input" :class="{ 'has-error': firstFieldError('placeholder_en') }">
+            <small v-if="firstFieldError('placeholder_en')" class="admin-form-error">{{ firstFieldError('placeholder_en') }}</small>
           </label>
 
-          <label class="admin-field">
+          <label class="admin-form-field">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.placeholderAr') }}</span>
-            <input v-model="form.placeholder_ar" type="text" class="admin-input" dir="rtl" />
-            <small class="admin-field__hint">{{ firstFieldError('placeholder_ar') }}</small>
+            <input v-model="form.placeholder_ar" type="text" class="admin-form-input" :class="{ 'has-error': firstFieldError('placeholder_ar') }" dir="rtl">
+            <small v-if="firstFieldError('placeholder_ar')" class="admin-form-error">{{ firstFieldError('placeholder_ar') }}</small>
           </label>
 
-          <label class="admin-field">
+          <label class="admin-form-field">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.helpTextEn') }}</span>
-            <textarea v-model="form.help_text_en" rows="3" class="admin-input admin-input--textarea" />
-            <small class="admin-field__hint">{{ firstFieldError('help_text_en') }}</small>
+            <textarea v-model="form.help_text_en" rows="3" class="admin-form-textarea" :class="{ 'has-error': firstFieldError('help_text_en') }"></textarea>
+            <small v-if="firstFieldError('help_text_en')" class="admin-form-error">{{ firstFieldError('help_text_en') }}</small>
           </label>
 
-          <label class="admin-field">
+          <label class="admin-form-field">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.helpTextAr') }}</span>
-            <textarea v-model="form.help_text_ar" rows="3" class="admin-input admin-input--textarea" dir="rtl" />
-            <small class="admin-field__hint">{{ firstFieldError('help_text_ar') }}</small>
+            <textarea v-model="form.help_text_ar" rows="3" class="admin-form-textarea" :class="{ 'has-error': firstFieldError('help_text_ar') }" dir="rtl"></textarea>
+            <small v-if="firstFieldError('help_text_ar')" class="admin-form-error">{{ firstFieldError('help_text_ar') }}</small>
           </label>
 
-          <label class="admin-field admin-field--full" v-if="needsOptions">
+          <label v-if="needsOptions" class="admin-form-field admin-form-field--full">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.options') }}</span>
             <textarea
               v-model="form.options_text"
               rows="5"
-              class="admin-input admin-input--textarea"
+              class="admin-form-textarea"
+              :class="{ 'has-error': firstFieldError('options_json') }"
               :placeholder="t('adminStaffQuestionTemplatesPage.form.optionsPlaceholder')"
-            />
-            <small class="admin-field__hint">{{ firstFieldError('options_json') }}</small>
+            ></textarea>
+            <small v-if="firstFieldError('options_json')" class="admin-form-error">{{ firstFieldError('options_json') }}</small>
           </label>
 
-          <label class="admin-field admin-field--full">
+          <label class="admin-form-field admin-form-field--full">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.validationRules') }}</span>
             <input
               v-model="form.validation_rules"
               type="text"
-              class="admin-input"
+              class="admin-form-input"
+              :class="{ 'has-error': firstFieldError('validation_rules') }"
               :placeholder="t('adminStaffQuestionTemplatesPage.form.validationRulesPlaceholder')"
-            />
-            <small class="admin-field__hint">{{ firstFieldError('validation_rules') }}</small>
+            >
+            <small v-if="firstFieldError('validation_rules')" class="admin-form-error">{{ firstFieldError('validation_rules') }}</small>
           </label>
 
-          <label class="admin-field">
+          <label class="admin-form-field">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.sortOrder') }}</span>
-            <input v-model.number="form.sort_order" type="number" min="0" class="admin-input" />
-            <small class="admin-field__hint">{{ firstFieldError('sort_order') }}</small>
+            <input v-model.number="form.sort_order" type="number" min="0" class="admin-form-input" :class="{ 'has-error': firstFieldError('sort_order') }">
+            <small v-if="firstFieldError('sort_order')" class="admin-form-error">{{ firstFieldError('sort_order') }}</small>
           </label>
 
-          <div class="admin-field admin-field--checkboxes">
-            <label class="admin-checkbox">
-              <input v-model="form.is_required" type="checkbox" />
-              <span>{{ t('adminStaffQuestionTemplatesPage.form.required') }}</span>
+          <div class="admin-form-switches admin-form-field--full">
+            <label class="admin-switch-card">
+              <input v-model="form.is_required" type="checkbox">
+              <div>
+                <strong>{{ t('adminStaffQuestionTemplatesPage.form.required') }}</strong>
+                <span>{{ t('adminStaffQuestionTemplatesPage.preview.required') }}</span>
+              </div>
             </label>
-
-            <label class="admin-checkbox">
-              <input v-model="form.is_active" type="checkbox" />
-              <span>{{ t('adminStaffQuestionTemplatesPage.form.active') }}</span>
+            <label class="admin-switch-card">
+              <input v-model="form.is_active" type="checkbox">
+              <div>
+                <strong>{{ t('adminStaffQuestionTemplatesPage.form.active') }}</strong>
+                <span>{{ t('adminStaffQuestionTemplatesPage.preview.active') }}</span>
+              </div>
             </label>
           </div>
         </div>
+
+        <div class="admin-form-actions">
+          <button type="button" class="admin-primary-btn" :disabled="isSaving" @click="saveTemplate">
+            {{
+              isSaving
+                ? isEditing
+                  ? t('adminStaffQuestionTemplatesPage.actions.updating')
+                  : t('adminStaffQuestionTemplatesPage.actions.saving')
+                : isEditing
+                  ? t('adminStaffQuestionTemplatesPage.actions.updateQuestion')
+                  : t('adminStaffQuestionTemplatesPage.actions.saveQuestion')
+            }}
+          </button>
+          <button type="button" class="admin-secondary-btn" @click="resetForm">
+            {{ isEditing ? t('adminStaffQuestionTemplatesPage.actions.cancelEdit') : t('adminStaffQuestionTemplatesPage.actions.resetForm') }}
+          </button>
+        </div>
       </section>
 
-      <section class="admin-question-preview-card">
-        <header class="admin-section-heading">
+      <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
+        <div class="admin-panel__head">
           <div>
-            <span class="admin-section-heading__eyebrow">{{ t('adminStaffQuestionTemplatesPage.preview.eyebrow') }}</span>
-            <h3>{{ t('adminStaffQuestionTemplatesPage.preview.title') }}</h3>
+            <span class="admin-panel__eyebrow">{{ t('adminStaffQuestionTemplatesPage.preview.eyebrow') }}</span>
+            <h2>{{ t('adminStaffQuestionTemplatesPage.preview.title') }}</h2>
           </div>
-        </header>
+        </div>
 
         <div class="admin-question-preview">
-          <div class="admin-question-preview__meta">
-            <span class="admin-chip">{{ form.question_type }}</span>
-            <span class="admin-chip" :class="{ 'admin-chip--muted': !form.is_required }">
-              {{ form.is_required ? t('adminStaffQuestionTemplatesPage.preview.required') : t('adminStaffQuestionTemplatesPage.preview.optional') }}
-            </span>
-            <span class="admin-chip" :class="{ 'admin-chip--muted': !form.is_active }">
-              {{ form.is_active ? t('adminStaffQuestionTemplatesPage.preview.active') : t('adminStaffQuestionTemplatesPage.preview.inactive') }}
-            </span>
-          </div>
+          <div class="admin-question-preview__card">
+            <div class="admin-question-preview__meta">
+              <span class="admin-status-pill">{{ form.question_type }}</span>
+              <span class="admin-question-preview__code">{{ form.code || t('adminStaffQuestionTemplatesPage.preview.autoCode') }}</span>
+              <span class="admin-status-pill" :class="{ 'is-muted': !form.is_required }">
+                {{ form.is_required ? t('adminStaffQuestionTemplatesPage.preview.required') : t('adminStaffQuestionTemplatesPage.preview.optional') }}
+              </span>
+              <span class="admin-status-pill" :class="form.is_active ? 'is-success' : 'is-muted'">
+                {{ form.is_active ? t('adminStaffQuestionTemplatesPage.preview.active') : t('adminStaffQuestionTemplatesPage.preview.inactive') }}
+              </span>
+            </div>
 
-          <h4>{{ previewQuestionText || t('adminStaffQuestionTemplatesPage.preview.emptyQuestion') }}</h4>
+            <label class="admin-question-preview__label">
+              {{ previewQuestionText || t('adminStaffQuestionTemplatesPage.preview.emptyQuestion') }}
+              <span v-if="form.is_required" class="admin-question-preview__required">*</span>
+            </label>
 
-          <p v-if="previewHelpText" class="admin-question-preview__help">
-            {{ previewHelpText }}
-          </p>
+            <p v-if="previewHelpText" class="admin-question-preview__help">{{ previewHelpText }}</p>
 
-          <div v-if="needsOptions && parsedOptions.length" class="admin-question-preview__options">
-            <span v-for="option in parsedOptions" :key="option" class="admin-question-preview__option">
-              {{ option }}
-            </span>
-          </div>
+            <div v-if="needsOptions && parsedOptions.length" class="admin-question-preview__options">
+              <label v-for="option in parsedOptions" :key="option" class="admin-question-preview__option">
+                <input :type="form.question_type === 'checkbox' ? 'checkbox' : 'radio'" disabled>
+                <span>{{ option }}</span>
+              </label>
+            </div>
 
-          <div class="admin-question-preview__input">
             <input
-              v-if="!['textarea', 'checkbox', 'radio', 'select'].includes(form.question_type)"
+              v-else-if="!['textarea', 'select', 'checkbox', 'radio'].includes(form.question_type)"
               type="text"
-              class="admin-input"
+              class="admin-question-preview__input"
               :placeholder="previewPlaceholder || t('adminStaffQuestionTemplatesPage.preview.placeholderFallback')"
               disabled
-            />
+            >
 
             <textarea
               v-else-if="form.question_type === 'textarea'"
               rows="4"
-              class="admin-input admin-input--textarea"
+              class="admin-question-preview__textarea"
               :placeholder="previewPlaceholder || t('adminStaffQuestionTemplatesPage.preview.placeholderFallback')"
               disabled
-            />
+            ></textarea>
 
-            <select v-else-if="form.question_type === 'select'" class="admin-input" disabled>
+            <select v-else-if="form.question_type === 'select'" class="admin-form-select" disabled>
               <option>{{ previewPlaceholder || t('adminStaffQuestionTemplatesPage.preview.selectPlaceholder') }}</option>
             </select>
 
-            <div v-else class="admin-question-preview__choice-list">
+            <div v-else class="admin-question-preview__options">
               <label
                 v-for="option in parsedOptions.length ? parsedOptions : [t('adminStaffQuestionTemplatesPage.preview.choiceFallback')]"
                 :key="option"
-                class="admin-choice-row"
+                class="admin-question-preview__option"
               >
-                <input :type="form.question_type === 'checkbox' ? 'checkbox' : 'radio'" disabled />
+                <input :type="form.question_type === 'checkbox' ? 'checkbox' : 'radio'" disabled>
                 <span>{{ option }}</span>
               </label>
             </div>
           </div>
+
+          <div class="admin-question-preview__notes">
+            <article class="admin-question-preview__note">
+              <span>{{ t('adminStaffQuestionTemplatesPage.form.validationRules') }}</span>
+              <strong>{{ form.validation_rules || t('adminStaffQuestionTemplatesPage.preview.noValidationRules') }}</strong>
+            </article>
+            <article class="admin-question-preview__note">
+              <span>{{ t('adminStaffQuestionTemplatesPage.form.sortOrder') }}</span>
+              <strong>{{ form.sort_order }}</strong>
+            </article>
+            <article class="admin-question-preview__note">
+              <span>{{ t('adminStaffQuestionTemplatesPage.table.status') }}</span>
+              <strong>{{ form.is_active ? t('adminStaffQuestionTemplatesPage.table.active') : t('adminStaffQuestionTemplatesPage.table.inactive') }}</strong>
+            </article>
+          </div>
         </div>
       </section>
-    </div>
+    </section>
 
-    <section class="admin-library-card admin-reveal-up">
-      <header class="admin-section-heading">
-        <div>
-          <span class="admin-section-heading__eyebrow">{{ t('adminStaffQuestionTemplatesPage.library.eyebrow') }}</span>
-          <h3>{{ t('adminStaffQuestionTemplatesPage.library.title') }}</h3>
+    <section class="admin-question-library-grid">
+      <section class="admin-panel admin-reveal-up admin-reveal-delay-2">
+        <div class="admin-panel__head">
+          <div>
+            <span class="admin-panel__eyebrow">{{ t('adminStaffQuestionTemplatesPage.preview.eyebrow') }}</span>
+            <h2>{{ t('adminStaffQuestionTemplatesPage.preview.title') }}</h2>
+          </div>
         </div>
-        <span class="admin-chip">{{ templates.length }}</span>
-      </header>
 
-      <div v-if="isLoading" class="admin-empty-state">
-        <i class="fas fa-spinner fa-spin"></i>
-        <span>{{ t('adminStaffQuestionTemplatesPage.states.loading') }}</span>
-      </div>
+        <div class="admin-question-type-grid">
+          <article
+            v-for="option in questionTypeOptions"
+            :key="option.value"
+            class="admin-question-type-card"
+          >
+            <strong>{{ option.label }}</strong>
+            <p>{{ option.helper }}</p>
+          </article>
+        </div>
+      </section>
 
-      <div v-else-if="templates.length === 0" class="admin-empty-state">
-        <i class="fas fa-clipboard-question"></i>
-        <span>{{ t('adminStaffQuestionTemplatesPage.states.empty') }}</span>
-      </div>
+      <section class="admin-panel admin-reveal-up">
+        <div class="admin-panel__head">
+          <div>
+            <span class="admin-panel__eyebrow">{{ t('adminStaffQuestionTemplatesPage.library.eyebrow') }}</span>
+            <h2>{{ t('adminStaffQuestionTemplatesPage.library.title') }}</h2>
+          </div>
+          <span class="admin-panel__action is-static">{{ pagination.total }}</span>
+        </div>
 
-      <div v-else class="admin-library-table-wrap">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>{{ t('adminStaffQuestionTemplatesPage.table.code') }}</th>
-              <th>{{ t('adminStaffQuestionTemplatesPage.table.questionEn') }}</th>
-              <th>{{ t('adminStaffQuestionTemplatesPage.table.questionAr') }}</th>
-              <th>{{ t('adminStaffQuestionTemplatesPage.table.type') }}</th>
-              <th>{{ t('adminStaffQuestionTemplatesPage.table.required') }}</th>
-              <th>{{ t('adminStaffQuestionTemplatesPage.table.status') }}</th>
-              <th>{{ t('adminStaffQuestionTemplatesPage.table.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, index) in templates" :key="row.id">
-              <td>{{ index + 1 }}</td>
-              <td>{{ row.code || '—' }}</td>
-              <td>{{ row.question_text_en }}</td>
-              <td dir="rtl">{{ row.question_text_ar || '—' }}</td>
-              <td>{{ row.question_type }}</td>
-              <td>{{ row.is_required ? t('adminStaffQuestionTemplatesPage.table.yes') : t('adminStaffQuestionTemplatesPage.table.no') }}</td>
-              <td>
-                <span class="admin-chip" :class="{ 'admin-chip--muted': !row.is_active }">
-                  {{ row.is_active ? t('adminStaffQuestionTemplatesPage.table.active') : t('adminStaffQuestionTemplatesPage.table.inactive') }}
-                </span>
-              </td>
-              <td>
-                <div class="admin-table-actions">
-                  <button type="button" class="admin-table-btn" @click="editTemplate(row)">
-                    {{ t('adminStaffQuestionTemplatesPage.table.edit') }}
-                  </button>
-                  <button type="button" class="admin-table-btn" @click="toggleTemplate(row)">
-                    {{ row.is_active ? t('adminStaffQuestionTemplatesPage.table.deactivate') : t('adminStaffQuestionTemplatesPage.table.activate') }}
-                  </button>
-                  <button type="button" class="admin-table-btn" :disabled="index === 0 || isReordering" @click="reorderTemplates('up', index)">
-                    {{ t('adminStaffQuestionTemplatesPage.table.up') }}
-                  </button>
-                  <button type="button" class="admin-table-btn" :disabled="index === templates.length - 1 || isReordering" @click="reorderTemplates('down', index)">
-                    {{ t('adminStaffQuestionTemplatesPage.table.down') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div v-if="isLoading" class="admin-table-empty">{{ t('adminStaffQuestionTemplatesPage.states.loading') }}</div>
+
+        <template v-else>
+          <div v-if="templates.length === 0" class="admin-table-empty">
+            {{ t('adminStaffQuestionTemplatesPage.states.empty') }}
+          </div>
+
+          <div v-else class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{{ t('adminStaffQuestionTemplatesPage.table.code') }}</th>
+                  <th>{{ t('adminStaffQuestionTemplatesPage.table.questionEn') }}</th>
+                  <th>{{ t('adminStaffQuestionTemplatesPage.table.questionAr') }}</th>
+                  <th>{{ t('adminStaffQuestionTemplatesPage.table.type') }}</th>
+                  <th>{{ t('adminStaffQuestionTemplatesPage.table.required') }}</th>
+                  <th>{{ t('adminStaffQuestionTemplatesPage.table.status') }}</th>
+                  <th>{{ t('adminStaffQuestionTemplatesPage.table.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, index) in templates" :key="row.id">
+                  <td>{{ index + 1 }}</td>
+                  <td>{{ row.code || '—' }}</td>
+                  <td>
+                    <div class="admin-question-table__text">
+                      <strong>{{ localizedQuestionText(row) }}</strong>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="admin-question-table__text" :dir="locale === 'ar' ? 'ltr' : 'rtl'">
+                      <strong>{{ secondaryQuestionText(row) }}</strong>
+                    </div>
+                  </td>
+                  <td>{{ questionTypeLabel(row.question_type) }}</td>
+                  <td>{{ row.is_required ? t('adminStaffQuestionTemplatesPage.table.yes') : t('adminStaffQuestionTemplatesPage.table.no') }}</td>
+                  <td>
+                    <span class="admin-status-pill" :class="row.is_active ? 'is-success' : 'is-muted'">
+                      {{ row.is_active ? t('adminStaffQuestionTemplatesPage.table.active') : t('adminStaffQuestionTemplatesPage.table.inactive') }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="admin-table-actions">
+                      <button type="button" class="admin-inline-link" @click="editTemplate(row)">
+                        {{ t('adminStaffQuestionTemplatesPage.table.edit') }}
+                      </button>
+                      <button type="button" class="admin-inline-link" @click="toggleTemplate(row)">
+                        {{ row.is_active ? t('adminStaffQuestionTemplatesPage.table.deactivate') : t('adminStaffQuestionTemplatesPage.table.activate') }}
+                      </button>
+                      <button type="button" class="admin-inline-link" :disabled="index === 0 || isReordering" @click="reorderTemplates('up', index)">
+                        {{ t('adminStaffQuestionTemplatesPage.table.up') }}
+                      </button>
+                      <button type="button" class="admin-inline-link" :disabled="index === templates.length - 1 || isReordering" @click="reorderTemplates('down', index)">
+                        {{ t('adminStaffQuestionTemplatesPage.table.down') }}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <AppPagination :pagination="pagination" :disabled="isLoading || isReordering" @change="fetchTemplates" />
+        </template>
+      </section>
     </section>
   </div>
 </template>

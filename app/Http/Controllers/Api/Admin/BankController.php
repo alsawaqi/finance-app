@@ -7,13 +7,30 @@ use App\Http\Requests\Admin\StoreBankRequest;
 use App\Http\Requests\Admin\UpdateBankRequest;
 use App\Models\Bank;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class BankController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+        $paginator = Bank::query()
+            ->with(['creator:id,name,email'])
+            ->withCount('agents')
+            ->orderBy('name')
+            ->paginate($perPage);
+
         return response()->json([
-            'data' => $this->serializeBanks(),
+            'data' => collect($paginator->items())
+                ->map(fn (Bank $bank) => $this->serializeBank($bank))
+                ->values(),
+            'pagination' => $this->paginationMeta($paginator),
         ]);
     }
 
@@ -54,17 +71,6 @@ class BankController extends Controller
         ]);
     }
 
-    private function serializeBanks(): array
-    {
-        return Bank::query()
-            ->with(['creator:id,name,email'])
-            ->withCount('agents')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Bank $bank) => $this->serializeBank($bank))
-            ->all();
-    }
-
     private function serializeBank(Bank $bank): array
     {
         return [
@@ -78,6 +84,18 @@ class BankController extends Controller
             'creator_name' => $bank->creator?->name,
             'created_at' => optional($bank->created_at)?->toISOString(),
             'updated_at' => optional($bank->updated_at)?->toISOString(),
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 }

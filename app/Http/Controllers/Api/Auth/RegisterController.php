@@ -14,10 +14,20 @@ class RegisterController extends Controller
 {
     public function __invoke(RegisterRequest $request): JsonResponse
     {
+        $countryCodeRaw = trim((string) $request->input('phone_country_code', ''));
+        $phoneRaw = trim((string) $request->input('phone', ''));
+
+        $countryCodeDigits = preg_replace('/\D+/', '', $countryCodeRaw) ?: '';
+        $phoneDigits = preg_replace('/\D+/', '', $phoneRaw) ?: '';
+        $normalizedCountryCode = $countryCodeDigits !== '' ? '+'.$countryCodeDigits : '';
+        $normalizedPhone = $phoneDigits !== ''
+            ? trim(($normalizedCountryCode !== '' ? $normalizedCountryCode.' ' : '').$phoneDigits)
+            : null;
+
         $user = User::create([
             'name' => trim($request->string('name')->toString()),
             'email' => strtolower(trim($request->string('email')->toString())),
-            'phone' => $request->filled('phone') ? trim((string) $request->input('phone')) : null,
+            'phone' => $normalizedPhone,
             'password' => $request->string('password')->toString(),
             'account_type' => UserAccountType::CLIENT,
             'is_active' => true,

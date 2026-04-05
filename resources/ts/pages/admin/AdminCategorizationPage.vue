@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import { getAdminCategorization, type CategorizedAgent, type CategorizedClient, type CategorizedStaff } from '@/services/adminCategorization'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
+import { formatDateTime } from '@/utils/dateTime'
+import { formatRequestStatus } from '@/utils/requestStatus'
+import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+
+type CategorizationTab = 'agents' | 'staff' | 'clients'
 
 const loading = ref(true)
 const errorMessage = ref('')
-const activeTab = ref<'agents' | 'staff' | 'clients'>('agents')
+const activeTab = ref<CategorizationTab>('agents')
 
 const summary = ref({
   total_requests: 0,
@@ -17,12 +24,24 @@ const summary = ref({
   total_agents: 0,
   with_additional_document_requests: 0,
 })
+const signals = ref({
+  agents_with_traffic: 0,
+  staff_with_assignments: 0,
+  clients_needing_action: 0,
+})
 const statusBreakdown = ref<Record<string, number>>({})
 const stageBreakdown = ref<Record<string, number>>({})
 const agents = ref<CategorizedAgent[]>([])
 const staff = ref<CategorizedStaff[]>([])
 const clients = ref<CategorizedClient[]>([])
-const { t } = useI18n()
+const tabPagination = ref<Record<CategorizationTab, PaginationMeta>>({
+  agents: { ...DEFAULT_PAGINATION, per_page: 12 },
+  staff: { ...DEFAULT_PAGINATION, per_page: 12 },
+  clients: { ...DEFAULT_PAGINATION, per_page: 12 },
+})
+const { t, locale } = useI18n()
+
+const currentPagination = computed(() => tabPagination.value[activeTab.value])
 
 const statCards = computed(() => [
   { label: t('adminCategorizationPage.stats.totalRequests'), value: summary.value.total_requests, tone: 'emerald' },
@@ -31,24 +50,65 @@ const statCards = computed(() => [
   { label: t('adminCategorizationPage.stats.agents'), value: summary.value.total_agents, tone: 'amber' },
 ])
 
-const topStatuses = computed(() => Object.entries(statusBreakdown.value).sort((a, b) => b[1] - a[1]).slice(0, 6))
-const topStages = computed(() => Object.entries(stageBreakdown.value).sort((a, b) => b[1] - a[1]).slice(0, 6))
-const agentsWithTraffic = computed(() => agents.value.filter((item) => item.emails_count > 0).length)
-const staffWithAssignments = computed(() => staff.value.filter((item) => item.active_assignments_count > 0).length)
-const clientsNeedingAction = computed(() => clients.value.filter((item) => item.needs_action_count > 0).length)
+function stageMeta(stage: string | null | undefined) {
+  return getRequestWorkflowStageMeta(stage)
+}
 
-async function load() {
+const topStatuses = computed(() =>
+  Object.entries(statusBreakdown.value)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([status, count]) => ({
+      key: status,
+      label: formatRequestStatus(status, locale, t('adminCategorizationPage.states.emptyValue')),
+      count,
+    })),
+)
+
+const topStages = computed(() =>
+  Object.entries(stageBreakdown.value)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([stage, count]) => ({
+      key: stage,
+      label: stageMeta(stage).label,
+      count,
+    })),
+)
+const agentsWithTraffic = computed(() => signals.value.agents_with_traffic)
+const staffWithAssignments = computed(() => signals.value.staff_with_assignments)
+const clientsNeedingAction = computed(() => signals.value.clients_needing_action)
+
+function setPagination(tab: CategorizationTab, pagination: PaginationMeta | undefined) {
+  tabPagination.value[tab] = pagination ?? { ...DEFAULT_PAGINATION, per_page: tabPagination.value[tab].per_page }
+}
+
+async function load(page = tabPagination.value[activeTab.value].current_page) {
   loading.value = true
   errorMessage.value = ''
 
   try {
-    const data = await getAdminCategorization()
+    const data = await getAdminCategorization({
+      tab: activeTab.value,
+      page,
+      per_page: tabPagination.value[activeTab.value].per_page,
+    })
+
     summary.value = data.summary
+    signals.value = data.signals ?? signals.value
     statusBreakdown.value = data.status_breakdown ?? {}
     stageBreakdown.value = data.stage_breakdown ?? {}
-    agents.value = data.agents ?? []
-    staff.value = data.staff ?? []
-    clients.value = data.clients ?? []
+
+    if (data.tab === 'agents') {
+      agents.value = data.agents ?? []
+      setPagination('agents', data.pagination)
+    } else if (data.tab === 'staff') {
+      staff.value = data.staff ?? []
+      setPagination('staff', data.pagination)
+    } else {
+      clients.value = data.clients ?? []
+      setPagination('clients', data.pagination)
+    }
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminCategorizationPage.errors.loadFailed')
   } finally {
@@ -57,10 +117,16 @@ async function load() {
 }
 
 function dateText(value?: string | null) {
-  return value ? new Date(value).toLocaleString() : t('adminCategorizationPage.states.emptyValue')
+  return formatDateTime(value, locale, t('adminCategorizationPage.states.emptyValue'))
 }
 
-onMounted(load)
+watch(
+  activeTab,
+  () => {
+    load(1)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -74,7 +140,7 @@ onMounted(load)
         </p>
       </div>
       <div class="actions-row">
-        <button class="ghost-btn" type="button" @click="load">{{ t('adminCategorizationPage.actions.refresh') }}</button>
+        <button class="ghost-btn" type="button" @click="load()">{{ t('adminCategorizationPage.actions.refresh') }}</button>
       </div>
     </div>
 
@@ -135,7 +201,7 @@ onMounted(load)
           <h2>{{ t('adminCategorizationPage.sections.requestStatusMix') }}</h2>
         </div>
         <div class="catalog-chip-grid">
-          <span v-for="entry in topStatuses" :key="entry[0]" class="soft-tag">{{ entry[0] }} · {{ entry[1] }}</span>
+          <span v-for="entry in topStatuses" :key="entry.key" class="soft-tag">{{ entry.label }} · {{ entry.count }}</span>
         </div>
       </article>
 
@@ -144,7 +210,7 @@ onMounted(load)
           <h2>{{ t('adminCategorizationPage.sections.workflowStageMix') }}</h2>
         </div>
         <div class="catalog-chip-grid">
-          <span v-for="entry in topStages" :key="entry[0]" class="soft-tag">{{ entry[0] }} · {{ entry[1] }}</span>
+          <span v-for="entry in topStages" :key="entry.key" class="soft-tag">{{ entry.label }} · {{ entry.count }}</span>
         </div>
       </article>
     </div>
@@ -251,6 +317,8 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+
+      <AppPagination :pagination="currentPagination" :disabled="loading" @change="load" />
     </div>
   </section>
 </template>

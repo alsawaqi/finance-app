@@ -1,9 +1,12 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export type AdminRequestListItem = {
   id: number
   reference_number: string
   approval_reference_number?: string | null
+  company_name?: string | null
+  country_code?: string | null
   intake_details_json?: Record<string, unknown> | null
   submitted_at?: string | null
   approved_at?: string | null
@@ -127,7 +130,7 @@ export type AdminRequestStaffQuestion = {
   asker?: { id: number; name: string; email?: string | null } | null
 }
 
-export async function listNewRequests(params?: { queue?: 'all' | 'pending' | 'contract' }) {
+export async function listNewRequests(params?: { queue?: 'all' | 'pending' | 'contract'; page?: number; per_page?: number }) {
   const { data } = await api.get('/api/admin/requests/new', { params })
   return data as {
     selected_queue: 'all' | 'pending' | 'contract'
@@ -137,6 +140,7 @@ export async function listNewRequests(params?: { queue?: 'all' | 'pending' | 'co
       contract: number
     }
     requests: AdminRequestListItem[]
+    pagination: PaginationMeta
   }
 }
 
@@ -233,9 +237,9 @@ export type StaffDirectoryMember = {
   role_names?: string[]
 }
 
-export async function listReadyForAssignment() {
-  const { data } = await api.get('/api/admin/requests/ready-to-assign')
-  return data as { requests: AssignmentReadyRequest[] }
+export async function listReadyForAssignment(params?: { page?: number; per_page?: number }) {
+  const { data } = await api.get('/api/admin/requests/ready-to-assign', { params })
+  return data as { requests: AssignmentReadyRequest[]; pagination: PaginationMeta }
 }
 
 export async function getStaffDirectory() {

@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { StaffUserItem } from '@/services/staffUsers'
+import { formatDateOnly, formatDateTime } from '@/utils/dateTime'
 
 defineProps<{
   rows: StaffUserItem[]
   loading: boolean
+  totalCount?: number
 }>()
 
 defineEmits<{
   (e: 'edit', row: StaffUserItem): void
   (e: 'toggle', row: StaffUserItem): void
 }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 </script>
 
 <template>
@@ -21,7 +23,7 @@ const { t } = useI18n()
         <span class="admin-panel__eyebrow">{{ t('adminStaffLibrary.eyebrow') }}</span>
         <h2>{{ t('adminStaffLibrary.title') }}</h2>
       </div>
-      <span class="admin-panel__action is-static">{{ t('adminStaffLibrary.accountsCount', { count: rows.length }) }}</span>
+      <span class="admin-panel__action is-static">{{ t('adminStaffLibrary.accountsCount', { count: totalCount ?? rows.length }) }}</span>
     </div>
 
     <div v-if="loading" class="admin-table-empty">{{ t('adminStaffLibrary.states.loading') }}</div>
@@ -48,13 +50,13 @@ const { t } = useI18n()
               <td>
                 <div class="admin-question-table__text">
                   <strong>{{ row.name }}</strong>
-                  <small>#{{ row.id }} · {{ row.email }}</small>
+                  <small>#{{ row.id }} | {{ row.email }}</small>
                 </div>
               </td>
               <td>
                 <div class="admin-question-table__text">
                   <strong>{{ row.phone || t('adminStaffLibrary.states.noPhone') }}</strong>
-                  <small>{{ row.created_at ? new Date(row.created_at).toLocaleDateString() : t('adminStaffLibrary.states.recentlyCreated') }}</small>
+                  <small>{{ formatDateOnly(row.created_at, locale, t('adminStaffLibrary.states.recentlyCreated')) }}</small>
                 </div>
               </td>
               <td>
@@ -71,7 +73,7 @@ const { t } = useI18n()
                   {{ row.is_active ? t('adminStaffLibrary.states.active') : t('adminStaffLibrary.states.inactive') }}
                 </span>
               </td>
-              <td>{{ row.last_login_at ? new Date(row.last_login_at).toLocaleString() : t('adminStaffLibrary.states.never') }}</td>
+              <td>{{ formatDateTime(row.last_login_at, locale, t('adminStaffLibrary.states.never')) }}</td>
               <td>
                 <div class="admin-table-actions">
                   <button type="button" class="admin-inline-link" @click="$emit('edit', row)">{{ t('adminStaffLibrary.actions.edit') }}</button>

@@ -5,6 +5,7 @@ import type { BankItem } from '@/services/banks'
 defineProps<{
   rows: BankItem[]
   loading: boolean
+  totalCount?: number
 }>()
 
 defineEmits<{
@@ -21,7 +22,7 @@ const { t } = useI18n()
         <span class="admin-panel__eyebrow">{{ t('adminBankLibrary.eyebrow') }}</span>
         <h2>{{ t('adminBankLibrary.title') }}</h2>
       </div>
-      <span class="admin-panel__action is-static">{{ t('adminBankLibrary.count', { count: rows.length }) }}</span>
+      <span class="admin-panel__action is-static">{{ t('adminBankLibrary.count', { count: totalCount ?? rows.length }) }}</span>
     </div>
 
     <div v-if="loading" class="admin-table-empty">{{ t('adminBankLibrary.states.loading') }}</div>

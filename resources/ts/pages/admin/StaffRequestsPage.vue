@@ -2,16 +2,20 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import { getStaffRequests, type StaffWorkspaceRequestSummary } from '@/services/staffWorkspace'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 import { countryNameFromCode } from '@/utils/countries'
-import { intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
+import { intakeCompanyName, intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { formatDateTime } from '@/utils/dateTime'
 
 const loading = ref(true)
 const errorMessage = ref('')
 const search = ref('')
 const workflowStage = ref('')
 const requests = ref<StaffWorkspaceRequestSummary[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const { t, locale } = useI18n()
 
 const availableStages = computed(() => [
@@ -28,7 +32,7 @@ function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
 }
 
-async function load() {
+async function load(page = pagination.value.current_page) {
   loading.value = true
   errorMessage.value = ''
 
@@ -36,13 +40,20 @@ async function load() {
     const data = await getStaffRequests({
       search: search.value || undefined,
       workflow_stage: workflowStage.value || undefined,
+      page,
+      per_page: pagination.value.per_page,
     })
     requests.value = data.requests ?? []
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('staffRequests.errors.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+function applyFilters() {
+  load(1)
 }
 
 onMounted(load)
@@ -82,7 +93,7 @@ onMounted(load)
           </select>
         </div>
         <div class="filter-actions">
-          <button class="primary-btn" type="button" @click="load">{{ t('staffRequests.actions.applyFilters') }}</button>
+          <button class="primary-btn" type="button" @click="applyFilters">{{ t('staffRequests.actions.applyFilters') }}</button>
         </div>
       </div>
     </article>
@@ -90,7 +101,7 @@ onMounted(load)
     <article class="panel-card">
       <div class="panel-head">
         <h2>{{ t('staffRequests.table.title') }}</h2>
-        <span class="count-pill">{{ t('staffRequests.table.count', { count: requests.length }) }}</span>
+        <span class="count-pill">{{ t('staffRequests.table.count', { count: pagination.total }) }}</span>
       </div>
 
       <p v-if="loading" class="empty-state">{{ t('staffRequests.states.loading') }}</p>
@@ -103,6 +114,7 @@ onMounted(load)
             <tr>
               <th>{{ t('staffRequests.table.request') }}</th>
               <th>{{ t('staffRequests.table.client') }}</th>
+              <th>{{ t('staffRequests.table.company') }}</th>
               <th>{{ t('staffRequests.table.country') }}</th>
               <th>{{ t('staffRequests.table.financeType') }}</th>
               <th>{{ t('staffRequests.table.comments') }}</th>
@@ -121,13 +133,14 @@ onMounted(load)
                 <strong>{{ intakeFullName(item.intake_details_json, item.client?.name || t('staffRequests.states.clientFallback')) }}</strong>
                 <div class="muted-small">{{ item.client?.email || t('staffRequests.states.emptyValue') }}</div>
               </td>
-              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json), locale) }}</td>
+              <td>{{ item.company_name || intakeCompanyName(item.intake_details_json, t('staffRequests.states.emptyValue')) }}</td>
+              <td>{{ countryNameFromCode(item.country_code || intakeCountryCode(item.intake_details_json), locale) }}</td>
               <td>
-                <div>{{ intakeFinanceType(item.intake_details_json) }}</div>
+                <div>{{ intakeFinanceType(item.intake_details_json, t('staffRequests.states.emptyValue'), locale) }}</div>
                 <div class="muted-small">{{ intakeRequestedAmount(item.intake_details_json) }}</div>
               </td>
               <td>{{ item.comments_count || 0 }}</td>
-              <td>{{ item.latest_activity_at ? new Date(item.latest_activity_at).toLocaleString() : t('staffRequests.states.emptyValue') }}</td>
+              <td>{{ formatDateTime(item.latest_activity_at, locale, t('staffRequests.states.emptyValue')) }}</td>
               <td><span class="status-badge">{{ stageMeta(item.workflow_stage).label }}</span></td>
               <td>
                 <RouterLink :to="{ name: 'staff-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('staffRequests.actions.view') }}</RouterLink>
@@ -136,6 +149,8 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+
+      <AppPagination :pagination="pagination" :disabled="loading" @change="load" />
     </article>
   </section>
 </template>

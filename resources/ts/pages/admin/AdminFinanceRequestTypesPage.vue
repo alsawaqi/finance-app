@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import type { FinanceRequestTypeItem, FinanceRequestTypePayload } from '@/services/financeRequestTypes'
 import {
   createFinanceRequestType,
@@ -9,6 +10,7 @@ import {
   toggleFinanceRequestTypeActive,
   updateFinanceRequestType,
 } from '@/services/financeRequestTypes'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 
 type FinanceRequestTypeForm = {
   id: number | null
@@ -21,9 +23,10 @@ type FinanceRequestTypeForm = {
   is_active: boolean
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const rows = ref<FinanceRequestTypeItem[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const isLoading = ref(false)
 const isSaving = ref(false)
 const formError = ref('')
@@ -34,9 +37,9 @@ const form = ref<FinanceRequestTypeForm>(createDefaultForm())
 const isEditing = computed(() => form.value.id !== null)
 
 const stats = computed(() => {
-  const total = rows.value.length
+  const total = pagination.value.total
   const active = rows.value.filter((item) => item.is_active).length
-  const inactive = total - active
+  const inactive = rows.value.filter((item) => !item.is_active).length
   const bilingual = rows.value.filter((item) => item.name_en?.trim() && item.name_ar?.trim()).length
 
   return [
@@ -79,6 +82,18 @@ function firstError(field: string) {
   return fieldErrors.value[field]?.[0] ?? ''
 }
 
+function localizedTypeName(row: FinanceRequestTypeItem) {
+  const nameEn = String(row.name_en || '').trim()
+  const nameAr = String((row as any).name_ar || '').trim()
+  return locale.value === 'ar' ? (nameAr || nameEn) : (nameEn || nameAr)
+}
+
+function secondaryTypeName(row: FinanceRequestTypeItem) {
+  const nameEn = String(row.name_en || '').trim()
+  const nameAr = String((row as any).name_ar || '').trim()
+  return locale.value === 'ar' ? (nameEn || nameAr) : (nameAr || nameEn)
+}
+
 function buildPayload(): FinanceRequestTypePayload {
   return {
     slug: form.value.slug.trim() || null,
@@ -91,15 +106,19 @@ function buildPayload(): FinanceRequestTypePayload {
   }
 }
 
-async function fetchRows() {
+async function fetchRows(page = pagination.value.current_page) {
   isLoading.value = true
   formError.value = ''
 
   try {
-    const { data } = await listFinanceRequestTypes()
+    const { data } = await listFinanceRequestTypes({
+      page,
+      per_page: pagination.value.per_page,
+    })
     rows.value = data.data
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
     if (!isEditing.value) {
-      form.value.sort_order = rows.value.length + 1
+      form.value.sort_order = Math.max(pagination.value.total, rows.value.length) + 1
     }
   } catch (error) {
     formError.value = extractErrorMessage(error, t('adminFinanceRequestTypesPage.errors.loadFailed'))
@@ -195,7 +214,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       </div>
     </section>
 
-    <div class="admin-question-stats-grid admin-reveal-up admin-reveal-delay-1">
+    <div class="admin-question-stats-grid admin-question-stats-grid--balanced admin-reveal-up admin-reveal-delay-1">
       <article v-for="stat in stats" :key="stat.label" class="admin-question-stat" :class="`tone-${stat.tone}`">
         <strong>{{ stat.value }}</strong>
         <span>{{ stat.label }}</span>
@@ -364,7 +383,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
           <h2>{{ t('adminFinanceRequestTypesPage.table.title') }}</h2>
         </div>
         <span class="admin-panel__action is-static">
-          {{ t('adminFinanceRequestTypesPage.table.count', { count: rows.length }) }}
+          {{ t('adminFinanceRequestTypesPage.table.count', { count: pagination.total }) }}
         </span>
       </div>
 
@@ -392,8 +411,8 @@ function extractErrorMessage(error: unknown, fallback: string) {
               <tr v-for="row in rows" :key="row.id">
                 <td>
                   <div class="admin-question-table__text">
-                    <strong>{{ row.name_en }}</strong>
-                    <small>{{ row.name_ar }}</small>
+                    <strong>{{ localizedTypeName(row) }}</strong>
+                    <small>{{ secondaryTypeName(row) }}</small>
                   </div>
                 </td>
                 <td>{{ row.slug }}</td>
@@ -417,6 +436,8 @@ function extractErrorMessage(error: unknown, fallback: string) {
             </tbody>
           </table>
         </div>
+
+        <AppPagination :pagination="pagination" :disabled="isLoading" @change="fetchRows" />
       </template>
     </section>
   </div>

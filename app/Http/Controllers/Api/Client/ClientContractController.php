@@ -12,6 +12,7 @@ use App\Support\ContractDocumentBuilder;
 use App\Support\ContractTemplateResolver;
 use App\Support\MpdfContractPdfRenderer;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -83,12 +84,21 @@ class ClientContractController extends Controller
         ]);
     }
 
-    public function downloadPdf(FinanceRequest $financeRequest)
+    public function downloadPdf(Request $request, FinanceRequest $financeRequest)
     {
         $this->authorizeClient($financeRequest);
 
         $contract = $financeRequest->currentContract;
         abort_unless($contract && $contract->contract_pdf_path && Storage::disk('public')->exists($contract->contract_pdf_path), 404);
+
+        if ($request->boolean('preview')) {
+            return Storage::disk('public')->response(
+                $contract->contract_pdf_path,
+                'contract-' . $financeRequest->reference_number . '.pdf',
+                ['Content-Type' => 'application/pdf'],
+                'inline'
+            );
+        }
 
         return Storage::disk('public')->download(
             $contract->contract_pdf_path,

@@ -2,14 +2,19 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import { listNewRequests, type AdminRequestListItem } from '@/services/adminRequests'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 import { countryNameFromCode } from '@/utils/countries'
-import { intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
+import { intakeCompanyName, intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { formatRequestStatus } from '@/utils/requestStatus'
+import { formatDateTime } from '@/utils/dateTime'
 
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<AdminRequestListItem[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const queueSummary = ref({ all: 0, pending: 0, contract: 0 })
 const route = useRoute()
 const router = useRouter()
@@ -27,14 +32,19 @@ function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
 }
 
-async function load() {
+async function load(page = pagination.value.current_page) {
   loading.value = true
   errorMessage.value = ''
 
   try {
-    const data = await listNewRequests({ queue: selectedQueue.value })
+    const data = await listNewRequests({
+      queue: selectedQueue.value,
+      page,
+      per_page: pagination.value.per_page,
+    })
     requests.value = data.requests ?? []
     queueSummary.value = data.queue_summary ?? queueSummary.value
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminNewRequests.errors.loadFailed')
   } finally {
@@ -44,10 +54,11 @@ async function load() {
 
 function setQueue(queue: 'all' | 'pending' | 'contract') {
   if (selectedQueue.value === queue) {
-    load()
+    load(1)
     return
   }
 
+  pagination.value.current_page = 1
   selectedQueue.value = queue
 }
 
@@ -59,11 +70,12 @@ watch(
       : 'all'
 
     if (selectedQueue.value !== normalized) {
+      pagination.value.current_page = 1
       selectedQueue.value = normalized
       return
     }
 
-    load()
+    load(pagination.value.current_page)
   },
   { immediate: true },
 )
@@ -81,7 +93,7 @@ watch(selectedQueue, async (value, oldValue) => {
 
 onMounted(() => {
   if (!route.query.queue) {
-    load()
+    load(pagination.value.current_page)
   }
 })
 </script>
@@ -109,7 +121,7 @@ onMounted(() => {
         :class="selectedQueue === card.key ? 'tone-blue' : 'tone-slate'"
         @click="setQueue(card.key as 'all' | 'pending' | 'contract')"
       >
-        <strong>{{ loading ? '…' : card.value }}</strong>
+        <strong>{{ loading ? '...' : card.value }}</strong>
         <span>{{ card.label }}</span>
       </button>
     </div>
@@ -117,7 +129,7 @@ onMounted(() => {
     <div class="panel-card">
       <div class="panel-head">
         <h2>{{ t('adminNewRequests.table.title') }}</h2>
-        <span class="count-pill">{{ t('adminNewRequests.table.totalCount', { count: requests.length }) }}</span>
+        <span class="count-pill">{{ t('adminNewRequests.table.totalCount', { count: pagination.total }) }}</span>
       </div>
 
       <p v-if="loading" class="empty-state">{{ t('adminNewRequests.states.loading') }}</p>
@@ -130,6 +142,7 @@ onMounted(() => {
             <tr>
               <th>{{ t('adminNewRequests.table.request') }}</th>
               <th>{{ t('adminNewRequests.table.client') }}</th>
+              <th>{{ t('adminNewRequests.table.company') }}</th>
               <th>{{ t('adminNewRequests.table.country') }}</th>
               <th>{{ t('adminNewRequests.table.requestedAmount') }}</th>
               <th>{{ t('adminNewRequests.table.financeType') }}</th>
@@ -151,10 +164,12 @@ onMounted(() => {
                 <div class="muted-small">{{ item.client?.email || t('adminNewRequests.states.emptyValue') }}</div>
               </td>
 
-              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json), locale) }}</td>
+              <td>{{ item.company_name || intakeCompanyName(item.intake_details_json, t('adminNewRequests.states.emptyValue')) }}</td>
+
+              <td>{{ countryNameFromCode(item.country_code || intakeCountryCode(item.intake_details_json), locale) }}</td>
               <td>{{ intakeRequestedAmount(item.intake_details_json) }}</td>
-              <td>{{ intakeFinanceType(item.intake_details_json) }}</td>
-              <td>{{ item.submitted_at ? new Date(item.submitted_at).toLocaleString() : t('adminNewRequests.states.emptyValue') }}</td>
+              <td>{{ intakeFinanceType(item.intake_details_json, t('adminNewRequests.states.emptyValue'), locale) }}</td>
+              <td>{{ formatDateTime(item.submitted_at, locale, t('adminNewRequests.states.emptyValue')) }}</td>
 
               <td>
                 <span class="status-badge">
@@ -167,7 +182,7 @@ onMounted(() => {
               </td>
 
               <td>
-                <span class="status-badge">{{ item.status }}</span>
+                <span class="status-badge">{{ formatRequestStatus(item.status, locale, t('adminNewRequests.states.emptyValue')) }}</span>
                 <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
 
@@ -180,6 +195,8 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
+
+      <AppPagination :pagination="pagination" :disabled="loading" @change="load" />
     </div>
   </section>
 </template>

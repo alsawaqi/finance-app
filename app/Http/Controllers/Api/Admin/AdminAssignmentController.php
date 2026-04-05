@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\FinanceRequestWorkflowService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class AdminAssignmentController extends Controller
@@ -24,7 +25,14 @@ class AdminAssignmentController extends Controller
 
     public function indexReady(Request $request): JsonResponse
     {
-        $requests = FinanceRequest::query()
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+
+        $requestsPaginator = FinanceRequest::query()
             ->with([
                 'client:id,name,email',
                 'currentContract:id,finance_request_id,version_no,status,admin_signed_at,client_signed_at',
@@ -79,10 +87,11 @@ class AdminAssignmentController extends Controller
             )
             ->orderByDesc('latest_activity_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
-            'requests' => $requests,
+            'requests' => collect($requestsPaginator->items())->values(),
+            'pagination' => $this->paginationMeta($requestsPaginator),
         ]);
     }
 
@@ -226,5 +235,17 @@ class AdminAssignmentController extends Controller
                 'financeRequestType:id,slug,name_en,name_ar,description_en,description_ar,is_active,sort_order',
             ]),
         ]);
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+        ];
     }
 }

@@ -2,38 +2,50 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import { listClientRequests } from '@/services/clientPortal'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 import { countryNameFromCode } from '@/utils/countries'
 import { intakeCountryCode, intakeRequestedAmount } from '@/utils/requestIntake'
 import { getClientWorkflowStageMeta } from '@/utils/clientRequestStage'
+import { formatDateTime } from '@/utils/dateTime'
 
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<any[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const { t, locale } = useI18n()
-const documentStages = ['document_collection', 'awaiting_additional_documents', 'awaiting_client_documents'];
-
+const documentStages = ['document_collection', 'awaiting_additional_documents', 'awaiting_client_documents']
 
 const stats = computed(() => ({
-  total: requests.value.length,
+  total: pagination.value.total,
   active: requests.value.filter((item) => item.status === 'active').length,
   needsAction: requests.value.filter((item) =>
-  item.current_contract?.status === 'admin_signed'
-  || documentStages.includes(item.workflow_stage)
-  || item.workflow_stage === 'client_update_requested',
-).length,
+    item.current_contract?.status === 'admin_signed'
+    || documentStages.includes(item.workflow_stage)
+    || item.workflow_stage === 'client_update_requested',
+  ).length,
 }))
 
 function stageMeta(stage: string | null | undefined) {
   return getClientWorkflowStageMeta(stage)
 }
 
-async function load() {
+function dateText(value?: string | null) {
+  return formatDateTime(value, locale, t('clientRequests.states.emptyDate'))
+}
+
+async function load(page = pagination.value.current_page) {
   loading.value = true
   errorMessage.value = ''
+
   try {
-    const data = await listClientRequests()
+    const data = await listClientRequests({
+      page,
+      per_page: pagination.value.per_page,
+    })
     requests.value = data.requests ?? []
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('clientRequests.errors.loadFailed')
   } finally {
@@ -70,15 +82,15 @@ onMounted(load)
 
     <div class="client-status-chip-grid client-status-chip-grid--summary">
       <div class="client-status-chip-card">
-        <strong>{{ loading ? '…' : stats.total }}</strong>
+        <strong>{{ loading ? '...' : stats.total }}</strong>
         <span>{{ t('clientRequests.stats.totalRequests') }}</span>
       </div>
       <div class="client-status-chip-card">
-        <strong>{{ loading ? '…' : stats.active }}</strong>
+        <strong>{{ loading ? '...' : stats.active }}</strong>
         <span>{{ t('clientRequests.stats.active') }}</span>
       </div>
       <div class="client-status-chip-card">
-        <strong>{{ loading ? '…' : stats.needsAction }}</strong>
+        <strong>{{ loading ? '...' : stats.needsAction }}</strong>
         <span>{{ t('clientRequests.stats.needAction') }}</span>
       </div>
     </div>
@@ -109,12 +121,12 @@ onMounted(load)
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('clientRequests.states.awaitingApproval') }}</div>
               </td>
-              <td>{{ countryNameFromCode(intakeCountryCode(item.intake_details_json), locale) }}</td>
+              <td>{{ countryNameFromCode(item.country_code || intakeCountryCode(item.intake_details_json), locale) }}</td>
               <td>{{ intakeRequestedAmount(item.intake_details_json) }}</td>
               <td>
                 <span class="client-stage-badge" :class="stageMeta(item.workflow_stage).className">{{ stageMeta(item.workflow_stage).label }}</span>
               </td>
-              <td>{{ item.submitted_at ? new Date(item.submitted_at).toLocaleString() : t('clientRequests.states.emptyDate') }}</td>
+              <td>{{ dateText(item.submitted_at) }}</td>
               <td class="request-table__action">
                 <RouterLink :to="contractActionRoute(item)" class="primary-btn small-btn">{{ contractActionLabel(item) }}</RouterLink>
               </td>
@@ -122,6 +134,7 @@ onMounted(load)
           </tbody>
         </table>
       </div>
+      <AppPagination :pagination="pagination" :disabled="loading" @change="load" />
       <p v-if="requests.length" class="client-table-scroll-hint">{{ t('clientRequests.table.scrollHint') }}</p>
     </div>
   </section>

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  formatAdditionalDocumentStatus,
+  formatUpdateItemStatus,
+} from '@/utils/requestStatus'
 
 const props = withDefaults(defineProps<{
   request: any
@@ -10,6 +14,10 @@ const props = withDefaults(defineProps<{
 })
 
 const { t, locale } = useI18n()
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
+}
 
 const collectionStats = computed(() => [
   { label: t('adminRequestDetails.related.stats.answers'), value: props.request?.answers?.length ?? 0 },
@@ -34,7 +42,15 @@ const staffQuestions = computed(() => (props.request?.staff_questions ?? []).sli
 const agentAssignments = computed(() => (props.request?.agent_assignments ?? []).filter((item: any) => item?.is_active !== false).slice(0, 5))
 
 function statusText(value: unknown) {
-  return value === null || value === undefined || value === '' ? t('adminRequestDetails.states.emptyValue') : String(value)
+  const key = String(value ?? '').trim().toLowerCase()
+  if (!key) return t('adminRequestDetails.states.emptyValue')
+  if (key === 'closed') return uiText('Reviewed', 'تمت المراجعة')
+  if (key === 'answered') return uiText('Answered', 'تمت الإجابة')
+
+  const updatedLabel = formatUpdateItemStatus(key, locale, '')
+  if (updatedLabel) return updatedLabel
+
+  return formatAdditionalDocumentStatus(key, locale, String(value))
 }
 
 function localizedQuestionTitle(item: any) {

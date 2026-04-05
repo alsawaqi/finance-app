@@ -1,8 +1,12 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
-export async function listClientRequests() {
-  const { data } = await api.get('/api/client/requests')
-  return data
+export async function listClientRequests(params?: { page?: number; per_page?: number }) {
+  const { data } = await api.get('/api/client/requests', { params })
+  return data as {
+    requests: any[]
+    pagination: PaginationMeta
+  }
 }
 
 export async function getClientRequest(id: number | string) {

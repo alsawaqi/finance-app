@@ -428,14 +428,23 @@ class FinanceRequestUpdateService
         switch ($item->item_type) {
             case 'intake_field':
                 $details = $financeRequest->intake_details_json ?? [];
-                $details[$item->field_key] = Arr::get($payload, 'value');
+                $fieldKey = (string) ($item->field_key ?? '');
+                $newValue = Arr::get($payload, 'value');
+
+                if (in_array($fieldKey, ['country', 'country_code'], true)) {
+                    $financeRequest->country_code = $this->normalizeCountryCode($newValue);
+                    unset($details['country'], $details['country_code']);
+                } else {
+                    $details[$fieldKey] = $newValue;
+                }
+
                 $financeRequest->intake_details_json = $details;
 
-                if ($item->field_key === 'company_name') {
+                if ($fieldKey === 'company_name') {
                     $financeRequest->company_name = Arr::get($payload, 'value');
                 }
 
-                if ($item->field_key === 'finance_request_type_id') {
+                if ($fieldKey === 'finance_request_type_id') {
                     $financeRequest->finance_request_type_id = Arr::get($payload, 'value') ? (int) Arr::get($payload, 'value') : null;
                 }
 
@@ -512,7 +521,9 @@ class FinanceRequestUpdateService
     {
         return match ($row['item_type']) {
             'intake_field' => [
-                'value' => data_get($financeRequest->intake_details_json ?? [], $row['field_key']),
+                'value' => in_array((string) ($row['field_key'] ?? ''), ['country', 'country_code'], true)
+                    ? $financeRequest->country_code
+                    : data_get($financeRequest->intake_details_json ?? [], $row['field_key']),
             ],
             'request_answer' => $this->resolveCurrentAnswerValue($financeRequest, (int) $row['question_id']),
             'attachment' => $this->resolveCurrentAttachmentValue($financeRequest, (string) $row['field_key']),
@@ -648,7 +659,25 @@ class FinanceRequestUpdateService
             return (int) $normalized;
         }
 
+        if (in_array($fieldKey, ['country', 'country_code'], true)) {
+            $code = $this->normalizeCountryCode($normalized);
+
+            if (! $code) {
+                throw ValidationException::withMessages([
+                    'value' => 'Please select a valid country code.',
+                ]);
+            }
+
+            return $code;
+        }
+
         return $normalized;
+    }
+
+    private function normalizeCountryCode(mixed $value): ?string
+    {
+        $normalized = strtoupper(trim((string) $value));
+        return preg_match('/^[A-Z]{2}$/', $normalized) === 1 ? $normalized : null;
     }
 
     private function attachmentCategoryFromFieldKey(string $fieldKey): string

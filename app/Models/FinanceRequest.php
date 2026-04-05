@@ -24,6 +24,7 @@ class FinanceRequest extends Model
         'current_contract_id',
         'applicant_type',
         'company_name',
+        'country_code',
         'status',
         'workflow_stage',
         'understudy_status',

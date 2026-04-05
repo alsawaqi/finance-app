@@ -20,6 +20,7 @@ class AdminInboxController extends Controller
         $userId = $request->integer('user_id');
         $onlyUnread = $request->boolean('only_unread');
         $search = trim((string) $request->string('search'));
+        $perPage = max(5, min(100, $request->integer('per_page', 25)));
 
         $messages = MailboxMessage::query()
             ->with(['user:id,name,email', 'attachments:id,mailbox_message_id'])
@@ -35,7 +36,7 @@ class AdminInboxController extends Controller
             })
             ->latest('received_at')
             ->latest('id')
-            ->paginate(25);
+            ->paginate($perPage);
 
         $staffUsers = User::query()
             ->where('account_type', UserAccountType::STAFF->value)
@@ -56,6 +57,8 @@ class AdminInboxController extends Controller
                 'last_page' => $messages->lastPage(),
                 'per_page' => $messages->perPage(),
                 'total' => $messages->total(),
+                'from' => $messages->firstItem(),
+                'to' => $messages->lastItem(),
             ],
             'staff_users' => $staffUsers,
         ]);
@@ -111,16 +114,47 @@ class AdminInboxController extends Controller
         ]);
     }
 
-    public function downloadAttachment(MailboxMessageAttachment $attachment): StreamedResponse
+    public function downloadAttachment(Request $request, MailboxMessageAttachment $attachment): StreamedResponse
     {
         $message = $attachment->mailboxMessage;
         abort_unless($message, 404);
-        abort_unless(Storage::disk($attachment->disk ?: 'local')->exists($attachment->file_path), 404);
+        $disk = $attachment->disk ?: 'local';
+        abort_unless(Storage::disk($disk)->exists($attachment->file_path), 404);
 
-        return Storage::disk($attachment->disk ?: 'local')->download(
+        if ($request->boolean('preview')) {
+            $mimeType = $attachment->mime_type ?: (Storage::disk($disk)->mimeType($attachment->file_path) ?: 'application/octet-stream');
+
+            if ($this->isPreviewableMimeType($mimeType)) {
+                return Storage::disk($disk)->response(
+                    $attachment->file_path,
+                    $attachment->file_name ?: basename($attachment->file_path),
+                    [
+                        'Content-Type' => $mimeType,
+                        'X-Content-Type-Options' => 'nosniff',
+                    ],
+                    'inline'
+                );
+            }
+        }
+
+        return Storage::disk($disk)->download(
             $attachment->file_path,
             $attachment->file_name ?: basename($attachment->file_path)
         );
+    }
+
+    private function isPreviewableMimeType(string $mimeType): bool
+    {
+        if (str_starts_with($mimeType, 'image/')) {
+            return true;
+        }
+
+        return in_array($mimeType, [
+            'application/pdf',
+            'text/plain',
+            'text/csv',
+            'application/json',
+        ], true);
     }
 
     private function serializeListRow(MailboxMessage $message): array

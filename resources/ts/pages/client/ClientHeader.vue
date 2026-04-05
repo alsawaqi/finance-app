@@ -8,7 +8,7 @@ import AppLocaleSelect from '../public/inc/AppLocaleSelect.vue'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 
 const navItems = computed(() => [
@@ -42,6 +42,10 @@ const userInitials = computed(() => {
 
 function isNavActive(names: string[]) {
   return names.includes(String(route.name ?? ''))
+}
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
 }
 
 async function handleLogout() {
@@ -191,7 +195,9 @@ defineEmits<{
 
     <div class="mobile-menu" :class="{ 'mobile-menu-visible': mobileMenuOpen }">
       <div class="menu-backdrop" @click="$emit('close-mobile-menu')"></div>
-      <div class="close-btn" @click="$emit('close-mobile-menu')">X</div>
+      <button type="button" class="close-btn" :aria-label="uiText('Close menu', 'إغلاق القائمة')" @click="$emit('close-mobile-menu')">
+        ×
+      </button>
 
       <nav class="menu-box">
         <div class="nav-logo">

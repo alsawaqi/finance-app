@@ -31,11 +31,14 @@ import AdminClientsOverviewPage from '@/pages/admin/AdminClientsOverviewPage.vue
 import AdminAgentsPage from '@/pages/admin/AdminAgentsPage.vue'
 import AdminNewRequestsPage from '@/pages/admin/AdminNewRequestsPage.vue'
 import AdminRequestDetailsPage from '@/pages/admin/AdminRequestDetailsPage.vue'
+import AdminRequestEmailsPage from '@/pages/admin/AdminRequestEmailsPage.vue'
 import AdminContractBuilderPage from '@/pages/admin/AdminContractBuilderPage.vue'
 import AdminAssignmentsPage from '@/pages/admin/AdminAssignmentsPage.vue'
 import AdminAssignmentDetailsPage from '@/pages/admin/AdminAssignmentDetailsPage.vue'
 import StaffRequestsPage from '@/pages/admin/StaffRequestsPage.vue'
 import StaffRequestDetailsPage from '@/pages/admin/StaffRequestDetailsPage.vue'
+import StaffRequestSendEmailPage from '@/pages/admin/StaffRequestSendEmailPage.vue'
+import StaffRequestEmailsPage from '@/pages/admin/StaffRequestEmailsPage.vue'
 import AdminStaffQuestionTemplatesPage from '@/pages/admin/AdminStaffQuestionTemplatesPage.vue'
 import AdminMailSettingsPage from '@/pages/admin/AdminMailSettingsPage.vue'
 import AdminInboxPage from '@/pages/admin/AdminInboxPage.vue'
@@ -92,13 +95,17 @@ const router = createRouter({
         { path: 'categorization', name: 'admin-categorization', component: AdminCategorizationPage, meta: { allowedRoles: ['admin'] } },
         { path: 'request-filtration', name: 'admin-request-filtration', component: AdminRequestFilteringPage, meta: { allowedRoles: ['admin'] } },
         { path: 'clients-overview', name: 'admin-clients-overview', component: AdminClientsOverviewPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'clients-overview/deactivated', name: 'admin-clients-overview-deactivated', component: AdminClientsOverviewPage, meta: { allowedRoles: ['admin'] } },
         { path: 'agents', name: 'admin-agents', component: AdminAgentsPage },
         { path: 'assignments', name: 'admin-assignments', component: AdminAssignmentsPage, meta: { allowedRoles: ['admin'] } },
         { path: 'assignments/:id', name: 'admin-assignment-details', component: AdminAssignmentDetailsPage, meta: { allowedRoles: ['admin'] } },
         { path: 'assigned-requests', name: 'staff-requests', component: StaffRequestsPage },
         { path: 'assigned-requests/:id', name: 'staff-request-details', component: StaffRequestDetailsPage },
+        { path: 'assigned-requests/:id/send-email', name: 'staff-request-send-email', component: StaffRequestSendEmailPage },
+        { path: 'assigned-requests/:id/emails', name: 'staff-request-emails', component: StaffRequestEmailsPage },
         { path: 'requests/new', name: 'admin-new-requests', component: AdminNewRequestsPage },
         { path: 'requests/:id', name: 'admin-request-details', component: AdminRequestDetailsPage },
+        { path: 'requests/:id/emails', name: 'admin-request-emails', component: AdminRequestEmailsPage },
         { path: 'requests/:id/contract', name: 'admin-request-contract', component: AdminContractBuilderPage },
         { path: 'staff-question-templates', name: 'admin-staff-question-templates', component: AdminStaffQuestionTemplatesPage, meta: { allowedRoles: ['admin'] } },
         { path: 'mail-settings', name: 'admin-mail-settings', component: AdminMailSettingsPage, meta: { allowedRoles: ['admin'] } },

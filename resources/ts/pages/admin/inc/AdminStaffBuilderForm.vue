@@ -137,23 +137,28 @@ function firstError(field: string) {
         />
       </label>
 
-      <div class="admin-form-field admin-form-field--full">
-        <span>{{ t('adminStaffBuilder.fields.directPermissions') }}</span>
-        <div class="admin-permission-grid">
-          <label v-for="permission in availablePermissions" :key="permission" class="admin-check-card">
-            <input
-              :checked="form.permission_names.includes(permission)"
-              type="checkbox"
-              @change="togglePermission(permission)"
-            />
-            <div>
-              <strong>{{ permission }}</strong>
-              <span>{{ t('adminStaffBuilder.help.directPermission') }}</span>
-            </div>
-          </label>
+      <details class="admin-collapsible-section admin-form-field--full">
+        <summary>
+          <span>{{ t('adminStaffBuilder.fields.directPermissions') }}</span>
+          <span class="count-pill">{{ form.permission_names.length }}/{{ availablePermissions.length }}</span>
+        </summary>
+        <div class="admin-collapsible-section__body">
+          <div class="admin-permission-grid">
+            <label v-for="permission in availablePermissions" :key="permission" class="admin-check-card">
+              <input
+                :checked="form.permission_names.includes(permission)"
+                type="checkbox"
+                @change="togglePermission(permission)"
+              />
+              <div>
+                <strong>{{ permission }}</strong>
+                <span>{{ t('adminStaffBuilder.help.directPermission') }}</span>
+              </div>
+            </label>
+          </div>
+          <small v-if="firstError('permission_names')" class="admin-form-error">{{ firstError('permission_names') }}</small>
         </div>
-        <small v-if="firstError('permission_names')" class="admin-form-error">{{ firstError('permission_names') }}</small>
-      </div>
+      </details>
 
       <div class="admin-form-switches admin-form-field--full">
         <label class="admin-switch-card">

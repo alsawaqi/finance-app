@@ -8,14 +8,31 @@ use App\Http\Requests\Admin\StoreDocumentUploadStepRequest;
 use App\Http\Requests\Admin\UpdateDocumentUploadStepRequest;
 use App\Models\DocumentUploadStep;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class DocumentUploadStepController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+        $paginator = DocumentUploadStep::query()
+            ->withCount('requestDocumentUploads')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->paginate($perPage);
+
         return response()->json([
-            'data' => $this->serializeSteps(),
+            'data' => collect($paginator->items())
+                ->map(fn (DocumentUploadStep $step) => $this->serializeStep($step))
+                ->values(),
+            'pagination' => $this->paginationMeta($paginator),
         ]);
     }
 
@@ -138,6 +155,18 @@ class DocumentUploadStepController extends Controller
             'request_document_uploads_count' => (int) ($step->request_document_uploads_count ?? 0),
             'created_at' => optional($step->created_at)?->toISOString(),
             'updated_at' => optional($step->updated_at)?->toISOString(),
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 }

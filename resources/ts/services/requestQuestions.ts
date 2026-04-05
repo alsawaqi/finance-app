@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export type QuestionType =
   | 'text'
@@ -42,8 +43,8 @@ export interface RequestQuestionPayload {
   is_active?: boolean
 }
 
-export async function listRequestQuestions() {
-  return api.get<{ data: RequestQuestionItem[] }>('/api/admin/request-questions')
+export async function listRequestQuestions(params?: { page?: number; per_page?: number }) {
+  return api.get<{ data: RequestQuestionItem[]; pagination: PaginationMeta }>('/api/admin/request-questions', { params })
 }
 
 export async function createRequestQuestion(payload: RequestQuestionPayload) {

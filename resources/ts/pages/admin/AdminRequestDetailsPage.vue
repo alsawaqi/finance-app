@@ -21,16 +21,27 @@ import {
   type AdminUpdateBatchDraftItem,
 } from '@/services/adminRequests'
 import {
+  applicantTypeLabel,
   intakeFullName,
   intakeRequestedAmount,
 } from '@/utils/requestIntake'
+import AppFilePreviewModal from '@/components/AppFilePreviewModal.vue'
+import { buildPreviewUrl } from '@/utils/filePreview'
 import AdminQuickViewModal from './inc/AdminQuickViewModal.vue'
 import RequestAnswersList from './inc/RequestAnswersList.vue'
 import RequestCoreDetailsCard from './inc/RequestCoreDetailsCard.vue'
-import RequestRelatedCollectionsCard from './inc/RequestRelatedCollectionsCard.vue'
 import RequestSummaryStatGrid from './inc/RequestSummaryStatGrid.vue'
 import RequestWorkspaceShell from './inc/RequestWorkspaceShell.vue'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { buildTimelineRows, formatTimelineDate } from '@/utils/requestTimeline'
+import {
+  formatAdditionalDocumentStatus,
+  formatEmailDeliveryStatus,
+  formatRequestStatus,
+  formatUpdateBatchStatus,
+  formatUnderstudyStatus,
+} from '@/utils/requestStatus'
+import { formatDateTime } from '@/utils/dateTime'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,7 +63,18 @@ const batchReasonEn = ref('')
 const batchReasonAr = ref('')
 const updateDraftItems = ref<any[]>([])
 const reviewNotes = ref<Record<number, string>>({})
-const quickView = ref<'answers' | 'attachments' | 'shareholders' | 'assignments' | 'comments' | 'timeline' | null>(null)
+const quickView = ref<
+  | 'requiredDocuments'
+  | 'additionalDocuments'
+  | 'answers'
+  | 'attachments'
+  | 'shareholders'
+  | 'assignments'
+  | 'comments'
+  | 'emails'
+  | 'timeline'
+  | null
+>(null)
 const staffQuestionSummary = ref<any | null>(null)
 const emailBankOptions = ref<any[]>([])
 const emailAgentOptions = ref<any[]>([])
@@ -65,6 +87,21 @@ const agentAssignmentReviewNote = ref('')
 const { t, locale } = useI18n()
 
 const requestId = computed(() => route.params.id as string)
+const filePreviewOpen = ref(false)
+const filePreviewName = ref('')
+const filePreviewMime = ref('')
+const filePreviewUrl = ref('')
+const fileDownloadUrl = ref('')
+
+function openFilePreview(fileName: string | null | undefined, downloadUrl: string, mimeType?: string | null) {
+  const targetUrl = String(downloadUrl || '').trim()
+  if (!targetUrl) return
+  filePreviewName.value = String(fileName || t('adminRequestDetails.states.emptyValue'))
+  filePreviewMime.value = String(mimeType || '')
+  fileDownloadUrl.value = targetUrl
+  filePreviewUrl.value = buildPreviewUrl(targetUrl)
+  filePreviewOpen.value = true
+}
 
 function localizedModelValue(entity: any, base: string, fallback = t('adminRequestDetails.states.emptyValue')) {
   const ar = entity?.[`${base}_ar`]
@@ -79,7 +116,7 @@ function stageMeta(stage: string | null | undefined) {
 const summaryStatItems = computed(() => [
   {
     label: t('adminRequestDetails.summary.status'),
-    value: requestItem.value?.status || t('adminRequestDetails.states.emptyValue'),
+    value: formatRequestStatus(requestItem.value?.status, locale, t('adminRequestDetails.states.emptyValue')),
     hint: t('adminRequestDetails.summary.currentBusinessState'),
   },
   {
@@ -95,11 +132,11 @@ const summaryStatItems = computed(() => [
   {
     label: t('adminRequestDetails.summary.companyName'),
     value: requestItem.value?.company_name || requestItem.value?.intake_details_json?.company_name || t('adminRequestDetails.states.emptyValue'),
-    hint: requestItem.value?.applicant_type || t('adminRequestDetails.states.emptyValue'),
+    hint: applicantTypeLabel(requestItem.value?.applicant_type, locale, t('adminRequestDetails.states.emptyValue')),
   },
   {
     label: t('adminRequestDetails.summary.requestedAmount'),
-    value: intakeRequestedAmount(requestItem.value?.intake_details_json),
+    value: intakeRequestedAmount(requestItem.value?.intake_details_json, t('adminRequestDetails.states.emptyValue'), true),
     hint: localizedModelValue(requestItem.value?.finance_request_type, 'name'),
   },
 ])
@@ -115,6 +152,35 @@ const activityCounts = computed(() => ({
   shareholders: requestItem.value?.shareholders?.length ?? 0,
   updateBatches: requestItem.value?.update_batches?.length ?? 0,
 }))
+
+const timelineRows = computed(() => buildTimelineRows(requestItem.value?.timeline, locale.value))
+
+function timelineDateLabel(value: unknown) {
+  return formatTimelineDate(value, locale.value)
+}
+
+const quickViewTitle = computed(() => {
+  switch (quickView.value) {
+    case 'requiredDocuments':
+      return t('adminRequestDetails.requiredDocuments.title')
+    case 'additionalDocuments':
+      return t('adminRequestDetails.additionalDocuments.title')
+    case 'answers':
+      return t('adminRequestDetails.modal.questionnaireAnswers')
+    case 'attachments':
+      return t('adminRequestDetails.modal.uploadedFiles')
+    case 'shareholders':
+      return t('adminRequestDetails.modal.shareholders')
+    case 'assignments':
+      return t('adminRequestDetails.modal.assignedStaff')
+    case 'comments':
+      return t('adminRequestDetails.modal.internalComments')
+    case 'emails':
+      return t('adminRequestDetails.emailActivity.title')
+    default:
+      return t('adminRequestDetails.modal.timeline')
+  }
+})
 
 const intakeFieldOptions = computed(() => [
   { value: 'requested_amount', label: t('adminRequestDetails.updateBatch.fields.requestedAmount') },
@@ -240,6 +306,10 @@ function localizedText(en?: string | null, ar?: string | null, fallback = '—')
   return en || ar || fallback
 }
 
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
+}
+
 function answerText(answer: any) {
   if (!answer) return t('adminRequestDetails.states.emptyValue')
   if (answer.answer_text) return answer.answer_text
@@ -284,9 +354,18 @@ function updateStatusClass(status: string | null | undefined) {
 
 function emailStatusClass(status: string | null | undefined) {
   const key = String(status || '').toLowerCase()
+  if (key === 'delivered') return 'client-badge client-badge--green'
   if (key === 'sent') return 'client-badge client-badge--green'
   if (key === 'failed') return 'client-badge client-badge--rose'
   return 'client-badge client-badge--amber'
+}
+
+function emailStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'sent') return uiText('Sent', 'تم الإرسال')
+  if (key === 'failed') return uiText('Failed', 'فشل الإرسال')
+  if (key === 'queued') return uiText('Queued', 'قيد الانتظار')
+  return uiText('Pending', 'قيد المعالجة')
 }
 
 function emailRecipients(email: any) {
@@ -343,6 +422,33 @@ function studyQuestionStatusClass(question: any) {
   if (key === 'closed') return 'client-badge client-badge--green'
   if (key === 'answered') return 'client-badge client-badge--blue'
   return 'client-badge client-badge--amber'
+}
+
+function understudyStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'approved') return uiText('Approved', 'تمت الموافقة')
+  if (key === 'submitted') return uiText('Submitted', 'مُرسل')
+  if (key === 'rejected') return uiText('Rejected', 'مرفوض')
+  return uiText('Draft', 'مسودة')
+}
+
+function readableUnderstudyStatus(status: string | null | undefined) {
+  return formatUnderstudyStatus(status, locale, t('adminRequestDetails.states.emptyValue'))
+}
+
+function readableAdditionalDocumentStatus(status: string | null | undefined) {
+  return formatAdditionalDocumentStatus(status, locale, t('adminRequestDetails.states.emptyValue'))
+}
+
+function readableEmailDeliveryStatus(status: string | null | undefined) {
+  return formatEmailDeliveryStatus(status, locale, t('adminRequestDetails.emailActivity.queued'))
+}
+
+function readableCommentVisibility(value: string | null | undefined) {
+  const key = String(value || '').trim().toLowerCase()
+  if (key === 'internal') return uiText('Internal', '\u062f\u0627\u062e\u0644\u064a')
+  if (key === 'admin_only') return uiText('Admin only', '\u0644\u0644\u0625\u062f\u0627\u0631\u0629 \u0641\u0642\u0637')
+  return key || t('adminRequestDetails.states.emptyValue')
 }
 
 function addUpdateDraftItem() {
@@ -699,6 +805,14 @@ onMounted(() => {
   >
     <template #topbar-actions>
       <RouterLink :to="{ name: 'admin-new-requests' }" class="ghost-btn">{{ t('adminRequestDetails.hero.backToQueue') }}</RouterLink>
+      <button
+        v-if="requestItem?.current_contract?.contract_pdf_path"
+        type="button"
+        class="ghost-btn"
+        @click="openFilePreview(`contract-${requestId}.pdf`, adminContractDownloadUrl(requestId), 'application/pdf')"
+      >
+        {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+      </button>
       <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.hero.downloadContractPdf') }}</a>
       <RouterLink v-if="requestItem?.approval_reference_number || requestItem?.current_contract" :to="{ name: 'admin-request-contract', params: { id: requestId } }" class="primary-btn">{{ t('adminRequestDetails.hero.goToContract') }}</RouterLink>
       <RouterLink v-if="requestItem?.current_contract?.client_signed_at" :to="{ name: 'admin-assignment-details', params: { id: requestId }, query: { return_to: String(route.fullPath || `/admin/requests/${requestId}`) } }" class="ghost-btn">{{ t('adminRequestDetails.hero.assignStaff') }}</RouterLink>
@@ -707,66 +821,118 @@ onMounted(() => {
     <template #loading>{{ t('adminRequestDetails.states.loading') }}</template>
 
     <template #summary>
-      <RequestSummaryStatGrid :items="summaryStatItems" />
+      <div class="request-summary-stack">
+        <RequestSummaryStatGrid :items="summaryStatItems" />
+
+        <div class="request-top-panel-grid">
+          <article class="panel-card slim-card">
+            <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.quickCounts') }}</h2></div>
+            <div class="catalog-mini-stats request-kpi-grid request-kpi-grid--two">
+              <div><span>{{ t('adminRequestDetails.summary.assignments') }}</span><strong>{{ activityCounts.assignments }}</strong></div>
+              <div><span>{{ t('adminRequestDetails.summary.comments') }}</span><strong>{{ activityCounts.comments }}</strong></div>
+              <div><span>{{ t('adminRequestDetails.summary.timelineEvents') }}</span><strong>{{ activityCounts.timeline }}</strong></div>
+              <div><span>{{ t('adminRequestDetails.summary.emailLogs') }}</span><strong>{{ activityCounts.emails }}</strong></div>
+            </div>
+            <div class="approve-actions request-footer-actions">
+              <RouterLink class="ghost-btn" :to="{ name: 'admin-request-emails', params: { id: requestId } }">{{ t('adminRequestDetails.emailActivity.title') }}</RouterLink>
+            </div>
+          </article>
+
+          <article v-if="canRejectRequest" class="panel-card slim-card action-card">
+            <div class="panel-head"><h2>{{ t('adminRequestDetails.rejectRequest.title') }}</h2></div>
+            <p class="subtext">{{ t('adminRequestDetails.rejectRequest.subtitle') }}</p>
+            <textarea v-model="rejectReason" rows="4" class="admin-textarea" :placeholder="t('adminRequestDetails.rejectRequest.placeholder')"></textarea>
+            <div class="approve-actions">
+              <button class="ghost-btn" type="button" :disabled="rejectingRequest" @click="rejectRequest">
+                {{ rejectingRequest ? t('adminRequestDetails.rejectRequest.rejecting') : t('adminRequestDetails.rejectRequest.rejectNow') }}
+              </button>
+            </div>
+          </article>
+
+          <article v-if="!requestItem?.approval_reference_number" class="panel-card slim-card action-card request-top-panel--span-2">
+            <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.approveRequest') }}</h2></div>
+            <p class="subtext">{{ t('adminRequestDetails.sections.approveSubtitle') }}</p>
+            <textarea v-model="approvalNotes" rows="5" class="admin-textarea" :placeholder="t('adminRequestDetails.sections.approvePlaceholder')"></textarea>
+            <div class="approve-actions">
+              <button class="primary-btn" type="button" :disabled="approving" @click="approveRequest">
+                {{ approving ? t('adminRequestDetails.actions.approving') : t('adminRequestDetails.actions.approveAndContinue') }}
+              </button>
+            </div>
+          </article>
+        </div>
+      </div>
     </template>
 
     <template #main>
+      <div class="request-workspace-stack">
       <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
 
-      <article style="margin: 1.25rem 0;">
-        <RequestRelatedCollectionsCard :request="requestItem" :required-documents="requiredDocuments" />
+      <article class="panel-card request-quick-panel">
+        <div class="panel-head">
+          <div>
+            <h2>{{ t('adminRequestDetails.quick.title') }}</h2>
+            <p class="subtext">{{ t('adminRequestDetails.quick.subtitle') }}</p>
+          </div>
+        </div>
+
+        <div class="catalog-mini-stats request-kpi-grid">
+          <div>
+            <span>{{ t('adminRequestDetails.requiredDocuments.title') }}</span>
+            <strong>{{ requiredDocuments.filter((item) => item.is_uploaded).length }}/{{ activityCounts.requiredDocuments }}</strong>
+          </div>
+          <div>
+            <span>{{ t('adminRequestDetails.additionalDocuments.title') }}</span>
+            <strong>{{ activityCounts.additionalDocuments }}</strong>
+          </div>
+          <div>
+            <span>{{ t('adminRequestDetails.emailActivity.title') }}</span>
+            <strong>{{ activityCounts.emails }}</strong>
+          </div>
+          <div>
+            <span>{{ t('adminRequestDetails.updateBatch.totalBatches') }}</span>
+            <strong>{{ activityCounts.updateBatches }}</strong>
+          </div>
+        </div>
+
+        <div class="admin-quick-actions request-quick-actions-grid">
+          <button type="button" class="admin-quick-action" @click="quickView = 'requiredDocuments'">
+            <strong>{{ t('adminRequestDetails.requiredDocuments.title') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.filesCount', { count: activityCounts.requiredDocuments }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'additionalDocuments'">
+            <strong>{{ t('adminRequestDetails.additionalDocuments.title') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.filesCount', { count: activityCounts.additionalDocuments }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'answers'">
+            <strong>{{ t('adminRequestDetails.quick.questionnaire') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.answersCount', { count: activityCounts.answers }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'attachments'">
+            <strong>{{ t('adminRequestDetails.quick.uploadedFiles') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.filesCount', { count: activityCounts.attachments }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'shareholders'">
+            <strong>{{ t('adminRequestDetails.quick.shareholders') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.recordsCount', { count: activityCounts.shareholders }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'assignments'">
+            <strong>{{ t('adminRequestDetails.quick.assignedStaff') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.ownersCount', { count: activityCounts.assignments }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'comments'">
+            <strong>{{ t('adminRequestDetails.quick.comments') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.notesCount', { count: activityCounts.comments }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'emails'">
+            <strong>{{ t('adminRequestDetails.emailActivity.title') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.eventsCount', { count: activityCounts.emails }) }}</span>
+          </button>
+          <button type="button" class="admin-quick-action" @click="quickView = 'timeline'">
+            <strong>{{ t('adminRequestDetails.quick.timeline') }}</strong>
+            <span>{{ t('adminRequestDetails.quick.eventsCount', { count: activityCounts.timeline }) }}</span>
+          </button>
+        </div>
       </article>
-
-      <details class="admin-accordion-card" open>
-        <summary>
-          <div>
-            <h2>{{ t('adminRequestDetails.requiredDocuments.title') }}</h2>
-            <p>{{ t('adminRequestDetails.requiredDocuments.subtitle') }}</p>
-          </div>
-        </summary>
-        <div class="admin-accordion-card__body">
-          <div v-if="requiredDocuments.length" class="checklist-grid">
-            <article v-for="item in requiredDocuments" :key="item.document_upload_step_id" class="checklist-card" :class="{ 'is-complete': item.is_uploaded && !item.is_change_requested }">
-              <div class="checklist-card__head">
-                <strong>{{ item.name }}</strong>
-                <span class="status-badge">
-                  {{ item.is_change_requested ? t('adminRequestDetails.requiredDocuments.status.changeRequested') : item.is_uploaded ? t('adminRequestDetails.requiredDocuments.status.uploaded') : t('adminRequestDetails.requiredDocuments.status.pending') }}
-                </span>
-              </div>
-              <p>
-                {{ item.is_uploaded || item.is_change_requested ? t('adminRequestDetails.requiredDocuments.latestFileLabel', { file: item.upload?.file_name || t('adminRequestDetails.requiredDocuments.uploadedFileFallback') }) : t('adminRequestDetails.requiredDocuments.waitingForClient') }}
-              </p>
-              <p v-if="item.rejection_reason" class="form-help form-help--error">{{ t('adminRequestDetails.requiredDocuments.reasonLabel', { reason: item.rejection_reason }) }}</p>
-              <div v-if="item.upload?.id" class="approve-actions">
-                <a :href="requiredDocumentDownloadUrl(item.upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.requiredDocuments.downloadLatest') }}</a>
-              </div>
-            </article>
-          </div>
-          <p v-else class="empty-state">{{ t('adminRequestDetails.requiredDocuments.empty') }}</p>
-        </div>
-      </details>
-
-      <details class="admin-accordion-card">
-        <summary>
-          <div>
-            <h2>{{ t('adminRequestDetails.additionalDocuments.title') }}</h2>
-            <p>{{ t('adminRequestDetails.additionalDocuments.subtitle') }}</p>
-          </div>
-        </summary>
-        <div class="admin-accordion-card__body">
-          <div v-if="requestItem?.additional_documents?.length" class="timeline-list compact-list">
-            <div v-for="item in requestItem.additional_documents" :key="item.id" class="timeline-item">
-              <strong>{{ item.title || t('adminRequestDetails.additionalDocuments.fallbackTitle') }}</strong>
-              <p>{{ item.reason || t('adminRequestDetails.additionalDocuments.noReason') }}</p>
-              <span>{{ item.status }}<template v-if="item.file_name"> · {{ item.file_name }}</template></span>
-              <div v-if="item.file_name" class="approve-actions">
-                <a :href="additionalDocumentDownloadUrl(item.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.additionalDocuments.downloadFile') }}</a>
-              </div>
-            </div>
-          </div>
-          <p v-else class="empty-state">{{ t('adminRequestDetails.additionalDocuments.empty') }}</p>
-        </div>
-      </details>
 
       <details v-if="understudyVisible" class="admin-accordion-card" open>
         <summary>
@@ -777,7 +943,7 @@ onMounted(() => {
         </summary>
         <div class="admin-accordion-card__body">
           <div class="catalog-mini-stats" style="margin-bottom: 1rem;">
-            <div><span>{{ t('adminRequestDetails.understudy.stats.studyStatus') }}</span><strong>{{ String(requestItem?.understudy_status || 'draft').toUpperCase() }}</strong></div>
+            <div><span>{{ t('adminRequestDetails.understudy.stats.studyStatus') }}</span><strong>{{ readableUnderstudyStatus(requestItem?.understudy_status || 'draft') }}</strong></div>
             <div><span>{{ t('adminRequestDetails.understudy.stats.requiredAnswered') }}</span><strong>{{ staffQuestionSummary?.required_answered_count ?? 0 }}/{{ staffQuestionSummary?.required_count ?? 0 }}</strong></div>
             <div><span>{{ t('adminRequestDetails.understudy.stats.allRequiredAnswered') }}</span><strong>{{ staffQuestionSummary?.all_required_answered ? t('adminRequestDetails.states.yes') : t('adminRequestDetails.states.no') }}</strong></div>
           </div>
@@ -787,7 +953,7 @@ onMounted(() => {
             <p>
               {{ t('adminRequestDetails.understudy.submittedText') }}
               <template v-if="requestItem?.understudy_submitted_by?.name"> · {{ requestItem.understudy_submitted_by.name }}</template>
-              <template v-if="requestItem?.understudy_submitted_at"> · {{ new Date(requestItem.understudy_submitted_at).toLocaleString() }}</template>
+              <template v-if="requestItem?.understudy_submitted_at"> · {{ formatDateTime(requestItem.understudy_submitted_at, locale, t('adminRequestDetails.states.emptyValue')) }}</template>
             </p>
           </div>
 
@@ -831,9 +997,9 @@ onMounted(() => {
           <div v-else-if="requestItem?.understudy_reviewed_at" class="notes-box" style="margin-top: 1rem;">
             <span>{{ t('adminRequestDetails.understudy.adminReviewResult') }}</span>
             <p>
-              {{ String(requestItem?.understudy_status || 'draft').toUpperCase() }}
+              {{ readableUnderstudyStatus(requestItem?.understudy_status || 'draft') }}
               <template v-if="requestItem?.understudy_reviewed_by?.name"> · {{ requestItem.understudy_reviewed_by.name }}</template>
-              <template v-if="requestItem?.understudy_reviewed_at"> · {{ new Date(requestItem.understudy_reviewed_at).toLocaleString() }}</template>
+              <template v-if="requestItem?.understudy_reviewed_at"> · {{ formatDateTime(requestItem.understudy_reviewed_at, locale, t('adminRequestDetails.states.emptyValue')) }}</template>
             </p>
             <p v-if="requestItem?.understudy_review_note" style="margin-top: 0.5rem;">{{ requestItem.understudy_review_note }}</p>
           </div>
@@ -869,7 +1035,15 @@ onMounted(() => {
             </select>
           </div>
 
-          <div class="admin-inline-block-grid">
+          <details class="admin-accordion-card slim-accordion request-collapsible">
+            <summary>
+              <div>
+                <h3>{{ t('adminRequestDetails.agentAssignments.selectAgents') }}</h3>
+                <p>{{ filteredAssignableAgents.length }} {{ t('adminRequestDetails.agentAssignments.stats.activeAgents') }}</p>
+              </div>
+            </summary>
+            <div class="admin-accordion-card__body">
+              <div class="admin-inline-block-grid">
             <article class="panel-card slim-card">
               <div class="panel-head"><h3>{{ t('adminRequestDetails.agentAssignments.selectAgents') }}</h3></div>
               <div v-if="filteredAssignableAgents.length" class="timeline-list compact-list">
@@ -924,7 +1098,14 @@ onMounted(() => {
                           <p>{{ document.group_label || t('adminRequestDetails.agentAssignments.requestFile') }}</p>
                           <span>{{ document.file_name }}</span>
                           <div v-if="document.download_url" class="approve-actions" style="margin-top: 0.45rem;">
-                            <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.agentAssignments.previewFile') }}</a>
+                            <button
+                              type="button"
+                              class="ghost-btn"
+                              @click="openFilePreview(document.file_name, document.download_url)"
+                            >
+                              {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+                            </button>
+                            <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
                           </div>
                         </div>
                       </div>
@@ -934,7 +1115,9 @@ onMounted(() => {
               </div>
               <p v-else class="empty-state">{{ t('adminRequestDetails.agentAssignments.selectAgentsFirst') }}</p>
             </article>
-          </div>
+              </div>
+            </div>
+          </details>
 
           <div class="client-form-group" style="margin-top: 1rem;">
             <label class="client-form-label">{{ t('adminRequestDetails.agentAssignments.adminNote') }}</label>
@@ -953,42 +1136,6 @@ onMounted(() => {
         </div>
       </details>
 
-      <article class="panel-card admin-quick-panel">
-        <div class="panel-head">
-          <div>
-            <h2>{{ t('adminRequestDetails.quick.title') }}</h2>
-            <p class="subtext">{{ t('adminRequestDetails.quick.subtitle') }}</p>
-          </div>
-        </div>
-
-        <div class="admin-quick-actions">
-          <button type="button" class="admin-quick-action" @click="quickView = 'answers'">
-            <strong>{{ t('adminRequestDetails.quick.questionnaire') }}</strong>
-            <span>{{ t('adminRequestDetails.quick.answersCount', { count: activityCounts.answers }) }}</span>
-          </button>
-          <button type="button" class="admin-quick-action" @click="quickView = 'attachments'">
-            <strong>{{ t('adminRequestDetails.quick.uploadedFiles') }}</strong>
-            <span>{{ t('adminRequestDetails.quick.filesCount', { count: activityCounts.attachments }) }}</span>
-          </button>
-          <button type="button" class="admin-quick-action" @click="quickView = 'shareholders'">
-            <strong>{{ t('adminRequestDetails.quick.shareholders') }}</strong>
-            <span>{{ t('adminRequestDetails.quick.recordsCount', { count: activityCounts.shareholders }) }}</span>
-          </button>
-          <button type="button" class="admin-quick-action" @click="quickView = 'assignments'">
-            <strong>{{ t('adminRequestDetails.quick.assignedStaff') }}</strong>
-            <span>{{ t('adminRequestDetails.quick.ownersCount', { count: activityCounts.assignments }) }}</span>
-          </button>
-          <button type="button" class="admin-quick-action" @click="quickView = 'comments'">
-            <strong>{{ t('adminRequestDetails.quick.comments') }}</strong>
-            <span>{{ t('adminRequestDetails.quick.notesCount', { count: activityCounts.comments }) }}</span>
-          </button>
-          <button type="button" class="admin-quick-action" @click="quickView = 'timeline'">
-            <strong>{{ t('adminRequestDetails.quick.timeline') }}</strong>
-            <span>{{ t('adminRequestDetails.quick.eventsCount', { count: activityCounts.timeline }) }}</span>
-          </button>
-        </div>
-      </article>
-
       <div class="admin-workspace-layout admin-workspace-layout--compact-side">
         <div class="admin-workspace-main">
           <article class="panel-card slim-card" style="margin-top: 1.25rem;">
@@ -1000,7 +1147,7 @@ onMounted(() => {
             </div>
 
             <div class="catalog-mini-stats" style="margin-bottom: 1rem;">
-              <div><span>{{ t('adminRequestDetails.updateBatch.openBatch') }}</span><strong>{{ activeOpenBatch ? activeOpenBatch.status : t('adminRequestDetails.states.none') }}</strong></div>
+              <div><span>{{ t('adminRequestDetails.updateBatch.openBatch') }}</span><strong>{{ activeOpenBatch ? formatUpdateBatchStatus(activeOpenBatch.status, locale, t('adminRequestDetails.states.none')) : t('adminRequestDetails.states.none') }}</strong></div>
               <div><span>{{ t('adminRequestDetails.updateBatch.totalBatches') }}</span><strong>{{ activityCounts.updateBatches }}</strong></div>
             </div>
 
@@ -1133,99 +1280,62 @@ onMounted(() => {
           </article>
         </div>
       </div>
+      </div>
     </template>
 
-    <template #side>
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.contractState') }}</h2></div>
-            <div class="summary-grid summary-grid--tight">
-              <div><span>{{ t('adminRequestDetails.summary.contractVersion') }}</span><strong>{{ requestItem.current_contract?.version_no || t('adminRequestDetails.states.emptyValue') }}</strong></div>
-              <div><span>{{ t('adminRequestDetails.summary.contractStatus') }}</span><strong>{{ requestItem.current_contract?.status || t('adminRequestDetails.states.emptyValue') }}</strong></div>
-              <div><span>{{ t('adminRequestDetails.summary.adminSigned') }}</span><strong>{{ requestItem.current_contract?.admin_signed_at ? new Date(requestItem.current_contract.admin_signed_at).toLocaleString() : t('adminRequestDetails.states.pending') }}</strong></div>
-              <div><span>{{ t('adminRequestDetails.summary.clientSigned') }}</span><strong>{{ requestItem.current_contract?.client_signed_at ? new Date(requestItem.current_contract.client_signed_at).toLocaleString() : t('adminRequestDetails.states.pending') }}</strong></div>
-            </div>
-          </article>
-
-          <article v-if="canRejectRequest" class="panel-card slim-card action-card">
-            <div class="panel-head"><h2>{{ t('adminRequestDetails.rejectRequest.title') }}</h2></div>
-            <p class="subtext">{{ t('adminRequestDetails.rejectRequest.subtitle') }}</p>
-            <textarea v-model="rejectReason" rows="4" class="admin-textarea" :placeholder="t('adminRequestDetails.rejectRequest.placeholder')"></textarea>
-            <div class="approve-actions">
-              <button class="ghost-btn" type="button" :disabled="rejectingRequest" @click="rejectRequest">
-                {{ rejectingRequest ? t('adminRequestDetails.rejectRequest.rejecting') : t('adminRequestDetails.rejectRequest.rejectNow') }}
-              </button>
-            </div>
-          </article>
-
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.quickCounts') }}</h2></div>
-            <div class="catalog-mini-stats">
-              <div><span>{{ t('adminRequestDetails.summary.assignments') }}</span><strong>{{ activityCounts.assignments }}</strong></div>
-              <div><span>{{ t('adminRequestDetails.summary.comments') }}</span><strong>{{ activityCounts.comments }}</strong></div>
-              <div><span>{{ t('adminRequestDetails.summary.timelineEvents') }}</span><strong>{{ activityCounts.timeline }}</strong></div>
-              <div><span>{{ t('adminRequestDetails.summary.emailLogs') }}</span><strong>{{ activityCounts.emails }}</strong></div>
-            </div>
-          </article>
-
-          <article class="panel-card slim-card">
-            <div class="panel-head"><h2>{{ t('adminRequestDetails.emailActivity.title') }}</h2></div>
-            <div v-if="requestItem.emails?.length" class="timeline-list compact-list">
-              <div v-for="email in requestItem.emails" :key="email.id" class="timeline-item">
-                <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;">
-                  <div style="flex:1;min-width:0;">
-                    <strong>{{ email.subject }}</strong>
-                    <p>{{ t('adminRequestDetails.emailActivity.fromLabel') }} {{ email.sender?.name || t('adminRequestDetails.states.system') }} · {{ email.from_email || email.sender?.email || t('adminRequestDetails.states.emptyValue') }}</p>
-                    <p>{{ t('adminRequestDetails.emailActivity.toLabel') }} {{ emailRecipients(email) }}</p>
-                    <p v-if="email.body" style="white-space:pre-wrap;margin-top:0.35rem;">{{ email.body }}</p>
-                    <span>{{ t('adminRequestDetails.emailActivity.attachmentsCount', { count: email.attachments?.length || 0 }) }} · {{ email.sent_at ? new Date(email.sent_at).toLocaleString() : new Date(email.created_at || '').toLocaleString() }}</span>
-                  </div>
-                  <span :class="emailStatusClass(email.delivery_status)">{{ email.delivery_status || t('adminRequestDetails.emailActivity.queued') }}</span>
-                </div>
-
-                <div v-if="email.attachments?.length" class="file-list" style="margin-top:0.75rem;">
-                  <div v-for="attachment in email.attachments" :key="attachment.id" class="file-item">
-                    <div>
-                      <strong>{{ attachment.file_name }}</strong>
-                      <span>{{ attachment.mime_type || attachment.file_extension || t('adminRequestDetails.emailActivity.storedRequestFile') }} · {{ formatFileSize(attachment.file_size) }}</span>
-                    </div>
-                    <a :href="emailAttachmentDownloadUrl(email.id, attachment.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p v-else class="empty-state">{{ t('adminRequestDetails.emailActivity.empty') }}</p>
-          </article>
-
-          <article v-if="!requestItem.approval_reference_number" class="panel-card slim-card action-card">
-            <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.approveRequest') }}</h2></div>
-            <p class="subtext">{{ t('adminRequestDetails.sections.approveSubtitle') }}</p>
-            <textarea v-model="approvalNotes" rows="5" class="admin-textarea" :placeholder="t('adminRequestDetails.sections.approvePlaceholder')"></textarea>
-            <div class="approve-actions">
-              <button class="primary-btn" type="button" :disabled="approving" @click="approveRequest">
-                {{ approving ? t('adminRequestDetails.actions.approving') : t('adminRequestDetails.actions.approveAndContinue') }}
-              </button>
-            </div>
-          </article>
-
+    <template #after>
       <AdminQuickViewModal
         :model-value="quickView !== null"
         @update:model-value="(value) => { if (!value) quickView = null }"
-        :title="quickView === 'answers'
-          ? t('adminRequestDetails.modal.questionnaireAnswers')
-          : quickView === 'attachments'
-            ? t('adminRequestDetails.modal.uploadedFiles')
-            : quickView === 'shareholders'
-              ? t('adminRequestDetails.modal.shareholders')
-              : quickView === 'assignments'
-                ? t('adminRequestDetails.modal.assignedStaff')
-                : quickView === 'comments'
-                  ? t('adminRequestDetails.modal.internalComments')
-                  : t('adminRequestDetails.modal.timeline')"
+        :title="quickViewTitle"
         :subtitle="t('adminRequestDetails.modal.subtitle')"
         wide
       >
+        <div v-if="quickView === 'requiredDocuments'" class="checklist-grid">
+          <article v-if="requiredDocuments.length" v-for="item in requiredDocuments" :key="item.document_upload_step_id" class="checklist-card" :class="{ 'is-complete': item.is_uploaded && !item.is_change_requested }">
+            <div class="checklist-card__head">
+              <strong>{{ item.name }}</strong>
+              <span class="status-badge">
+                {{ item.is_change_requested ? t('adminRequestDetails.requiredDocuments.status.changeRequested') : item.is_uploaded ? t('adminRequestDetails.requiredDocuments.status.uploaded') : t('adminRequestDetails.requiredDocuments.status.pending') }}
+              </span>
+            </div>
+            <p>{{ item.is_uploaded || item.is_change_requested ? t('adminRequestDetails.requiredDocuments.latestFileLabel', { file: item.upload?.file_name || t('adminRequestDetails.requiredDocuments.uploadedFileFallback') }) : t('adminRequestDetails.requiredDocuments.waitingForClient') }}</p>
+            <p v-if="item.rejection_reason" class="form-help form-help--error">{{ t('adminRequestDetails.requiredDocuments.reasonLabel', { reason: item.rejection_reason }) }}</p>
+            <div v-if="item.upload?.id" class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                @click="openFilePreview(item.upload?.file_name, requiredDocumentDownloadUrl(item.upload.id))"
+              >
+                {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+              </button>
+              <a :href="requiredDocumentDownloadUrl(item.upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.requiredDocuments.downloadLatest') }}</a>
+            </div>
+          </article>
+          <p v-else class="empty-state">{{ t('adminRequestDetails.requiredDocuments.empty') }}</p>
+        </div>
+
+        <div v-else-if="quickView === 'additionalDocuments'" class="timeline-list compact-list">
+          <div v-if="requestItem.additional_documents?.length" v-for="item in requestItem.additional_documents" :key="item.id" class="timeline-item">
+            <strong>{{ item.title || t('adminRequestDetails.additionalDocuments.fallbackTitle') }}</strong>
+            <p>{{ item.reason || t('adminRequestDetails.additionalDocuments.noReason') }}</p>
+            <span>{{ readableAdditionalDocumentStatus(item.status) }}<template v-if="item.file_name"> · {{ item.file_name }}</template></span>
+            <div v-if="item.file_name" class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                @click="openFilePreview(item.file_name, additionalDocumentDownloadUrl(item.id))"
+              >
+                {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+              </button>
+              <a :href="additionalDocumentDownloadUrl(item.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.additionalDocuments.downloadFile') }}</a>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ t('adminRequestDetails.additionalDocuments.empty') }}</p>
+        </div>
+
         <RequestAnswersList
-          v-if="quickView === 'answers'"
+          v-else-if="quickView === 'answers'"
           :answers="requestItem.answers || []"
           :empty-text="t('adminRequestDetails.states.noAnswersRecorded')"
           :question-fallback="t('adminRequestDetails.states.questionFallback')"
@@ -1238,7 +1348,16 @@ onMounted(() => {
               <strong>{{ file.file_name }}</strong>
               <span>{{ file.category }}</span>
             </div>
-            <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+            <div class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))"
+              >
+                {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+              </button>
+              <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+            </div>
           </div>
           <p v-else class="empty-state">{{ t('adminRequestDetails.states.noInitialAttachments') }}</p>
         </div>
@@ -1250,6 +1369,13 @@ onMounted(() => {
             <p v-if="shareholder.id_number">{{ t('adminRequestDetails.states.idNumberLabel', { id: shareholder.id_number }) }}</p>
             <p>{{ shareholder.id_file_name }}</p>
             <div class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                @click="openFilePreview(shareholder.id_file_name, shareholderIdDownloadUrl(shareholder.id))"
+              >
+                {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+              </button>
               <a :href="shareholderIdDownloadUrl(shareholder.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.downloadIdFile') }}</a>
             </div>
           </div>
@@ -1268,20 +1394,70 @@ onMounted(() => {
           <div v-if="requestItem.comments?.length" v-for="comment in requestItem.comments" :key="comment.id" class="timeline-item">
             <strong>{{ comment.user?.name || t('adminRequestDetails.states.system') }}</strong>
             <p>{{ comment.comment_text }}</p>
-            <span>{{ new Date(comment.created_at).toLocaleString() }} · {{ comment.visibility }}</span>
+            <span>{{ formatDateTime(comment.created_at, locale, t('adminRequestDetails.states.emptyValue')) }} · {{ readableCommentVisibility(comment.visibility) }}</span>
           </div>
           <p v-else class="empty-state">{{ t('adminRequestDetails.states.noCommentsRecorded') }}</p>
         </div>
 
-        <div v-else class="timeline-list">
-          <div v-if="requestItem.timeline?.length" v-for="entry in requestItem.timeline" :key="entry.id" class="timeline-item">
-            <strong>{{ entry.event_title || entry.event_type }}</strong>
-            <p>{{ entry.event_description || t('adminRequestDetails.states.emptyValue') }}</p>
-            <span>{{ new Date(entry.created_at).toLocaleString() }}</span>
+        <div v-else-if="quickView === 'emails'" class="timeline-list compact-list">
+          <div v-if="requestItem.emails?.length" v-for="email in requestItem.emails" :key="email.id" class="timeline-item">
+            <div class="request-modal-meta">
+              <div>
+                <strong>{{ email.subject }}</strong>
+                <p>{{ t('adminRequestDetails.emailActivity.fromLabel') }} {{ email.sender?.name || t('adminRequestDetails.states.system') }} · {{ email.from_email || email.sender?.email || t('adminRequestDetails.states.emptyValue') }}</p>
+                <p>{{ t('adminRequestDetails.emailActivity.toLabel') }} {{ emailRecipients(email) }}</p>
+                <p v-if="email.body" class="request-prewrap-text">{{ email.body }}</p>
+                <span>{{ t('adminRequestDetails.emailActivity.attachmentsCount', { count: email.attachments?.length || 0 }) }} · {{ formatDateTime(email.sent_at || email.created_at, locale, t('adminRequestDetails.states.emptyValue')) }}</span>
+              </div>
+              <span :class="emailStatusClass(email.delivery_status)">{{ readableEmailDeliveryStatus(email.delivery_status) }}</span>
+            </div>
+
+            <div v-if="email.attachments?.length" class="file-list request-inline-stack">
+              <div v-for="attachment in email.attachments" :key="attachment.id" class="file-item">
+                <div>
+                  <strong>{{ attachment.file_name }}</strong>
+                  <span>{{ attachment.mime_type || attachment.file_extension || t('adminRequestDetails.emailActivity.storedRequestFile') }} · {{ formatFileSize(attachment.file_size) }}</span>
+                </div>
+                <div class="approve-actions">
+                  <button
+                    type="button"
+                    class="ghost-btn"
+                    @click="openFilePreview(attachment.file_name, emailAttachmentDownloadUrl(email.id, attachment.id), attachment.mime_type || attachment.file_extension)"
+                  >
+                    {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+                  </button>
+                  <a :href="emailAttachmentDownloadUrl(email.id, attachment.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+                </div>
+              </div>
+            </div>
           </div>
+          <p v-else class="empty-state">{{ t('adminRequestDetails.emailActivity.empty') }}</p>
+        </div>
+
+        <div v-else class="timeline-list">
+          <template v-if="timelineRows.length">
+            <template v-for="(row, index) in timelineRows" :key="row.entry.id ?? `${row.entry.event_type ?? 'timeline'}-${index}`">
+              <div v-if="row.gapLabel" class="timeline-gap-indicator">{{ row.gapLabel }}</div>
+              <div class="timeline-item timeline-item--event">
+                <strong>{{ row.entry.event_title || row.entry.event_type }}</strong>
+                <p>{{ row.entry.event_description || t('adminRequestDetails.states.emptyValue') }}</p>
+                <span>{{ timelineDateLabel(row.entry.created_at) }}</span>
+              </div>
+            </template>
+          </template>
           <p v-else class="empty-state">{{ t('adminRequestDetails.states.noTimelineEvents') }}</p>
         </div>
       </AdminQuickViewModal>
     </template>
+
+    <AppFilePreviewModal
+      :model-value="filePreviewOpen"
+      @update:model-value="(value) => { filePreviewOpen = value }"
+      title="File preview"
+      :file-name="filePreviewName"
+      :mime-type="filePreviewMime"
+      :preview-url="filePreviewUrl"
+      :download-url="fileDownloadUrl"
+    />
   </RequestWorkspaceShell>
 </template>

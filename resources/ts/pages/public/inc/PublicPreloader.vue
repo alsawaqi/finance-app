@@ -1,7 +1,7 @@
 <template>
     <div v-if="show" class="loader-wrap">
       <div class="preloader">
-        <div class="preloader-close" @click="$emit('close')">x</div>
+        <button type="button" class="preloader-close" :aria-label="closeLabel" @click="$emit('close')">×</button>
         <div id="handle-preloader" class="handle-preloader">
           <div class="animation-preloader">
             <div class="spinner"></div>
@@ -22,10 +22,16 @@
   </template>
   
   <script setup lang="ts">
+  import { computed } from 'vue'
+  import { useI18n } from 'vue-i18n'
+
   defineProps<{
     show: boolean
     letters: string[]
   }>()
+
+  const { locale } = useI18n()
+  const closeLabel = computed(() => (locale.value === 'ar' ? 'إغلاق' : 'Close'))
   
   defineEmits<{
     (e: 'close'): void

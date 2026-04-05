@@ -8,14 +8,32 @@ use App\Http\Requests\Admin\StoreStaffUserRequest;
 use App\Http\Requests\Admin\UpdateStaffUserRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Spatie\Permission\Models\Permission;
 
 class StaffUserController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+        $paginator = User::query()
+            ->where('account_type', UserAccountType::STAFF->value)
+            ->orWhereHas('roles', fn ($query) => $query->where('name', 'staff'))
+            ->with('roles')
+            ->orderBy('name')
+            ->paginate($perPage);
+
         return response()->json([
-            'data' => $this->serializeStaffUsers(),
+            'data' => collect($paginator->items())
+                ->map(fn (User $user) => $this->serializeStaffUser($user))
+                ->values(),
+            'pagination' => $this->paginationMeta($paginator),
             'meta' => [
                 'available_permissions' => Permission::query()
                     ->where('guard_name', 'web')
@@ -93,21 +111,6 @@ class StaffUserController extends Controller
     }
 
     /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function serializeStaffUsers(): array
-    {
-        return User::query()
-            ->where('account_type', UserAccountType::STAFF->value)
-            ->orWhereHas('roles', fn ($query) => $query->where('name', 'staff'))
-            ->with('roles')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (User $user) => $this->serializeStaffUser($user))
-            ->all();
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function serializeStaffUser(User $user): array
@@ -154,5 +157,17 @@ class StaffUserController extends Controller
             || $user->hasRole('staff');
 
         abort_unless($isStaff, 404);
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
+        ];
     }
 }

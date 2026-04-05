@@ -33,6 +33,7 @@ export type ClientRequestSummary = {
   workflow_stage: string
   applicant_type?: string | null
   company_name?: string | null
+  country_code?: string | null
   submitted_at?: string | null
   latest_activity_at?: string | null
   intake_details?: Record<string, unknown> | null

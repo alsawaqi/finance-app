@@ -7,13 +7,29 @@ use App\Http\Requests\Admin\StoreAgentRequest;
 use App\Http\Requests\Admin\UpdateAgentRequest;
 use App\Models\Agent;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class AgentController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+        $paginator = Agent::query()
+            ->with(['creator:id,name,email', 'bank:id,name,short_name,code'])
+            ->orderBy('name')
+            ->paginate($perPage);
+
         return response()->json([
-            'data' => $this->serializeAgents(),
+            'data' => collect($paginator->items())
+                ->map(fn (Agent $agent) => $this->serializeAgent($agent))
+                ->values(),
+            'pagination' => $this->paginationMeta($paginator),
         ]);
     }
 
@@ -54,16 +70,6 @@ class AgentController extends Controller
         ]);
     }
 
-    private function serializeAgents(): array
-    {
-        return Agent::query()
-            ->with(['creator:id,name,email', 'bank:id,name,short_name,code'])
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Agent $agent) => $this->serializeAgent($agent))
-            ->all();
-    }
-
     private function serializeAgent(Agent $agent): array
     {
         return [
@@ -83,6 +89,18 @@ class AgentController extends Controller
             'creator_name' => $agent->creator?->name,
             'created_at' => optional($agent->created_at)?->toISOString(),
             'updated_at' => optional($agent->updated_at)?->toISOString(),
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 }

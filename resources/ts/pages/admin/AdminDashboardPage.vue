@@ -32,42 +32,68 @@ const bankEmailBreakdown = ref<{ labels: string[]; email_series: number[]; reque
 
 const cards = computed(() => [
   {
-    label: 'Pending review',
+    label: t('adminNewRequests.queue.pendingReview'),
     value: summary.value.pending_queue_requests,
     tone: 'amber',
     route: { name: 'admin-new-requests', query: { queue: 'pending' } },
   },
   {
-    label: 'Contract queue',
+    label: t('adminNewRequests.queue.contractStage'),
     value: summary.value.contract_queue_requests,
     tone: 'violet',
     route: { name: 'admin-new-requests', query: { queue: 'contract' } },
   },
   {
-    label: 'Assigned requests',
+    label: t('adminSidebar.menu.assignedRequests'),
     value: summary.value.assigned_queue_requests,
     tone: 'green',
     route: { name: 'admin-assignments' },
   },
   {
-    label: 'Total requests',
+    label: t('adminDashboard.totals.totalRequests'),
     value: summary.value.total_requests,
     tone: 'blue',
     route: { name: 'admin-request-filtration' },
   },
   {
-    label: 'Clients',
+    label: t('adminDashboard.totals.clients'),
     value: summary.value.total_clients,
     tone: 'blue',
     route: { name: 'admin-clients-overview' },
   },
   {
-    label: 'Agents',
+    label: t('adminSidebar.menu.agents'),
     value: summary.value.total_agents,
     tone: 'emerald',
     route: { name: 'admin-agents' },
   },
 ])
+
+const heroStats = computed(() => [
+  { label: t('adminDashboard.totals.totalRequests'), value: summary.value.total_requests },
+  { label: t('adminNewRequests.queue.pendingReview'), value: summary.value.pending_queue_requests },
+  { label: t('adminSidebar.menu.assignedRequests'), value: summary.value.assigned_queue_requests },
+])
+
+const totals = computed(() => [
+  { label: t('adminDashboard.totals.totalRequests'), value: summary.value.total_requests },
+  { label: t('adminDashboard.totals.completed'), value: summary.value.completed_requests },
+  { label: t('adminDashboard.totals.clients'), value: summary.value.total_clients },
+  { label: t('adminDashboard.totals.additionalDocs'), value: summary.value.with_additional_document_requests },
+])
+
+const hasRequestTrend = computed(() =>
+  requestTrend.value.labels.length > 0
+  && requestTrend.value.series.some((value) => Number(value) > 0),
+)
+
+const hasBankBreakdown = computed(() =>
+  bankEmailBreakdown.value.labels.length > 0
+  && (
+    bankEmailBreakdown.value.email_series.some((value) => Number(value) > 0)
+    || bankEmailBreakdown.value.request_series.some((value) => Number(value) > 0)
+  ),
+)
 
 const requestTrendOptions = computed(() => ({
   chart: {
@@ -75,15 +101,34 @@ const requestTrendOptions = computed(() => ({
     toolbar: { show: false },
     zoom: { enabled: false },
   },
+  colors: ['#4f46e5'],
   xaxis: {
     categories: requestTrend.value.labels,
+    labels: {
+      style: {
+        colors: '#64748b',
+        fontSize: '12px',
+      },
+    },
+  },
+  yaxis: {
+    labels: {
+      style: {
+        colors: '#64748b',
+        fontSize: '12px',
+      },
+    },
+  },
+  grid: {
+    borderColor: 'rgba(148, 163, 184, 0.18)',
+    strokeDashArray: 4,
   },
   stroke: {
     curve: 'smooth',
     width: 3,
   },
   dataLabels: { enabled: false },
-  markers: { size: 4 },
+  markers: { size: 4, strokeWidth: 0, hover: { sizeOffset: 3 } },
   tooltip: { shared: true },
 }))
 
@@ -99,14 +144,41 @@ const bankChartOptions = computed(() => ({
     id: 'bank-traffic',
     toolbar: { show: false },
   },
+  colors: ['#4f46e5', '#06b6d4'],
   plotOptions: {
     bar: {
       horizontal: true,
       borderRadius: 6,
+      barHeight: '54%',
     },
   },
   xaxis: {
     categories: bankEmailBreakdown.value.labels,
+    labels: {
+      style: {
+        colors: '#64748b',
+        fontSize: '12px',
+      },
+    },
+  },
+  yaxis: {
+    labels: {
+      style: {
+        colors: '#475569',
+        fontSize: '12px',
+      },
+    },
+  },
+  grid: {
+    borderColor: 'rgba(148, 163, 184, 0.18)',
+    strokeDashArray: 4,
+  },
+  legend: {
+    position: 'top',
+    horizontalAlign: 'left',
+    labels: {
+      colors: '#475569',
+    },
   },
   dataLabels: { enabled: false },
   tooltip: { shared: true, intersect: false },
@@ -149,16 +221,25 @@ onMounted(load)
 
 <template>
   <section class="admin-page-shell admin-dashboard-page">
-    <section class="admin-hero admin-reveal-up">
-      <div class="admin-hero__content">
+    <section class="admin-hero admin-dashboard-hero admin-reveal-up">
+      <div class="admin-hero__content admin-dashboard-hero__content">
         <span class="admin-hero__eyebrow">{{ t('adminDashboard.hero.eyebrow') }}</span>
         <h2>{{ t('adminDashboard.hero.title') }}</h2>
         <p>{{ t('adminDashboard.hero.subtitle') }}</p>
       </div>
 
-      <div class="admin-hero__actions admin-hero__actions--stacked">
-        <RouterLink :to="{ name: 'admin-new-requests' }" class="admin-primary-btn">Open new queue</RouterLink>
-        <RouterLink :to="{ name: 'admin-request-filtration' }" class="admin-secondary-btn">Open filtration</RouterLink>
+      <div class="admin-dashboard-hero__aside">
+        <div class="admin-dashboard-hero__stats">
+          <article v-for="item in heroStats" :key="item.label" class="admin-dashboard-hero__stat">
+            <span>{{ item.label }}</span>
+            <strong>{{ loading ? '...' : item.value }}</strong>
+          </article>
+        </div>
+
+        <div class="admin-hero__actions admin-dashboard-hero__actions">
+          <RouterLink :to="{ name: 'admin-new-requests' }" class="admin-primary-btn">{{ t('adminDashboard.actions.openReviewQueue') }}</RouterLink>
+          <RouterLink :to="{ name: 'admin-categorization' }" class="admin-secondary-btn">{{ t('adminDashboard.actions.openCategorization') }}</RouterLink>
+        </div>
       </div>
     </section>
 
@@ -172,66 +253,67 @@ onMounted(load)
         class="admin-question-stat admin-question-stat--link"
         :class="`tone-${card.tone}`"
       >
-        <strong>{{ loading ? '…' : card.value }}</strong>
+        <strong>{{ loading ? '...' : card.value }}</strong>
         <span>{{ card.label }}</span>
         <span class="admin-inline-link">{{ t('adminDashboard.actions.open') }}</span>
       </RouterLink>
     </div>
 
-    <div class="admin-dashboard-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
-      <article class="panel-card">
+    <div class="admin-dashboard-grid admin-dashboard-grid--main">
+      <article class="panel-card admin-chart-card">
         <div class="panel-head">
-          <h2>Request intake trend</h2>
+          <h2>{{ t('adminDashboard.charts.requestIntakeTrend') }}</h2>
         </div>
 
-        <apexchart
-          v-if="!loading"
-          type="line"
-          height="320"
-          :options="requestTrendOptions"
-          :series="requestTrendSeries"
-        />
+        <div v-if="loading" class="empty-state">{{ t('adminDashboard.states.chartLoading') }}</div>
+        <div v-else-if="hasRequestTrend" class="admin-chart-card__body">
+          <apexchart
+            type="line"
+            height="320"
+            :options="requestTrendOptions"
+            :series="requestTrendSeries"
+          />
+        </div>
+        <div v-else class="empty-state">{{ t('adminDashboard.states.noRequestTrend') }}</div>
       </article>
 
-      <article class="panel-card">
+      <article class="panel-card admin-chart-card">
         <div class="panel-head">
-          <h2>Emails by bank</h2>
+          <h2>{{ t('adminDashboard.charts.emailsByBank') }}</h2>
         </div>
 
-        <apexchart
-          v-if="!loading"
-          type="bar"
-          height="320"
-          :options="bankChartOptions"
-          :series="bankChartSeries"
-        />
+        <div v-if="loading" class="empty-state">{{ t('adminDashboard.states.chartLoading') }}</div>
+        <div v-else-if="hasBankBreakdown" class="admin-chart-card__body">
+          <apexchart
+            type="bar"
+            height="320"
+            :options="bankChartOptions"
+            :series="bankChartSeries"
+          />
+        </div>
+        <div v-else class="empty-state">{{ t('adminDashboard.states.noBankActivity') }}</div>
       </article>
 
       <article class="panel-card catalog-highlight-card">
-        <div class="panel-head"><h2>Top workflow buckets</h2></div>
+        <div class="panel-head">
+          <h2>{{ t('adminDashboard.sections.quickDistribution') }}</h2>
+        </div>
+
         <div class="catalog-chip-grid">
-          <span v-for="entry in topStatuses" :key="entry[0]" class="soft-tag">{{ entry[0] }} · {{ entry[1] }}</span>
+          <span v-for="entry in topStatuses" :key="entry[0]" class="soft-tag">{{ entry[0] }} / {{ entry[1] }}</span>
+          <span v-if="!topStatuses.length" class="soft-tag soft-tag--muted">{{ t('adminDashboard.states.noWorkflowBuckets') }}</span>
         </div>
       </article>
 
       <article class="panel-card catalog-highlight-card">
-        <div class="panel-head"><h2>Current totals</h2></div>
+        <div class="panel-head">
+          <h2>{{ t('adminDashboard.sections.currentTotals') }}</h2>
+        </div>
+
         <div class="catalog-mini-stats">
-          <div>
-            <span>Total requests</span>
-            <strong>{{ loading ? '…' : summary.total_requests }}</strong>
-          </div>
-          <div>
-            <span>Completed</span>
-            <strong>{{ loading ? '…' : summary.completed_requests }}</strong>
-          </div>
-          <div>
-            <span>Clients</span>
-            <strong>{{ loading ? '…' : summary.total_clients }}</strong>
-          </div>
-          <div>
-            <span>Additional docs</span>
-            <strong>{{ loading ? '…' : summary.with_additional_document_requests }}</strong>
+          <div v-for="item in totals" :key="item.label">
+            <span>{{ item.label }}</span>
+            <strong>{{ loading ? '...' : item.value }}</strong>
           </div>
         </div>
       </article>

@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export type CategorizationSummary = {
   total_requests: number
@@ -64,10 +65,20 @@ export type CategorizedClient = {
   last_login_at?: string | null
 }
 
-export async function getAdminCategorization() {
-  const { data } = await api.get('/api/admin/categorization')
+export async function getAdminCategorization(params?: {
+  tab?: 'agents' | 'staff' | 'clients'
+  page?: number
+  per_page?: number
+}) {
+  const { data } = await api.get('/api/admin/categorization', { params })
   return data as {
     summary: CategorizationSummary
+    signals: {
+      agents_with_traffic: number
+      staff_with_assignments: number
+      clients_needing_action: number
+    }
+    tab: 'agents' | 'staff' | 'clients'
     status_breakdown: Record<string, number>
     stage_breakdown: Record<string, number>
     charts: {
@@ -85,5 +96,6 @@ export async function getAdminCategorization() {
     agents: CategorizedAgent[]
     staff: CategorizedStaff[]
     clients: CategorizedClient[]
+    pagination: PaginationMeta
   }
 }

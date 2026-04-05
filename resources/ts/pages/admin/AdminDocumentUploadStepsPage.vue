@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
+import AppPagination from '@/components/AppPagination.vue'
 import AdminDocumentStepBuilderForm from './inc/AdminDocumentStepBuilderForm.vue'
 import AdminDocumentStepLibraryTable from './inc/AdminDocumentStepLibraryTable.vue'
 import AdminDocumentStepPreviewCard from './inc/AdminDocumentStepPreviewCard.vue'
@@ -14,6 +15,7 @@ import {
   toggleDocumentUploadStepActive,
   updateDocumentUploadStep,
 } from '@/services/documentUploadSteps'
+import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 
 type StepForm = {
   id: number | null
@@ -28,6 +30,7 @@ type StepForm = {
 }
 
 const steps = ref<DocumentUploadStepItem[]>([])
+const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 20 })
 const isLoading = ref(false)
 const isSaving = ref(false)
 const isReordering = ref(false)
@@ -48,7 +51,7 @@ const parsedAllowedFileTypes = computed(() =>
 )
 
 const stats = computed(() => {
-  const total = steps.value.length
+  const total = pagination.value.total
   const active = steps.value.filter((item) => item.is_active).length
   const required = steps.value.filter((item) => item.is_required).length
   const inUse = steps.value.filter((item) => item.request_document_uploads_count > 0).length
@@ -103,15 +106,19 @@ function buildPayload(): DocumentUploadStepPayload {
   }
 }
 
-async function fetchSteps() {
+async function fetchSteps(page = pagination.value.current_page) {
   isLoading.value = true
   formError.value = ''
 
   try {
-    const { data } = await listDocumentUploadSteps()
+    const { data } = await listDocumentUploadSteps({
+      page,
+      per_page: pagination.value.per_page,
+    })
     steps.value = data.data
+    pagination.value = data.pagination ?? { ...DEFAULT_PAGINATION, per_page: pagination.value.per_page }
     if (!isEditing.value) {
-      form.value.sort_order = steps.value.length + 1
+      form.value.sort_order = Math.max(pagination.value.total, steps.value.length) + 1
     }
   } catch (error) {
     formError.value = extractErrorMessage(error, t('adminDocumentUploadStepsPage.errors.loadFailed'))
@@ -186,7 +193,7 @@ async function destroyStep(row: DocumentUploadStepItem) {
   try {
     const { data } = await deleteDocumentUploadStep(row.id)
     successMessage.value = data.message
-    steps.value = steps.value.filter((step) => step.id !== row.id)
+    await fetchSteps(pagination.value.current_page)
 
     if (form.value.id === row.id) {
       resetForm()
@@ -199,6 +206,11 @@ async function destroyStep(row: DocumentUploadStepItem) {
 }
 
 async function reorderSteps(orderedIds: number[]) {
+  if (pagination.value.last_page > 1) {
+    formError.value = t('adminDocumentUploadStepsPage.errors.reorderNeedsSinglePage')
+    return
+  }
+
   clearMessages()
   isReordering.value = true
 
@@ -217,8 +229,8 @@ async function reorderSteps(orderedIds: number[]) {
 
   try {
     const { data } = await reorderDocumentUploadSteps(orderedIds)
-    steps.value = data.data
     successMessage.value = data.message
+    await fetchSteps(pagination.value.current_page)
   } catch (error) {
     steps.value = previous
     formError.value = extractErrorMessage(error, t('adminDocumentUploadStepsPage.errors.reorderFailed'))
@@ -297,6 +309,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       @delete="destroyStep"
       @reorder="reorderSteps"
     />
+    <AppPagination :pagination="pagination" :disabled="isLoading || isReordering" @change="fetchSteps" />
   </div>
 </template>
 

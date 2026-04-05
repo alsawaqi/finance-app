@@ -26,6 +26,7 @@ class RequestFileDownloadController extends Controller
             disk: $attachment->disk ?: 'public',
             path: $attachment->file_path,
             filename: $attachment->file_name,
+            preview: $request->boolean('preview'),
         );
     }
 
@@ -38,6 +39,7 @@ class RequestFileDownloadController extends Controller
             disk: $shareholder->disk ?: 'public',
             path: $shareholder->id_file_path,
             filename: $shareholder->id_file_name,
+            preview: $request->boolean('preview'),
         );
     }
 
@@ -50,6 +52,7 @@ class RequestFileDownloadController extends Controller
             disk: $requestDocumentUpload->disk ?: 'public',
             path: $requestDocumentUpload->file_path,
             filename: $requestDocumentUpload->file_name,
+            preview: $request->boolean('preview'),
         );
     }
 
@@ -62,6 +65,7 @@ class RequestFileDownloadController extends Controller
             disk: $additionalDocument->disk ?: 'public',
             path: $additionalDocument->file_path,
             filename: $additionalDocument->file_name ?: ($additionalDocument->title ?: 'additional-document'),
+            preview: $request->boolean('preview'),
         );
     }
 
@@ -75,6 +79,7 @@ class RequestFileDownloadController extends Controller
             disk: $requestEmailAttachment->disk ?: 'public',
             path: $requestEmailAttachment->file_path,
             filename: $requestEmailAttachment->file_name ?: 'request-email-attachment',
+            preview: $request->boolean('preview'),
         );
     }
 
@@ -97,11 +102,66 @@ class RequestFileDownloadController extends Controller
         abort_unless($isAssigned, 403, 'You are not assigned to this request.');
     }
 
-    private function downloadStoredFile(string $disk, ?string $path, ?string $filename): StreamedResponse
+    private function downloadStoredFile(string $disk, ?string $path, ?string $filename, bool $preview = false): StreamedResponse
     {
         abort_unless(filled($path), 404);
         abort_unless(Storage::disk($disk)->exists($path), 404);
 
-        return Storage::disk($disk)->download($path, $filename ?: basename($path));
+        $resolvedFilename = $filename ?: basename($path);
+
+        if ($preview) {
+            $mimeType = $this->detectMimeType($disk, $path, $resolvedFilename);
+
+            if ($this->isPreviewableMimeType($mimeType)) {
+                return Storage::disk($disk)->response(
+                    $path,
+                    $resolvedFilename,
+                    [
+                        'Content-Type' => $mimeType,
+                        'X-Content-Type-Options' => 'nosniff',
+                    ],
+                    'inline'
+                );
+            }
+        }
+
+        return Storage::disk($disk)->download($path, $resolvedFilename);
+    }
+
+    private function detectMimeType(string $disk, string $path, string $filename): string
+    {
+        $mimeType = Storage::disk($disk)->mimeType($path);
+
+        if (is_string($mimeType) && $mimeType !== '') {
+            return $mimeType;
+        }
+
+        return match (strtolower(pathinfo($filename, PATHINFO_EXTENSION))) {
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'bmp' => 'image/bmp',
+            'svg' => 'image/svg+xml',
+            'pdf' => 'application/pdf',
+            'txt', 'log' => 'text/plain',
+            'csv' => 'text/csv',
+            'json' => 'application/json',
+            default => 'application/octet-stream',
+        };
+    }
+
+    private function isPreviewableMimeType(string $mimeType): bool
+    {
+        if (str_starts_with($mimeType, 'image/')) {
+            return true;
+        }
+
+        return in_array($mimeType, [
+            'application/pdf',
+            'text/plain',
+            'text/csv',
+            'application/json',
+        ], true);
     }
 }

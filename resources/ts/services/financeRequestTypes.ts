@@ -1,4 +1,5 @@
 import api from './api'
+import type { PaginationMeta } from '@/types/pagination'
 
 export interface FinanceRequestTypeItem {
   id: number
@@ -23,8 +24,8 @@ export interface FinanceRequestTypePayload {
   sort_order?: number
 }
 
-export async function listFinanceRequestTypes() {
-  return api.get<{ data: FinanceRequestTypeItem[] }>('/api/admin/finance-request-types')
+export async function listFinanceRequestTypes(params?: { page?: number; per_page?: number }) {
+  return api.get<{ data: FinanceRequestTypeItem[]; pagination: PaginationMeta }>('/api/admin/finance-request-types', { params })
 }
 
 export async function createFinanceRequestType(payload: FinanceRequestTypePayload) {

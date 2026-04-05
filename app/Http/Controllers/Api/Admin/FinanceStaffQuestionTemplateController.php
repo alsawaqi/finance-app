@@ -8,14 +8,30 @@ use App\Http\Requests\Admin\StoreFinanceStaffQuestionTemplateRequest;
 use App\Http\Requests\Admin\UpdateFinanceStaffQuestionTemplateRequest;
 use App\Models\FinanceStaffQuestionTemplate;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class FinanceStaffQuestionTemplateController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $perPage = (int) ($validated['per_page'] ?? 12);
+        $paginator = FinanceStaffQuestionTemplate::query()
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->paginate($perPage);
+
         return response()->json([
-            'data' => $this->serializeTemplates(),
+            'data' => collect($paginator->items())
+                ->map(fn (FinanceStaffQuestionTemplate $template) => $this->serializeTemplate($template))
+                ->values(),
+            'pagination' => $this->paginationMeta($paginator),
         ]);
     }
 
@@ -121,6 +137,18 @@ class FinanceStaffQuestionTemplateController extends Controller
             'is_active' => (bool) $template->is_active,
             'created_at' => optional($template->created_at)?->toISOString(),
             'updated_at' => optional($template->updated_at)?->toISOString(),
+        ];
+    }
+
+    private function paginationMeta(LengthAwarePaginator $paginator): array
+    {
+        return [
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+            'from' => $paginator->firstItem(),
+            'to' => $paginator->lastItem(),
         ];
     }
 }

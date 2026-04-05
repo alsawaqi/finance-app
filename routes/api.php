@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\Auth\MeController;
 use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\ResetPasswordController;
 use App\Http\Controllers\Api\Auth\VerifyEmailController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Client\ClientContractController;
 use App\Http\Controllers\Api\Client\ClientRequestController;
 use App\Http\Controllers\Api\Client\ClientRequestUpdateController;
@@ -40,7 +41,7 @@ Route::prefix('auth')->group(function () {
         Route::post('/reset-password', ResetPasswordController::class);
     });
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'active_user'])->group(function () {
         Route::get('/user', MeController::class);
         Route::post('/logout', LogoutController::class);
         Route::post('/email/verification-notification', EmailVerificationNotificationController::class)
@@ -51,8 +52,14 @@ Route::prefix('auth')->group(function () {
     });
 });
 
+Route::middleware(['auth:sanctum', 'active_user'])->group(function () {
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{notificationId}/read', [NotificationController::class, 'markRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+});
+
 Route::prefix('client')
-    ->middleware(['auth:sanctum', 'role:client'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:client'])
     ->group(function () {
         Route::get('/request-questions', [ClientRequestController::class, 'questions']);
         Route::get('/finance-request-types', [FinanceRequestTypeController::class, 'clientIndex']);
@@ -70,7 +77,7 @@ Route::prefix('client')
     });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:admin', 'permission:assign staff'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:admin', 'permission:assign staff'])
     ->group(function () {
         Route::get('/requests/ready-to-assign', [AdminAssignmentController::class, 'indexReady']);
         Route::get('/staff-directory', [AdminAssignmentController::class, 'staffDirectory']);
@@ -78,7 +85,7 @@ Route::prefix('admin')
     });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:admin|staff'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:admin|staff'])
     ->group(function () {
         Route::get('/requests/new', [AdminFinanceRequestController::class, 'indexNew']);
         Route::get('/requests/{financeRequest}', [AdminFinanceRequestController::class, 'show']);
@@ -97,12 +104,13 @@ Route::prefix('admin')
     });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:admin'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:admin'])
     ->group(function () {
         Route::get('/categorization', AdminCategorizationController::class);
         Route::get('/request-filters', [AdminRequestFilteringController::class, 'requests']);
         Route::get('/clients-overview', [AdminRequestFilteringController::class, 'clients']);
         Route::get('/clients-overview/{client}/requests', [AdminRequestFilteringController::class, 'clientRequests']);
+        Route::patch('/clients-overview/{client}/toggle-active', [AdminRequestFilteringController::class, 'toggleClientActive']);
         Route::get('/finance-request-types', [FinanceRequestTypeController::class, 'index']);
         Route::post('/finance-request-types', [FinanceRequestTypeController::class, 'store']);
         Route::put('/finance-request-types/{financeRequestType}', [FinanceRequestTypeController::class, 'update']);
@@ -143,7 +151,7 @@ Route::prefix('admin')
     });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:admin|staff'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:admin|staff'])
     ->group(function () {
         Route::get('/request-questions', [RequestQuestionController::class, 'index']);
         Route::post('/request-questions', [RequestQuestionController::class, 'store']);
@@ -153,7 +161,7 @@ Route::prefix('admin')
     });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:admin|staff', 'permission:manage staff'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:admin|staff', 'permission:manage staff'])
     ->group(function () {
         Route::get('/staff-users', [StaffUserController::class, 'index']);
         Route::post('/staff-users', [StaffUserController::class, 'store']);
@@ -162,7 +170,7 @@ Route::prefix('admin')
     });
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'role:admin|staff', 'permission:manage agents'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:admin|staff', 'permission:manage agents'])
     ->group(function () {
         Route::get('/banks', [BankController::class, 'index']);
         Route::get('/agents', [AgentController::class, 'index']);
@@ -172,7 +180,7 @@ Route::prefix('admin')
     });
 
 Route::prefix('staff')
-    ->middleware(['auth:sanctum', 'role:admin|staff'])
+    ->middleware(['auth:sanctum', 'active_user', 'role:admin|staff'])
     ->group(function () {
         Route::get('/requests', [StaffRequestWorkspaceController::class, 'index']);
         Route::get('/requests/{financeRequest}', [StaffRequestWorkspaceController::class, 'show']);

@@ -3,7 +3,9 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import SignaturePad from 'signature_pad'
+import AppFilePreviewModal from '@/components/AppFilePreviewModal.vue'
 import { clientContractDownloadUrl, getClientContract, signClientContract } from '@/services/clientPortal'
+import { buildPreviewUrl } from '@/utils/filePreview'
 import { countryNameFromCode } from '@/utils/countries'
 import { intakeCountryCode, intakeFinanceType, intakeFullName, intakeRequestedAmount } from '@/utils/requestIntake'
 
@@ -18,7 +20,14 @@ const financeRequest = ref<any | null>(null)
 const contract = ref<any | null>(null)
 const { t, locale } = useI18n()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const filePreviewOpen = ref(false)
+const filePreviewUrl = ref('')
+const fileDownloadUrl = ref('')
 let signaturePad: SignaturePad | null = null
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
+}
 
 function buildSignaturePad() {
   const canvas = canvasRef.value
@@ -94,6 +103,13 @@ function clearSignature() {
   signaturePad?.clear()
 }
 
+function openContractPreview() {
+  const downloadUrl = clientContractDownloadUrl(requestId.value)
+  fileDownloadUrl.value = downloadUrl
+  filePreviewUrl.value = buildPreviewUrl(downloadUrl)
+  filePreviewOpen.value = true
+}
+
 async function submitSignature() {
   if (!financeRequest.value) return
   if (!signaturePad || signaturePad.isEmpty()) {
@@ -142,6 +158,7 @@ onUnmounted(() => {
       </div>
       <div class="action-stack">
         <RouterLink :to="{ name: 'client-request-details', params: { id: requestId } }" class="ghost-btn">{{ t('clientSign.hero.backToRequest') }}</RouterLink>
+        <button type="button" class="ghost-btn" @click="openContractPreview">{{ uiText('Preview PDF', 'معاينة PDF') }}</button>
         <a :href="clientContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="primary-btn">{{ t('clientSign.hero.downloadPdf') }}</a>
       </div>
     </div>
@@ -156,9 +173,9 @@ onUnmounted(() => {
           <div class="summary-row"><span>{{ t('clientSign.summary.requestRef') }}</span><strong>{{ financeRequest.reference_number }}</strong></div>
           <div class="summary-row"><span>{{ t('clientSign.summary.approvalRef') }}</span><strong>{{ financeRequest.approval_reference_number || t('clientSign.states.pendingApproval') }}</strong></div>
           <div class="summary-row"><span>{{ t('clientSign.summary.client') }}</span><strong>{{ intakeFullName(financeRequest.intake_details_json, financeRequest.client?.name || t('clientSign.states.clientFallback')) }}</strong></div>
-          <div class="summary-row"><span>{{ t('clientSign.summary.country') }}</span><strong>{{ countryNameFromCode(intakeCountryCode(financeRequest.intake_details_json), locale) }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.country') }}</span><strong>{{ countryNameFromCode(financeRequest.country_code || intakeCountryCode(financeRequest.intake_details_json), locale) }}</strong></div>
           <div class="summary-row"><span>{{ t('clientSign.summary.requestedAmount') }}</span><strong>{{ intakeRequestedAmount(financeRequest.intake_details_json) }}</strong></div>
-          <div class="summary-row"><span>{{ t('clientSign.summary.financeType') }}</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json) }}</strong></div>
+          <div class="summary-row"><span>{{ t('clientSign.summary.financeType') }}</span><strong>{{ intakeFinanceType(financeRequest.intake_details_json, t('clientSign.states.emptyValue'), locale) }}</strong></div>
         </div>
       </article>
 
@@ -184,5 +201,15 @@ onUnmounted(() => {
         </div>
       </article>
     </div>
+
+    <AppFilePreviewModal
+      :model-value="filePreviewOpen"
+      @update:model-value="(value) => { filePreviewOpen = value }"
+      :title="uiText('Contract preview', 'معاينة العقد')"
+      :file-name="`contract-${requestId}.pdf`"
+      mime-type="application/pdf"
+      :preview-url="filePreviewUrl"
+      :download-url="fileDownloadUrl"
+    />
   </section>
 </template>
