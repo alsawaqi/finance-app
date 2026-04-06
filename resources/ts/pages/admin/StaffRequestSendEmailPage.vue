@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import Editor from 'primevue/editor'
 import {
   getStaffRequest,
   getStaffRequestEmailOptions,
@@ -43,8 +44,6 @@ const selectedEmailDocumentKeys = ref<string[]>([])
 const sendingEmail = ref(false)
 const recipientPickerOpen = ref(false)
 const attachmentPickerOpen = ref(false)
-const emailEditorRef = ref<HTMLElement | null>(null)
-const emailEditorFocused = ref(false)
 const filePreviewOpen = ref(false)
 const filePreviewName = ref('')
 const filePreviewMime = ref('')
@@ -63,11 +62,10 @@ const selectedEmailAttachments = computed(() =>
   (allowedEmailDocuments.value ?? []).filter((document) => selectedEmailDocumentKeys.value.includes(document.key)),
 )
 const sentEmailsCount = computed(() => (Array.isArray(requestItem.value?.emails) ? requestItem.value.emails.length : 0))
-const emailBodyTextLength = computed(() => stripHtml(emailBody.value).trim().length)
+const emailBodyTextLength = computed(() => stripHtml(normalizeEditorHtml(emailBody.value)).trim().length)
 const canSendEmail = computed(() => Boolean(
   canComposeEmail.value
   && emailSubject.value.trim()
-  && selectedEmailDocumentKeys.value.length > 0
   && emailBodyTextLength.value > 0,
 ))
 
@@ -108,33 +106,22 @@ function stripHtml(value: string) {
 
 function normalizeEditorHtml(value: string) {
   const normalized = String(value || '').replace(/\u200B/g, '').trim()
-  if (!normalized || normalized === '<br>' || normalized === '<div><br></div>') {
+  if (
+    !normalized
+    || normalized === '<br>'
+    || normalized === '<div><br></div>'
+    || normalized === '<p><br></p>'
+  ) {
     return ''
   }
 
   return normalized
 }
 
-function syncEmailBodyFromEditor() {
-  if (!emailEditorRef.value) return
-  emailBody.value = normalizeEditorHtml(emailEditorRef.value.innerHTML)
-}
-
-function applyEmailEditorCommand(command: string, value?: string) {
-  if (!canComposeEmail.value || !emailEditorRef.value) return
-  emailEditorRef.value.focus()
-  document.execCommand(command, false, value)
-  syncEmailBodyFromEditor()
-}
-
 function clearEmailComposer() {
   emailSubject.value = ''
   emailBody.value = ''
   selectedEmailDocumentKeys.value = []
-
-  if (emailEditorRef.value) {
-    emailEditorRef.value.innerHTML = ''
-  }
 }
 
 function openRecipientPicker() {
@@ -180,7 +167,7 @@ async function sendEmailToAssignedAgent() {
       agent_id: selectedAgentId.value,
       document_keys: selectedEmailDocumentKeys.value,
       subject: emailSubject.value.trim(),
-      body: emailBody.value.trim() || null,
+      body: normalizeEditorHtml(emailBody.value) || null,
     })
 
     requestItem.value = data.request
@@ -252,13 +239,6 @@ watch(requestId, () => {
   selectedBankId.value = null
   selectedAgentId.value = null
   load()
-})
-
-watch(canComposeEmail, async () => {
-  await nextTick()
-  if (emailEditorRef.value && emailEditorRef.value.innerHTML !== emailBody.value) {
-    emailEditorRef.value.innerHTML = emailBody.value
-  }
 })
 
 onMounted(load)
@@ -335,25 +315,13 @@ onMounted(load)
             />
           </label>
 
-          <div class="staff-email-editor-shell" :class="{ 'is-disabled': !canComposeEmail, 'is-focused': emailEditorFocused }">
-            <div class="staff-email-editor-toolbar">
-              <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('bold')"><strong>B</strong></button>
-              <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('italic')"><em>I</em></button>
-              <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('insertUnorderedList')"><i class="fas fa-list-ul"></i></button>
-              <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('insertOrderedList')"><i class="fas fa-list-ol"></i></button>
-              <button type="button" class="small-btn ghost-btn" :disabled="!canComposeEmail" @click="applyEmailEditorCommand('removeFormat')"><i class="fas fa-eraser"></i></button>
-            </div>
-
-            <div
-              ref="emailEditorRef"
-              class="staff-email-editor-surface"
-              :contenteditable="canComposeEmail ? 'true' : 'false'"
-              :data-placeholder="t('staffRequestDetails.placeholders.emailBody')"
-              @focus="emailEditorFocused = true"
-              @blur="emailEditorFocused = false; syncEmailBodyFromEditor()"
-              @input="syncEmailBodyFromEditor"
-            ></div>
-          </div>
+          <Editor
+            v-model="emailBody"
+            class="staff-prime-editor"
+            :readonly="!canComposeEmail"
+            :placeholder="t('staffRequestDetails.placeholders.emailBody')"
+            editor-style="height: 320px;"
+          />
 
           <div class="staff-email-attachments-meta">
             <span class="count-pill">{{ selectedEmailAttachments.length }} {{ uiText('selected', 'محدد') }}</span>
@@ -494,43 +462,31 @@ onMounted(load)
   gap: 0.85rem;
 }
 
-.staff-email-editor-shell {
-  border: 1px solid rgba(148, 163, 184, 0.3);
+.staff-prime-editor {
   border-radius: 16px;
   overflow: hidden;
-  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
-.staff-email-editor-shell.is-focused {
-  border-color: rgba(79, 70, 229, 0.45);
-  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
-}
-
-.staff-email-editor-shell.is-disabled {
-  opacity: 0.78;
-  background: rgba(248, 250, 252, 0.95);
-}
-
-.staff-email-editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.6rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+.staff-prime-editor:deep(.p-editor-toolbar) {
+  border: none;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
   background: rgba(248, 250, 252, 0.9);
 }
 
-.staff-email-editor-surface {
-  min-height: 300px;
-  padding: 1rem;
-  outline: none;
-  line-height: 1.6;
-  color: var(--admin-text);
+.staff-prime-editor:deep(.p-editor-content) {
+  border: none;
+  background: #ffffff;
 }
 
-.staff-email-editor-surface:empty::before {
-  content: attr(data-placeholder);
-  color: var(--admin-text-light);
+.staff-prime-editor:deep(.ql-editor) {
+  color: var(--admin-text);
+  line-height: 1.65;
+  font-size: 0.96rem;
+}
+
+.staff-prime-editor:deep(.ql-container.ql-disabled) {
+  background: rgba(248, 250, 252, 0.95);
 }
 
 .staff-email-attachments-meta {
@@ -569,10 +525,6 @@ onMounted(load)
 }
 
 @media (max-width: 768px) {
-  .staff-email-editor-surface {
-    min-height: 220px;
-  }
-
   .staff-email-composer-actions {
     width: 100%;
   }

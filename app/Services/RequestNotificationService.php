@@ -20,6 +20,7 @@ class RequestNotificationService
     private array $clientAllowedEvents = [
         'contract.admin_signed',
         'contract.admin_uploaded_and_auto_completed',
+        'contract.client_commercial_registration_reupload_requested',
         'request.comment_added',
         'request.client_update_requested',
         'request.required_document_change_requested',

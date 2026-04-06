@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\FinanceRequestStatus;
+use App\Enums\FinanceRequestUnderstudyStatus;
 use App\Enums\FinanceRequestWorkflowStage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdvanceFinanceRequestFromUnderstudyRequest;
@@ -281,15 +282,28 @@ class AdminFinanceRequestController extends Controller
         FinanceRequestStaffQuestion $staffQuestion,
     ): JsonResponse {
         $admin = $request->user();
+        $action = (string) $request->validated('action');
+        $reviewNote = $request->validated('review_note');
 
-        $reviewedQuestion = DB::transaction(function () use ($request, $financeRequest, $staffQuestion, $admin) {
+        $reviewedQuestion = DB::transaction(function () use ($financeRequest, $staffQuestion, $admin, $action, $reviewNote) {
             $reviewedQuestion = $this->staffQuestionService->reviewQuestion(
                 $financeRequest,
                 $staffQuestion,
                 $admin,
-                (string) $request->validated('action'),
-                $request->validated('review_note'),
+                $action,
+                $reviewNote,
             );
+
+            if ($action === 'reopen'
+                && ($financeRequest->understudy_status?->value ?? (string) $financeRequest->understudy_status) === FinanceRequestUnderstudyStatus::SUBMITTED->value
+            ) {
+                $this->staffQuestionService->reviewStudy(
+                    $financeRequest,
+                    $admin,
+                    'reject',
+                    $reviewNote,
+                );
+            }
 
             $this->workflowService->syncStaffQuestionStage($financeRequest, $admin?->id);
 

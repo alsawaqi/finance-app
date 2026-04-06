@@ -19,6 +19,7 @@ import {
   getAdminRequestAgentAssignmentOptions,
   getAdminRequestDetails,
   rejectAdminRequest,
+  reviewAdminStaffQuestion,
   reviewAdminUpdateItem,
   reviewAdminUnderstudy,
   storeAdminRequestAgentAssignments,
@@ -72,6 +73,8 @@ const batchReasonEn = ref('')
 const batchReasonAr = ref('')
 const updateDraftItems = ref<any[]>([])
 const reviewNotes = ref<Record<number, string>>({})
+const reviewingStaffQuestion = ref<Record<number, boolean>>({})
+const staffQuestionReviewNotes = ref<Record<number, string>>({})
 const quickView = ref<
   | 'requiredDocuments'
   | 'additionalDocuments'
@@ -695,6 +698,45 @@ async function submitUnderstudyReview(action: 'approve' | 'reject') {
   }
 }
 
+async function submitStaffQuestionReview(question: any, action: 'close' | 'reopen') {
+  if (!requestItem.value) return
+  const questionId = Number(question?.id ?? 0)
+  if (!questionId) return
+  if (reviewingStaffQuestion.value[questionId]) return
+
+  reviewingStaffQuestion.value = {
+    ...reviewingStaffQuestion.value,
+    [questionId]: true,
+  }
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const reviewNote = String(staffQuestionReviewNotes.value[questionId] || '').trim()
+    const data = await reviewAdminStaffQuestion(requestItem.value.id, questionId, {
+      action,
+      review_note: reviewNote || undefined,
+    })
+
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+
+    if (action === 'close') {
+      successMessage.value = uiText('Question marked as reviewed.', 'تم اعتماد السؤال كمراجع.')
+    } else {
+      successMessage.value = uiText('Question reopened and sent back to staff for re-answer.', 'تمت إعادة فتح السؤال وإعادته إلى الموظف لإعادة الإجابة.')
+    }
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to review this study question.', 'تعذر مراجعة سؤال الدراسة هذا.')
+  } finally {
+    reviewingStaffQuestion.value = {
+      ...reviewingStaffQuestion.value,
+      [questionId]: false,
+    }
+  }
+}
+
 async function submitComment() {
   if (!requestItem.value || !commentText.value.trim() || savingComment.value) return
 
@@ -1141,6 +1183,35 @@ onMounted(() => {
                 <span :class="studyQuestionStatusClass(question)">{{ studyQuestionStatusLabel(question) }}</span>
               </div>
               <p>{{ studyQuestionAnswer(question) }}</p>
+              <template v-if="understudyReadyForReview">
+                <div class="client-form-group" style="margin-top: 0.75rem;">
+                  <label class="client-form-label">{{ uiText('Question review note (optional)', 'ملاحظة مراجعة السؤال (اختياري)') }}</label>
+                  <textarea
+                    v-model="staffQuestionReviewNotes[question.id]"
+                    rows="2"
+                    class="client-form-control client-form-control--textarea"
+                    :placeholder="uiText('Explain what to update if you request re-answer.', 'اكتب ما المطلوب تحديثه إذا طلبت إعادة الإجابة.')"
+                  />
+                </div>
+                <div class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
+                  <button
+                    type="button"
+                    class="ghost-btn"
+                    :disabled="Boolean(reviewingStaffQuestion[question.id]) || String(question.status || '').toLowerCase() === 'pending'"
+                    @click="submitStaffQuestionReview(question, 'reopen')"
+                  >
+                    {{ reviewingStaffQuestion[question.id] ? t('adminRequestDetails.actions.saving') : uiText('Request re-answer', 'طلب إعادة الإجابة') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="primary-btn"
+                    :disabled="Boolean(reviewingStaffQuestion[question.id]) || String(question.status || '').toLowerCase() === 'closed'"
+                    @click="submitStaffQuestionReview(question, 'close')"
+                  >
+                    {{ reviewingStaffQuestion[question.id] ? t('adminRequestDetails.actions.saving') : uiText('Mark reviewed', 'تأكيد المراجعة') }}
+                  </button>
+                </div>
+              </template>
             </article>
           </div>
           <p v-else class="empty-state">{{ t('adminRequestDetails.understudy.noQuestions') }}</p>

@@ -221,6 +221,17 @@ export async function uploadAdminCommercialContract(
   return data
 }
 
+export async function requestClientCommercialContractReupload(
+  id: number | string,
+  payload?: { reason?: string | null },
+) {
+  const { data } = await api.post(`/api/admin/requests/${id}/contract/commercial-registration/request-client-reupload`, {
+    reason: payload?.reason ?? null,
+  })
+
+  return data
+}
+
 export function adminContractDownloadUrl(id: number | string) {
   return `/api/admin/requests/${id}/contract/download`
 }
@@ -351,6 +362,15 @@ export async function reviewAdminUnderstudy(
   payload: { action: 'approve' | 'reject'; review_note?: string },
 ) {
   const { data } = await api.post(`/api/admin/requests/${id}/understudy-review`, payload)
+  return data
+}
+
+export async function reviewAdminStaffQuestion(
+  id: number | string,
+  staffQuestionId: number | string,
+  payload: { action: 'close' | 'reopen'; review_note?: string },
+) {
+  const { data } = await api.patch(`/api/admin/requests/${id}/staff-questions/${staffQuestionId}/review`, payload)
   return data
 }
 

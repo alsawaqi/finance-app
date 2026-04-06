@@ -16,8 +16,8 @@ class SendFinanceRequestEmailRequest extends FormRequest
         return [
             'bank_id' => ['nullable', 'integer', 'exists:banks,id'],
             'agent_id' => ['required', 'integer', 'exists:agents,id'],
-            'document_keys' => ['required', 'array', 'min:1'],
-            'document_keys.*' => ['required', 'string', 'distinct', 'max:255'],
+            'document_keys' => ['nullable', 'array'],
+            'document_keys.*' => ['string', 'distinct', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['nullable', 'string', 'max:20000'],
         ];

@@ -178,8 +178,21 @@ final class ClientStageWhatsAppNotifier
 
         if ($eventType === 'contract.client_signed' && ($metadata['requires_commercial_registration'] ?? false)) {
             return [
-                'en' => "Hello,\n\nThank you for signing your contract.\nApproval number: {$approvalRef}\nNext step: please upload the Chamber of Commerce authenticated contract from your portal.\n\n- {$brandEn}",
-                'ar' => $this->decodeUnicode("\\u0645\\u0631\\u062d\\u0628\\u0627\\u064b\\u060c\\n\\n\\u0634\\u0643\\u0631\\u0627\\u064b \\u0644\\u062a\\u0648\\u0642\\u064a\\u0639 \\u0627\\u0644\\u0639\\u0642\\u062f.\\n\\u0631\\u0642\\u0645 \\u0627\\u0644\\u0645\\u0648\\u0627\\u0641\\u0642\\u0629: {$approvalRef}\\n\\u0627\\u0644\\u062e\\u0637\\u0648\\u0629 \\u0627\\u0644\\u062a\\u0627\\u0644\\u064a\\u0629: \\u064a\\u0631\\u062c\\u0649 \\u0631\\u0641\\u0639 \\u0627\\u0644\\u0639\\u0642\\u062f \\u0627\\u0644\\u0645\\u0648\\u062b\\u0642 \\u0645\\u0646 \\u0627\\u0644\\u063a\\u0631\\u0641\\u0629 \\u0627\\u0644\\u062a\\u062c\\u0627\\u0631\\u064a\\u0629 \\u0639\\u0628\\u0631 \\u0627\\u0644\\u0628\\u0648\\u0627\\u0628\\u0629.\\n\\n- {$brandAr}"),
+                'en' => "Hello,\n\nThank you for signing your contract.\nApproval number: {$approvalRef}\nNext step: please upload the authenticated Ghurfat Tijar contract from your portal.\n\n- {$brandEn}",
+                'ar' => $this->decodeUnicode("\\u0645\\u0631\\u062d\\u0628\\u0627\\u064b\\u060c\\n\\n\\u0634\\u0643\\u0631\\u0627\\u064b \\u0644\\u062a\\u0648\\u0642\\u064a\\u0639 \\u0627\\u0644\\u0639\\u0642\\u062f.\\n\\u0631\\u0642\\u0645 \\u0627\\u0644\\u0645\\u0648\\u0627\\u0641\\u0642\\u0629: {$approvalRef}\\n\\u0627\\u0644\\u062e\\u0637\\u0648\\u0629 \\u0627\\u0644\\u062a\\u0627\\u0644\\u064a\\u0629: \\u064a\\u0631\\u062c\\u0649 \\u0631\\u0641\\u0639 \\u0639\\u0642\\u062f \\u063a\\u0631\\u0641\\u0629 \\u062a\\u062c\\u0627\\u0631 \\u0627\\u0644\\u0645\\u0648\\u062b\\u0642 \\u0639\\u0628\\u0631 \\u0627\\u0644\\u0628\\u0648\\u0627\\u0628\\u0629.\\n\\n- {$brandAr}"),
+            ];
+        }
+
+        if ($eventType === 'contract.client_commercial_registration_reupload_requested') {
+            $reason = trim((string) ($metadata['reason'] ?? ''));
+
+            return [
+                'en' => $reason !== ''
+                    ? "Hello,\n\nA re-upload was requested for your authenticated Ghurfat Tijar contract.\nApproval number: {$approvalRef}\nReason: {$reason}\nPlease upload the corrected file from your portal.\n\n- {$brandEn}"
+                    : "Hello,\n\nA re-upload was requested for your authenticated Ghurfat Tijar contract.\nApproval number: {$approvalRef}\nPlease upload the corrected file from your portal.\n\n- {$brandEn}",
+                'ar' => $reason !== ''
+                    ? "مرحباً،\n\nتم طلب إعادة رفع عقد غرفة تجار الموثق.\nرقم الموافقة: {$approvalRef}\nالسبب: {$reason}\nيرجى رفع النسخة المصححة من البوابة.\n\n- {$brandAr}"
+                    : "مرحباً،\n\nتم طلب إعادة رفع عقد غرفة تجار الموثق.\nرقم الموافقة: {$approvalRef}\nيرجى رفع النسخة المصححة من البوابة.\n\n- {$brandAr}",
             ];
         }
 

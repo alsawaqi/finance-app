@@ -422,7 +422,7 @@ export async function sendStaffRequestEmail(
   payload: {
     bank_id?: number | null
     agent_id: number
-    document_keys: string[]
+    document_keys?: string[]
     subject: string
     body?: string | null
   },

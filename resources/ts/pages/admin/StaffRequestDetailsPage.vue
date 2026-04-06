@@ -126,7 +126,7 @@ const staffQuestions = computed<StaffStudyQuestion[]>(() => {
 })
 const understudyLocked = computed(() => ['submitted', 'approved'].includes(String(requestItem.value?.understudy_status || '').toLowerCase()) || String(requestItem.value?.workflow_stage || '').toLowerCase() === 'awaiting_understudy_review')
 const understudyQuestionsCompleted = computed(() => Boolean(staffQuestionSummary.value?.all_required_answered))
-const understudyQuestionInputsLocked = computed(() => understudyLocked.value || understudyQuestionsCompleted.value)
+const understudyQuestionInputsLocked = computed(() => understudyLocked.value)
 const canSubmitUnderstudyPackage = computed(() => !understudyLocked.value && Boolean(staffQuestionSummary.value?.all_required_answered) && understudyNote.value.trim().length > 0)
 const emailComposerVisible = computed(() =>
   ['awaiting_agent_assignment', 'processing'].includes(String(requestItem.value?.workflow_stage || '').toLowerCase())
@@ -156,11 +156,14 @@ const activityCounts = computed(() => ({
 }))
 
 watch(
-  understudyQuestionsCompleted,
-  (completed) => {
-    if (completed) {
+  understudyLocked,
+  (locked) => {
+    if (locked) {
       understudySectionOpen.value = false
+      return
     }
+
+    understudySectionOpen.value = true
   },
 )
 
@@ -959,8 +962,8 @@ onMounted(load)
                 </p>
               </div>
 
-              <p v-if="understudyQuestionsCompleted" class="client-subtext" style="margin-bottom: 1rem;">
-                {{ uiText('All required study questions are complete. This section is now minimized.', 'تمت إجابة جميع أسئلة الدراسة الإلزامية. تم تصغير هذا القسم.') }}
+              <p v-if="understudyQuestionsCompleted && !understudyLocked" class="client-subtext" style="margin-bottom: 1rem;">
+                {{ uiText('All required study questions are answered. You can still edit any answer until you submit the final study package to admin.', 'تمت الإجابة على جميع أسئلة الدراسة الإلزامية. ما زال بإمكانك تعديل أي إجابة حتى تقوم بإرسال الحزمة النهائية إلى الإدارة.') }}
               </p>
 
               <div v-if="requestItem?.understudy_submitted_at" class="notes-box" style="margin-bottom: 1rem;">
@@ -1206,7 +1209,7 @@ onMounted(load)
 
                   <div class="notes-box" style="margin-top: 0.75rem;">
                     <span>{{ uiText('Allowed request files', 'ملفات الطلب المسموح بها') }}</span>
-                    <p v-if="selectedAgentOption">Choose the approved files that should be attached when sending to {{ selectedAgentOption.name }}.</p>
+                    <p v-if="selectedAgentOption">Choose the approved files that should be attached when sending to {{ selectedAgentOption?.name }}.</p>
                     <p v-else>{{ uiText('Select an assigned agent to see the exact files approved by the admin.', 'اختر وكيلاً مُسندًا لرؤية الملفات المعتمدة من الإدارة.') }}</p>
                   </div>
 
@@ -1224,7 +1227,7 @@ onMounted(load)
                           <p>{{ document.group_label || 'Request file' }}</p>
                           <span>{{ document.file_name }}</span>
                           <div v-if="document.download_url" class="approve-actions" style="margin-top: 0.45rem;">
-                            <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ uiText('Preview file', 'معاينة الملف') }}</a>
+                            <a :href="document.download_url ?? undefined" target="_blank" rel="noopener" class="ghost-btn">{{ uiText('Preview file', 'معاينة الملف') }}</a>
                           </div>
                         </div>
                       </div>
@@ -1262,7 +1265,7 @@ onMounted(load)
                   <p v-if="canComposeEmail">
                     Sending to:
                     <strong>{{ selectedAgentOption?.name || 'Selected agent' }}</strong>
-                    <template v-if="selectedBankOption?.name"> - {{ selectedBankOption.name }}</template>
+                    <template v-if="selectedBankOption?.name"> - {{ selectedBankOption?.name }}</template>
                   </p>
                   <p v-else>{{ uiText('Select a recipient before entering your email content.', 'اختر مستلمًا قبل إدخال محتوى البريد.') }}</p>
                 </div>
@@ -1391,7 +1394,7 @@ onMounted(load)
                   <p>{{ document.group_label || 'Request file' }}</p>
                   <span>{{ document.file_name }}</span>
                   <div v-if="document.download_url" class="approve-actions staff-picker-preview">
-                    <a :href="document.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ uiText('Preview file', 'معاينة الملف') }}</a>
+                    <a :href="document.download_url ?? undefined" target="_blank" rel="noopener" class="ghost-btn">{{ uiText('Preview file', 'معاينة الملف') }}</a>
                   </div>
                 </div>
               </label>

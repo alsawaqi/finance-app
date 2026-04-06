@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -85,12 +86,6 @@ class FinanceRequestEmailService
             ->unique()
             ->values();
 
-        if ($documentKeys->isEmpty()) {
-            throw ValidationException::withMessages([
-                'document_keys' => 'Please choose at least one approved attachment for this email.',
-            ]);
-        }
-
         $missingKey = $documentKeys->first(fn (string $key) => ! $allowedDocuments->has($key));
         if ($missingKey !== null) {
             throw ValidationException::withMessages([
@@ -103,13 +98,15 @@ class FinanceRequestEmailService
             ->filter()
             ->values();
 
-        $requestEmail = DB::transaction(function () use ($financeRequest, $sender, $assignment, $payload, $selectedDocuments) {
+        $sanitizedBody = $this->sanitizeEditorHtmlBody($payload['body'] ?? null);
+
+        $requestEmail = DB::transaction(function () use ($financeRequest, $sender, $assignment, $payload, $selectedDocuments, $sanitizedBody) {
             $requestEmail = RequestEmail::create([
                 'finance_request_id' => $financeRequest->id,
                 'direction' => RequestEmailDirection::OUTBOUND,
                 'sent_by' => $sender->id,
                 'subject' => (string) $payload['subject'],
-                'body' => $payload['body'] ?? null,
+                'body' => $sanitizedBody !== '' ? $sanitizedBody : null,
                 'provider_message_id' => null,
                 'thread_key' => 'finance-request-' . $financeRequest->id,
                 'delivery_status' => RequestEmailDeliveryStatus::QUEUED,
@@ -147,7 +144,7 @@ class FinanceRequestEmailService
                 (string) $requestEmail->subject,
                 'emails.finance-request-outbound',
                 [
-                    'bodyText' => $requestEmail->body,
+                    'bodyHtml' => $requestEmail->body,
                     'senderName' => $sender->smtpSenderName(),
                     'senderEmail' => (string) $sender->smtpSenderEmail(),
                     'agentName' => $assignment->agent->name,
@@ -226,5 +223,139 @@ class FinanceRequestEmailService
         }
 
         return $requestEmail->fresh(['sender:id,name,email', 'agents.bank:id,name,short_name,code', 'attachments']);
+    }
+
+    private function sanitizeEditorHtmlBody(?string $html): string
+    {
+        $raw = trim((string) $html);
+        if ($raw === '') {
+            return '';
+        }
+
+        $allowedTags = [
+            'p' => [],
+            'br' => [],
+            'strong' => [],
+            'b' => [],
+            'em' => [],
+            'i' => [],
+            'u' => [],
+            'ul' => [],
+            'ol' => [],
+            'li' => [],
+            'blockquote' => [],
+            'pre' => [],
+            'code' => [],
+            'h1' => [],
+            'h2' => [],
+            'h3' => [],
+            'h4' => [],
+            'h5' => [],
+            'h6' => [],
+            'a' => ['href', 'target', 'rel'],
+            'span' => [],
+            'div' => [],
+        ];
+
+        $internalErrors = libxml_use_internal_errors(true);
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $wrapper = '<!DOCTYPE html><html><body>' . $raw . '</body></html>';
+        $dom->loadHTML(mb_convert_encoding($wrapper, 'HTML-ENTITIES', 'UTF-8'));
+
+        $body = $dom->getElementsByTagName('body')->item(0);
+        if (! $body) {
+            libxml_clear_errors();
+            libxml_use_internal_errors($internalErrors);
+
+            return '';
+        }
+
+        $this->sanitizeDomNode($body, $allowedTags);
+
+        $sanitized = '';
+        foreach ($body->childNodes as $child) {
+            $sanitized .= $dom->saveHTML($child);
+        }
+
+        libxml_clear_errors();
+        libxml_use_internal_errors($internalErrors);
+
+        return trim($sanitized);
+    }
+
+    /**
+     * @param  array<string, array<int, string>>  $allowedTags
+     */
+    private function sanitizeDomNode(\DOMNode $node, array $allowedTags): void
+    {
+        for ($i = $node->childNodes->length - 1; $i >= 0; $i--) {
+            $child = $node->childNodes->item($i);
+            if (! $child) {
+                continue;
+            }
+
+            if ($child instanceof \DOMElement) {
+                $tag = strtolower($child->tagName);
+
+                if (! array_key_exists($tag, $allowedTags)) {
+                    while ($child->firstChild) {
+                        $node->insertBefore($child->firstChild, $child);
+                    }
+                    $node->removeChild($child);
+                    continue;
+                }
+
+                $allowedAttributes = $allowedTags[$tag];
+                for ($a = $child->attributes->length - 1; $a >= 0; $a--) {
+                    $attribute = $child->attributes->item($a);
+                    if (! $attribute) {
+                        continue;
+                    }
+
+                    $name = strtolower($attribute->name);
+                    $value = trim((string) $attribute->value);
+
+                    if (Str::startsWith($name, 'on') || ! in_array($name, $allowedAttributes, true)) {
+                        $child->removeAttribute($attribute->name);
+                        continue;
+                    }
+
+                    if ($tag === 'a' && $name === 'href') {
+                        if (! $this->isSafeLinkHref($value)) {
+                            $child->removeAttribute('href');
+                        }
+                        continue;
+                    }
+
+                    if ($tag === 'a' && $name === 'target') {
+                        $normalizedTarget = strtolower($value);
+                        if (! in_array($normalizedTarget, ['_blank', '_self'], true)) {
+                            $child->removeAttribute('target');
+                        }
+                        continue;
+                    }
+
+                    if ($tag === 'a' && $name === 'rel') {
+                        $child->setAttribute('rel', 'noopener noreferrer');
+                    }
+                }
+
+                $this->sanitizeDomNode($child, $allowedTags);
+            }
+        }
+    }
+
+    private function isSafeLinkHref(string $href): bool
+    {
+        if ($href === '') {
+            return false;
+        }
+
+        $lower = strtolower($href);
+        if (Str::startsWith($lower, ['http://', 'https://', 'mailto:', 'tel:'])) {
+            return true;
+        }
+
+        return ! preg_match('/^\s*javascript:/i', $href);
     }
 }

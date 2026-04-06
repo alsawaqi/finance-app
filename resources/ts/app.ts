@@ -5,6 +5,11 @@ import router from './router'
 import { i18n, initI18n } from './i18n'
 import { useAuthStore } from './stores/auth'
 import VueApexCharts from 'vue3-apexcharts'
+import PrimeVue from 'primevue/config'
+import 'primevue/resources/themes/lara-light-indigo/theme.css'
+import 'primevue/resources/primevue.min.css'
+import 'primeicons/primeicons.css'
+import 'quill/dist/quill.snow.css'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -13,6 +18,7 @@ app.use(pinia)
 app.use(i18n)
 app.use(router)
 app.use(VueApexCharts)
+app.use(PrimeVue)
 app.component('apexchart', VueApexCharts)
 
 initI18n()

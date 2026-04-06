@@ -7,6 +7,7 @@ import {
   adminContractCommercialDownloadUrl,
   adminContractDownloadUrl,
   getAdminContract,
+  requestClientCommercialContractReupload,
   saveAdminContract,
   uploadAdminCommercialContract,
 } from '@/services/adminRequests'
@@ -29,6 +30,7 @@ const { t, locale } = useI18n()
 const loading = ref(true)
 const saving = ref(false)
 const errorMessage = ref('')
+const successMessage = ref('')
 const financeRequest = ref<any | null>(null)
 const contract = ref<any | null>(null)
 const contractTemplate = ref<any | null>(null)
@@ -40,6 +42,8 @@ const uploadedContractFile = ref<File | null>(null)
 const requiresCommercialRegistration = ref(false)
 const adminCommercialFile = ref<File | null>(null)
 const uploadingAdminCommercial = ref(false)
+const requestingClientCommercialReupload = ref(false)
+const clientCommercialReuploadReason = ref('')
 let signaturePad: SignaturePad | null = null
 
 function buildSignaturePad() {
@@ -120,8 +124,14 @@ const bypassMode = computed(() => Boolean(uploadedContractFile.value))
 const requiresAdminCommercialUpload = computed(() =>
   Boolean(
     contract.value?.requires_commercial_registration
-    && contract.value?.client_commercial_contract_path
-    && !contract.value?.admin_commercial_contract_path,
+    && contract.value?.client_commercial_contract_path,
+  ),
+)
+
+const canRequestClientCommercialReupload = computed(() =>
+  Boolean(
+    contract.value?.requires_commercial_registration
+    && contract.value?.client_commercial_contract_path,
   ),
 )
 
@@ -173,6 +183,7 @@ async function load() {
     requiresCommercialRegistration.value = Boolean(data.contract?.requires_commercial_registration)
     uploadedContractFile.value = null
     adminCommercialFile.value = null
+    requestingClientCommercialReupload.value = false
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminContractBuilderPage.errors.loadFailed')
   } finally {
@@ -216,6 +227,7 @@ async function saveContract() {
 
   saving.value = true
   errorMessage.value = ''
+  successMessage.value = ''
 
   try {
     if (selectedUpload) {
@@ -258,6 +270,50 @@ async function submitAdminCommercialContract() {
   }
 }
 
+async function submitAdminCommercialContractAction() {
+  if (!financeRequest.value || !adminCommercialFile.value || uploadingAdminCommercial.value) return
+
+  uploadingAdminCommercial.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await uploadAdminCommercialContract(financeRequest.value.id, {
+      file: adminCommercialFile.value,
+    })
+
+    successMessage.value = data?.message || uiText('Admin authenticated contract uploaded successfully.', 'تم رفع عقد غرفة تجار الموثق من الإدارة بنجاح.')
+    adminCommercialFile.value = null
+    await load()
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to upload the admin authenticated contract.', 'تعذر رفع عقد غرفة تجار الموثق من الإدارة.')
+  } finally {
+    uploadingAdminCommercial.value = false
+  }
+}
+
+async function submitClientCommercialReuploadRequest() {
+  if (!financeRequest.value || requestingClientCommercialReupload.value) return
+
+  requestingClientCommercialReupload.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await requestClientCommercialContractReupload(financeRequest.value.id, {
+      reason: clientCommercialReuploadReason.value.trim() || null,
+    })
+
+    successMessage.value = data?.message || uiText('Client re-upload was requested successfully.', 'تم طلب إعادة الرفع من العميل بنجاح.')
+    clientCommercialReuploadReason.value = ''
+    await load()
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to request client re-upload.', 'تعذر طلب إعادة الرفع من العميل.')
+  } finally {
+    requestingClientCommercialReupload.value = false
+  }
+}
+
 function handleWindowResize() {
   resizeCanvas(true)
 }
@@ -288,9 +344,10 @@ onUnmounted(() => {
     </div>
 
     <p v-if="loading" class="empty-state">{{ t('adminContractBuilderPage.states.loading') }}</p>
-    <p v-else-if="errorMessage" class="error-state">{{ errorMessage }}</p>
+    <p v-if="successMessage" class="success-state">{{ successMessage }}</p>
+    <p v-if="errorMessage" class="error-state">{{ errorMessage }}</p>
 
-    <div v-else-if="financeRequest" class="contract-grid">
+    <div v-if="!loading && financeRequest" class="contract-grid">
       <article class="panel-card info-card">
         <div class="panel-head"><h2>{{ t('adminContractBuilderPage.sections.requestSummary') }}</h2></div>
         <div class="summary-grid">
@@ -303,6 +360,7 @@ onUnmounted(() => {
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.unifiedNumber') }}</span><strong>{{ intakeUnifiedNumber(financeRequest.intake_details_json) }}</strong></div>
           <div class="summary-row"><span>{{ t('adminContractBuilderPage.summary.companyCrNumber') }}</span><strong>{{ intakeCompanyCrNumber(financeRequest.intake_details_json) }}</strong></div>
         </div>
+
       </article>
 
       <article class="panel-card contract-form-card">
@@ -322,14 +380,14 @@ onUnmounted(() => {
           </article>
 
           <article class="mode-card">
-            <h3>{{ uiText('Commercial registration authentication', 'توثيق الغرفة التجارية') }}</h3>
+            <h3>{{ uiText('Commercial registration authentication', 'توثيق غرفة تجار') }}</h3>
             <label class="toggle-row">
               <input
                 v-model="requiresCommercialRegistration"
                 type="checkbox"
                 :disabled="bypassMode"
               />
-              <span>{{ uiText('Require client + admin commercial registration uploads after signatures.', 'طلب رفع توثيق الغرفة التجارية من العميل ثم الإدارة بعد التوقيع.') }}</span>
+              <span>{{ uiText('Require client + admin authenticated contract uploads after signatures.', 'طلب رفع عقد غرفة تجار الموثق من العميل ثم الإدارة بعد التوقيع.') }}</span>
             </label>
             <p v-if="bypassMode" class="muted-small mode-note">
               {{ uiText('Disabled while attachment bypass is active.', 'الخيار معطل أثناء تفعيل مسار المرفق الإداري.') }}
@@ -362,6 +420,27 @@ onUnmounted(() => {
           <span>{{ uiText('Attachment mode enabled', 'تم تفعيل مسار المرفق') }}</span>
           <p>{{ uiText('The uploaded contract will be used as the final downloadable contract for this request.', 'سيتم استخدام العقد المرفوع كنسخة العقد النهائية القابلة للتنزيل لهذا الطلب.') }}</p>
         </div>
+        <div v-if="canRequestClientCommercialReupload" class="commercial-reupload-box">
+          <p class="subtext">{{ uiText('If the client upload has mistakes, request a corrected re-upload before finalizing.', 'إذا كان رفع العميل فيه أخطاء، اطلب إعادة رفع نسخة مصححة قبل الإنهاء.') }}</p>
+          <textarea
+            v-model="clientCommercialReuploadReason"
+            class="client-form-control client-form-control--textarea"
+            rows="3"
+            :placeholder="uiText('Optional note for client (reason for re-upload)', 'ملاحظة اختيارية للعميل (سبب إعادة الرفع)')"
+          />
+          <button
+            type="button"
+            class="ghost-btn"
+            :disabled="requestingClientCommercialReupload"
+            @click="submitClientCommercialReuploadRequest"
+          >
+            {{
+              requestingClientCommercialReupload
+                ? uiText('Requesting...', 'جارٍ الإرسال...')
+                : uiText('Request client re-upload', 'طلب إعادة الرفع من العميل')
+            }}
+          </button>
+        </div>
       </article>
 
       <article class="panel-card signature-card wide-card">
@@ -392,7 +471,7 @@ onUnmounted(() => {
 
       <article v-if="contract?.requires_commercial_registration" class="panel-card wide-card commercial-card">
         <div class="panel-head">
-          <h2>{{ uiText('Commercial registration status', 'حالة توثيق الغرفة التجارية') }}</h2>
+          <h2>{{ uiText('Commercial registration status', 'حالة توثيق غرفة تجار') }}</h2>
         </div>
         <div class="summary-grid summary-grid--tight">
           <div>
@@ -426,13 +505,13 @@ onUnmounted(() => {
         </div>
 
         <div v-if="requiresAdminCommercialUpload" class="commercial-upload-box">
-          <p class="subtext">{{ uiText('Upload the admin-authenticated Chamber of Commerce contract to continue to staff assignment.', 'ارفع العقد الموثق من الغرفة التجارية من جهة الإدارة للانتقال إلى تعيين الموظف.') }}</p>
+          <p class="subtext">{{ uiText('Upload the admin-authenticated Ghurfat Tijar contract to continue to staff assignment.', 'ارفع عقد غرفة تجار الموثق من جهة الإدارة للانتقال إلى تعيين الموظف.') }}</p>
           <input class="client-form-control" type="file" @change="onAdminCommercialFileChange" />
           <button
             type="button"
             class="primary-btn"
             :disabled="uploadingAdminCommercial || !adminCommercialFile"
-            @click="submitAdminCommercialContract"
+            @click="submitAdminCommercialContractAction"
           >
             {{ uploadingAdminCommercial ? uiText('Uploading...', 'جاري الرفع...') : uiText('Upload admin authenticated contract', 'رفع العقد الموثق من الإدارة') }}
           </button>
@@ -562,6 +641,15 @@ onUnmounted(() => {
   border-radius: 14px;
   border: 1px solid rgba(59, 130, 246, 0.24);
   background: rgba(239, 246, 255, 0.8);
+}
+
+.commercial-reupload-box {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  background: rgba(254, 242, 242, 0.8);
 }
 
 .signature-pad-shell {

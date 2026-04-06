@@ -97,6 +97,7 @@ Route::prefix('admin')
         Route::get('/requests/{financeRequest}/contract', [AdminContractController::class, 'show']);
         Route::post('/requests/{financeRequest}/contract', [AdminContractController::class, 'storeAndSend']);
         Route::post('/requests/{financeRequest}/contract/commercial-registration/admin-upload', [AdminContractController::class, 'uploadAdminCommercialRegistration']);
+        Route::post('/requests/{financeRequest}/contract/commercial-registration/request-client-reupload', [AdminContractController::class, 'requestClientCommercialRegistrationReupload']);
         Route::get('/requests/{financeRequest}/contract/download', [AdminContractController::class, 'downloadPdf']);
         Route::get('/requests/{financeRequest}/contract/commercial-registration/{party}/download', [AdminContractController::class, 'downloadCommercialRegistration'])
             ->whereIn('party', ['client', 'admin']);

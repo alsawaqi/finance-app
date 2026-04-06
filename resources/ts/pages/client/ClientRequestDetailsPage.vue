@@ -237,9 +237,9 @@ async function submitCommercialContractUpload() {
     })
     await load()
     commercialContractFile.value = null
-    successMessage.value = data.message || uiText('Commercial registration contract uploaded successfully.', 'تم رفع عقد توثيق الغرفة التجارية بنجاح.')
+    successMessage.value = data.message || uiText('Authenticated Ghurfat Tijar contract uploaded successfully.', 'تم رفع عقد غرفة تجار الموثق بنجاح.')
   } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || uiText('Unable to upload the commercial registration contract.', 'تعذر رفع عقد توثيق الغرفة التجارية.')
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to upload the authenticated Ghurfat Tijar contract.', 'تعذر رفع عقد غرفة تجار الموثق.')
   } finally {
     uploadingCommercialContract.value = false
   }
@@ -548,7 +548,7 @@ onMounted(load)
 
             <article v-if="requestItem.current_contract?.requires_commercial_registration" class="panel-card slim-card client-commercial-card">
               <div class="panel-head">
-                <h3>{{ uiText('Commercial registration authentication', 'توثيق الغرفة التجارية') }}</h3>
+                <h3>{{ uiText('Commercial registration authentication', 'توثيق غرفة تجار') }}</h3>
               </div>
               <div class="summary-grid summary-grid--compact summary-grid--three">
                 <div>
@@ -575,8 +575,8 @@ onMounted(load)
               <p v-else class="client-muted">
                 {{
                   requestItem.current_contract?.admin_commercial_uploaded_at
-                    ? uiText('Commercial registration uploads are complete.', 'تم استكمال رفع توثيق الغرفة التجارية.')
-                    : uiText('Waiting for the next commercial registration action.', 'بانتظار الإجراء التالي الخاص بتوثيق الغرفة التجارية.')
+                    ? uiText('Authenticated Ghurfat Tijar uploads are complete.', 'تم استكمال رفع عقد غرفة تجار الموثق.')
+                    : uiText('Waiting for the next authenticated Ghurfat Tijar action.', 'بانتظار الإجراء التالي الخاص بعقد غرفة تجار الموثق.')
                 }}
               </p>
             </article>

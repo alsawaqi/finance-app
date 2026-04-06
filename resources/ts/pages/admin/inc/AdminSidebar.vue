@@ -195,7 +195,7 @@ function handleNavClick() {
       <RouterLink to="/admin" class="admin-sidebar__brand-link" @click="handleNavClick">
         <span class="admin-sidebar__brand-logo">F</span>
         <div>
-          <strong>{{ workspaceTitle }}</strong>
+          <strong>{{ workspaceTitle }}s</strong>
           <small>{{ workspaceSubtitle }}</small>
         </div>
       </RouterLink>
@@ -207,10 +207,11 @@ function handleNavClick() {
 
     <div class="admin-sidebar__mobile-tools">
       <div class="admin-sidebar__mobile-profile">
-        <span class="admin-profile-chip__avatar">{{ displayName.charAt(0).toUpperCase() }}</span>
+     
         <div>
-          <strong>{{ displayName }}</strong>
-          <small>{{ displayEmail }}</small>
+    
+          <strong>{{ displayEmail }}</strong>
+          
         </div>
       </div>
 

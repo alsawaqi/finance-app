@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Staff;
 
 use App\Enums\FinanceRequestWorkflowStage;
+use App\Enums\FinanceRequestUnderstudyStatus;
 use App\Enums\RequestAdditionalDocumentStatus;
 use App\Enums\RequestCommentVisibility;
 use App\Enums\RequestDocumentUploadStatus;
@@ -33,6 +34,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class StaffRequestWorkspaceController extends Controller
 {
@@ -203,6 +205,7 @@ class StaffRequestWorkspaceController extends Controller
     ): JsonResponse {
         $user = $request->user();
         $this->ensureVisibleToUser($user, $financeRequest);
+        $this->ensureUnderstudyEditable($financeRequest);
 
         if ($staffQuestion->assigned_to && (int) $staffQuestion->assigned_to !== (int) $user?->id && ! $user?->hasRole('admin')) {
             abort(403, 'This staff question is assigned to another staff member.');
@@ -239,6 +242,7 @@ class StaffRequestWorkspaceController extends Controller
     ): JsonResponse {
         $user = $request->user();
         $this->ensureVisibleToUser($user, $financeRequest);
+        $this->ensureUnderstudyEditable($financeRequest);
 
         $updatedRequest = DB::transaction(function () use ($financeRequest, $user, $request) {
             return $this->staffQuestionService->saveStudyDraft(
@@ -264,6 +268,7 @@ class StaffRequestWorkspaceController extends Controller
     ): JsonResponse {
         $user = $request->user();
         $this->ensureVisibleToUser($user, $financeRequest);
+        $this->ensureUnderstudyEditable($financeRequest);
 
         $updatedRequest = DB::transaction(function () use ($financeRequest, $user, $request) {
             return $this->staffQuestionService->submitStudy(
@@ -532,6 +537,21 @@ class StaffRequestWorkspaceController extends Controller
                 ->exists();
 
         abort_unless($isAssigned, 403, 'You are not assigned to this request.');
+    }
+
+    private function ensureUnderstudyEditable(FinanceRequest $financeRequest): void
+    {
+        $understudyStatus = $financeRequest->understudy_status?->value ?? (string) $financeRequest->understudy_status;
+        $workflowStage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+
+        if (in_array($understudyStatus, [
+            FinanceRequestUnderstudyStatus::SUBMITTED->value,
+            FinanceRequestUnderstudyStatus::APPROVED->value,
+        ], true) || $workflowStage === FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW->value) {
+            throw ValidationException::withMessages([
+                'understudy' => 'The study package is locked while waiting for admin review. It becomes editable again when the admin requests updates.',
+            ]);
+        }
     }
 
     private function paginationMeta(LengthAwarePaginator $paginator): array
