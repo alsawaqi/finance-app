@@ -11,7 +11,6 @@ import {
   type AllowedEmailDocument,
   type BankOption,
 } from '@/services/staffWorkspace'
-import { adminContractDownloadUrl } from '@/services/adminRequests'
 import { intakeFullName } from '@/utils/requestIntake'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 import { formatRequestStatus } from '@/utils/requestStatus'
@@ -270,21 +269,12 @@ onMounted(load)
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('staffRequestDetails.sections.emailComposerTitle') }}</p>
-        <h1>{{ uiText('Send request email', 'إرسال بريد الطلب') }}</h1>
+        <h4>{{ uiText('Send request email', 'إرسال بريد الطلب') }}</h4>
         <p class="subtext">{{ t('staffRequestDetails.sections.emailComposerSubtitle') }}</p>
       </div>
       <div class="actions-row">
         <RouterLink class="ghost-btn" :to="{ name: 'staff-request-details', params: { id: requestId } }">{{ t('staffRequestDetails.hero.backToAssignedRequests') }}</RouterLink>
         <RouterLink class="ghost-btn" :to="{ name: 'staff-request-emails', params: { id: requestId } }">{{ uiText('Sent email history', 'سجل الرسائل المرسلة') }}</RouterLink>
-        <button
-          v-if="requestItem?.current_contract?.contract_pdf_path"
-          type="button"
-          class="ghost-btn"
-          @click="openFilePreview(`contract-${requestId}.pdf`, adminContractDownloadUrl(requestId), 'application/pdf')"
-        >
-          {{ uiText('Preview contract', 'معاينة العقد') }}
-        </button>
-        <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.hero.downloadContractPdf') }}</a>
       </div>
     </div>
 

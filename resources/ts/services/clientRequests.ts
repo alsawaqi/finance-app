@@ -5,6 +5,7 @@ export type ClientQuestion = {
   code?: string | null
   question_text: string
   question_type: string
+  finance_type?: 'all' | 'individual' | 'company'
   options_json?: string[] | null
   placeholder?: string | null
   help_text?: string | null
@@ -90,7 +91,10 @@ export type ClientRequestDetails = ClientRequestSummary & {
     name: string
     status: string
     is_required: boolean
+    is_multiple?: boolean
     is_uploaded: boolean
+    uploads_count?: number
+    accepted_uploads_count?: number
     upload?: {
       id: number
       file_name: string
@@ -98,6 +102,13 @@ export type ClientRequestDetails = ClientRequestSummary & {
       status: string
       uploaded_at?: string | null
     } | null
+    uploads?: Array<{
+      id: number
+      file_name: string
+      file_path: string
+      status: string
+      uploaded_at?: string | null
+    }>
   }>
   additional_document_requests?: Array<{
     id: number
@@ -141,11 +152,13 @@ export type ClientRequestWizardPayload = {
   }>
 }
 
-export async function getRequestQuestions() {
+export async function getRequestQuestions(financeType?: 'individual' | 'company') {
   return api.get<{
     questions: ClientQuestion[]
     finance_request_types: FinanceRequestTypeOption[]
-  }>('/api/client/request-questions')
+  }>('/api/client/request-questions', {
+    params: financeType ? { finance_type: financeType } : undefined,
+  })
 }
 
 export async function getClientRequests() {

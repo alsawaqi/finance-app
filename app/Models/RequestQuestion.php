@@ -14,6 +14,7 @@ class RequestQuestion extends Model
         'code',
         'question_text',
         'question_type',
+        'finance_type',
         'options_json',
         'placeholder',
         'help_text',

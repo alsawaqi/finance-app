@@ -147,6 +147,7 @@ class DocumentUploadStepController extends Controller
             'name' => $step->name,
             'description' => $step->description,
             'is_required' => (bool) $step->is_required,
+            'is_multiple' => (bool) $step->is_multiple,
             'allowed_file_types_json' => $allowedFileTypes,
             'allowed_file_types_count' => count($allowedFileTypes),
             'max_file_size_mb' => $step->max_file_size_mb !== null ? (int) $step->max_file_size_mb : null,

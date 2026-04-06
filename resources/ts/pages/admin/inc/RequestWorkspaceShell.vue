@@ -33,7 +33,7 @@ const loadingFallback = computed(() => (locale.value === 'ar' ? 'جارٍ الت
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ eyebrow }}</p>
-        <h1>{{ title }}</h1>
+        <h4>{{ title }}</h4>
         <p v-if="subtitle" class="subtext">{{ subtitle }}</p>
       </div>
       <div class="actions-row">

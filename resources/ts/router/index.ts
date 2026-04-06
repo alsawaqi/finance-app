@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAppProgress } from '@/composables/useAppProgress'
 
 import HomePage from '@/pages/public/HomePage.vue'
 import AboutPage from '@/pages/public/AboutPage.vue'
@@ -118,7 +119,10 @@ const router = createRouter({
   ],
 })
 
+const appProgress = useAppProgress()
+
 router.beforeEach(async (to) => {
+  appProgress.startNavigation()
   const auth = useAuthStore()
   const hasRoleRules = Array.isArray(to.meta.allowedRoles)
     ? to.meta.allowedRoles.length > 0
@@ -157,6 +161,14 @@ router.beforeEach(async (to) => {
   }
 
   return true
+})
+
+router.afterEach(() => {
+  appProgress.finishNavigation()
+})
+
+router.onError(() => {
+  appProgress.finishNavigation()
 })
 
 export default router

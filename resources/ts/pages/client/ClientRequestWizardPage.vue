@@ -25,6 +25,7 @@ const auth = useAuthStore()
 const { t, locale } = useI18n()
 
 const loading = ref(true)
+const questionsLoading = ref(false)
 const submitting = ref(false)
 const currentStep = ref(1)
 const totalSteps = 2
@@ -85,6 +86,10 @@ const details = reactive({
   address: '',
   notes: '',
 })
+
+function normalizeFinanceType(value: unknown): 'individual' | 'company' {
+  return value === 'company' ? 'company' : 'individual'
+}
 
 
 type ShareholderState = {
@@ -383,15 +388,18 @@ function openUploadPreview(file: File | null, title: string) {
   uploadPreviewOpen.value = true
 }
 
-function syncAnswersFromQuestions() {
+function syncAnswersFromQuestions(seedAnswers?: Record<number, unknown>) {
+  const sourceAnswers = seedAnswers ?? (JSON.parse(JSON.stringify(answers)) as Record<number, unknown>)
   const activeQuestionIds = new Set<number>()
+
+  Object.keys(answers).forEach((key) => {
+    delete answers[Number(key)]
+  })
 
   questions.value.forEach((question) => {
     activeQuestionIds.add(question.id)
-
-    if (!(question.id in answers)) {
-      answers[question.id] = question.question_type === 'checkbox' ? [] : ''
-    }
+    const seededValue = sourceAnswers[question.id]
+    answers[question.id] = seededValue ?? (question.question_type === 'checkbox' ? [] : '')
   })
 
   Object.keys(answers).forEach((key) => {
@@ -408,18 +416,17 @@ function applyDraftToState(draft: ClientRequestWizardDraftPayload) {
 
   currentStep.value = draft.currentStep
   Object.assign(details, draft.details)
+  details.finance_type = normalizeFinanceType(details.finance_type)
 
   Object.keys(answers).forEach((key) => {
     delete answers[Number(key)]
   })
 
-  questions.value.forEach((question) => {
-    if (question.id in draft.answers) {
-      answers[question.id] = draft.answers[question.id]
-      return
+  Object.entries(draft.answers ?? {}).forEach(([questionId, value]) => {
+    const numericQuestionId = Number(questionId)
+    if (Number.isInteger(numericQuestionId) && numericQuestionId > 0) {
+      answers[numericQuestionId] = value
     }
-
-    answers[question.id] = question.question_type === 'checkbox' ? [] : ''
   })
 
   shareholders.value = draft.shareholders.map((shareholder) => ({
@@ -438,12 +445,12 @@ function restoreDraftIfAvailable() {
   const draft = loadClientRequestDraft(getDraftUserId())
 
   if (!draft) {
-    syncAnswersFromQuestions()
     hydrateApplicantDefaults()
-    return
+    return false
   }
 
   applyDraftToState(draft)
+  return true
 }
 
 function persistDraftNow() {
@@ -506,6 +513,11 @@ function validateStepOne() {
   clearErrors()
   let hasError = false
 
+  if (!details.finance_type) {
+    fieldErrors['details.finance_type'] = t('clientWizard.errors.applicantTypeRequired')
+    hasError = true
+  }
+
   for (const question of questions.value) {
     if (!question.is_required) continue
 
@@ -526,11 +538,6 @@ function validateStepOne() {
 function validateStepTwo() {
   clearErrors()
   let hasError = false
-
-  if (!details.finance_type) {
-    fieldErrors['details.finance_type'] = t('clientWizard.errors.applicantTypeRequired')
-    hasError = true
-  }
 
   if (!String(details.finance_request_type_id).trim()) {
   fieldErrors['details.finance_request_type_id'] = t('clientWizard.errors.requestTypeRequired')
@@ -630,6 +637,8 @@ function validateStepTwo() {
 }
 
 function goNext() {
+  if (questionsLoading.value) return
+
   if (currentStep.value === 1 && validateStepOne()) {
     currentStep.value = 2
   }
@@ -642,19 +651,71 @@ function goBack() {
 
 async function loadQuestions() {
   loading.value = true
+  questionsLoading.value = true
   clearErrors()
 
   try {
-    const { data } = await getRequestQuestions()
-questions.value = data.questions ?? []
-financeRequestTypes.value = data.finance_request_types ?? []
-restoreDraftIfAvailable()
+    const restored = restoreDraftIfAvailable()
+    const { data } = await getRequestQuestions(details.finance_type)
+    questions.value = data.questions ?? []
+    financeRequestTypes.value = data.finance_request_types ?? []
+    syncAnswersFromQuestions()
+
+    if (!restored && details.finance_type === 'company' && shareholders.value.length === 0) {
+      addShareholder()
+    }
   } catch (error: any) {
     generalError.value = error?.response?.data?.message || t('clientWizard.errors.loadQuestionsFailed')
   } finally {
+    questionsLoading.value = false
     loading.value = false
   }
 }
+
+async function reloadQuestionsForFinanceType(financeType: 'individual' | 'company') {
+  if (loading.value || restoringDraft.value) return
+
+  questionsLoading.value = true
+  clearErrors()
+
+  try {
+    const { data } = await getRequestQuestions(financeType)
+    const previousAnswers = JSON.parse(JSON.stringify(answers)) as Record<number, unknown>
+    questions.value = data.questions ?? []
+
+    if ((data.finance_request_types ?? []).length > 0) {
+      financeRequestTypes.value = data.finance_request_types ?? []
+    }
+
+    syncAnswersFromQuestions(previousAnswers)
+  } catch (error: any) {
+    generalError.value = error?.response?.data?.message || t('clientWizard.errors.loadQuestionsFailed')
+  } finally {
+    questionsLoading.value = false
+  }
+}
+
+watch(
+  () => details.finance_type,
+  async (value, previous) => {
+    const normalized = normalizeFinanceType(value)
+    if (normalized !== value) {
+      details.finance_type = normalized
+      return
+    }
+
+    if (normalized === previous) return
+
+    if (normalized === 'individual') {
+      details.company_name = ''
+      details.company_cr_number = ''
+      companyCr.value = null
+      shareholders.value = []
+    }
+
+    await reloadQuestionsForFinanceType(normalized)
+  },
+)
 
 async function submitRequest() {
   if (!validateStepTwo() || !nationalAddressAttachment.value) return
@@ -788,15 +849,38 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="generalError" class="client-alert client-alert--error">{{ generalError }}</div>
-<div v-if="successMessage" class="client-alert client-alert--success">{{ successMessage }}</div>
-<div v-if="draftMessage" class="client-alert client-alert--success">{{ draftMessage }}</div>
+        <div v-if="successMessage" class="client-alert client-alert--success">{{ successMessage }}</div>
+        <div v-if="draftMessage" class="client-alert client-alert--success">{{ draftMessage }}</div>
 
         <template v-if="currentStep === 1">
-          <div v-if="questions.length === 0" class="client-empty-state client-empty-state--inner">
+          <div class="client-request-section">
+            <div class="client-request-section__head">
+              <div>
+                <h4>{{ t('clientWizard.fields.applicantType') }}</h4>
+                <p class="client-subtext">{{ t('clientWizard.steps.step1Text') }}</p>
+              </div>
+            </div>
+
+            <div class="client-form-grid">
+              <div class="client-form-group">
+                <label class="client-form-label">{{ t('clientWizard.fields.applicantType') }} <span class="client-required-mark">*</span></label>
+                <select v-model="details.finance_type" class="client-form-control">
+                  <option value="individual">{{ t('clientWizard.options.individual') }}</option>
+                  <option value="company">{{ t('clientWizard.options.company') }}</option>
+                </select>
+                <p v-if="fieldErrors['details.finance_type']" class="client-form-error">{{ fieldErrors['details.finance_type'] }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="questionsLoading" class="client-empty-state client-empty-state--inner">
+            <h3>{{ t('clientWizard.states.loadingTitle') }}</h3>
+            <p class="client-muted">{{ t('clientWizard.states.loadingText') }}</p>
+          </div>
+          <div v-else-if="questions.length === 0" class="client-empty-state client-empty-state--inner">
             <h3>{{ t('clientWizard.states.noQuestionsTitle') }}</h3>
             <p class="client-muted">{{ t('clientWizard.states.noQuestionsText') }}</p>
           </div>
-
           <div v-else class="client-form-stack">
             <ClientQuestionField
               v-for="question in questions"
@@ -809,15 +893,15 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="client-inline-actions">
-  <button v-if="draftRestored" type="button" class="client-btn-secondary" @click="discardDraft">
-    {{ t('clientWizard.actions.discardDraft') }}
-  </button>
-  <RouterLink :to="{ name: 'client-new-request' }" class="client-btn-secondary">
-    {{ t('clientWizard.actions.cancel') }}
-  </RouterLink>
-  <button type="button" class="client-btn-primary" @click="goNext">
-    {{ t('clientWizard.actions.continueToDetails') }}
-  </button>
+            <button v-if="draftRestored" type="button" class="client-btn-secondary" @click="discardDraft">
+              {{ t('clientWizard.actions.discardDraft') }}
+            </button>
+            <RouterLink :to="{ name: 'client-new-request' }" class="client-btn-secondary">
+              {{ t('clientWizard.actions.cancel') }}
+            </RouterLink>
+            <button type="button" class="client-btn-primary" :disabled="questionsLoading" @click="goNext">
+              {{ t('clientWizard.actions.continueToDetails') }}
+            </button>
 </div>
         </template>
 
@@ -832,7 +916,6 @@ onBeforeUnmount(() => {
               </div>
 
               <div class="client-form-grid">
-                 
                 <div class="client-form-group">
                   <label class="client-form-label">{{ t('clientWizard.fields.requestType') }} <span class="client-required-mark">*</span></label>
                   <select v-model="details.finance_request_type_id" class="client-form-control">
@@ -844,17 +927,6 @@ onBeforeUnmount(() => {
                   <p v-if="fieldErrors['details.finance_request_type_id']" class="client-form-error">
                     {{ fieldErrors['details.finance_request_type_id'] }}
                   </p>
-                </div>
-
-
-
-                <div class="client-form-group">
-                  <label class="client-form-label">{{ t('clientWizard.fields.applicantType') }} <span class="client-required-mark">*</span></label>
-                  <select v-model="details.finance_type" class="client-form-control">
-                    <option value="individual">{{ t('clientWizard.options.individual') }}</option>
-                    <option value="company">{{ t('clientWizard.options.company') }}</option>
-                  </select>
-                  <p v-if="fieldErrors['details.finance_type']" class="client-form-error">{{ fieldErrors['details.finance_type'] }}</p>
                 </div>
 
                 <div class="client-form-group">
@@ -890,6 +962,17 @@ onBeforeUnmount(() => {
                     :placeholder="t('clientWizard.placeholders.companyName')"
                   />
                   <p v-if="fieldErrors['details.company_name']" class="client-form-error">{{ fieldErrors['details.company_name'] }}</p>
+                </div>
+
+                <div v-if="details.finance_type === 'company'" class="client-form-group">
+                  <label class="client-form-label">{{ t('clientWizard.fields.companyCrNumber') }} <span class="client-required-mark">*</span></label>
+                  <input
+                    v-model="details.company_cr_number"
+                    type="text"
+                    class="client-form-control"
+                    :placeholder="t('clientWizard.placeholders.companyCrNumber')"
+                  />
+                  <p v-if="fieldErrors['details.company_cr_number']" class="client-form-error">{{ fieldErrors['details.company_cr_number'] }}</p>
                 </div>
 
                 <div v-else class="client-form-group">
@@ -932,104 +1015,104 @@ onBeforeUnmount(() => {
                   <p v-if="fieldErrors['details.phone_number']" class="client-form-error">{{ fieldErrors['details.phone_number'] }}</p>
                 </div>
 
-               <div class="client-form-group">
-  <label class="client-form-label">{{ t('clientWizard.fields.unifiedNumber') }} <span class="client-required-mark">*</span></label>
-  <input
-    v-model="details.unified_number"
-    type="text"
-    class="client-form-control"
-    :placeholder="t('clientWizard.placeholders.unifiedNumber')"
-  />
-  <p v-if="fieldErrors['details.unified_number']" class="client-form-error">{{ fieldErrors['details.unified_number'] }}</p>
-</div>
+                <div class="client-form-group">
+                  <label class="client-form-label">{{ t('clientWizard.fields.unifiedNumber') }} <span class="client-required-mark">*</span></label>
+                  <input
+                    v-model="details.unified_number"
+                    type="text"
+                    class="client-form-control"
+                    :placeholder="t('clientWizard.placeholders.unifiedNumber')"
+                  />
+                  <p v-if="fieldErrors['details.unified_number']" class="client-form-error">{{ fieldErrors['details.unified_number'] }}</p>
+                </div>
 
-<div class="client-form-group">
-  <label class="client-form-label">{{ t('clientWizard.fields.nationalAddressNumber') }} <span class="client-required-mark">*</span></label>
-  <input
-    v-model="details.national_address_number"
-    type="text"
-    class="client-form-control"
-    :placeholder="t('clientWizard.placeholders.nationalAddressNumber')"
-  />
-  <p v-if="fieldErrors['details.national_address_number']" class="client-form-error">{{ fieldErrors['details.national_address_number'] }}</p>
-</div>
+                <div class="client-form-group">
+                  <label class="client-form-label">{{ t('clientWizard.fields.nationalAddressNumber') }} <span class="client-required-mark">*</span></label>
+                  <input
+                    v-model="details.national_address_number"
+                    type="text"
+                    class="client-form-control"
+                    :placeholder="t('clientWizard.placeholders.nationalAddressNumber')"
+                  />
+                  <p v-if="fieldErrors['details.national_address_number']" class="client-form-error">{{ fieldErrors['details.national_address_number'] }}</p>
+                </div>
 
-<div class="client-form-group">
-  <label class="client-form-label">{{ t('clientWizard.fields.nationalAddressAttachment') }} <span class="client-required-mark">*</span></label>
-  <div
-    class="client-upload-drop"
-    @dragover.prevent
-    @dragenter.prevent
-    @drop="dropNationalAddressAttachment"
-  >
-    <input
-      :id="FILE_INPUT_IDS.nationalAddress"
-      type="file"
-      class="client-file-input-hidden"
-      @change="handleNationalAddressAttachment"
-    />
-    <label :for="FILE_INPUT_IDS.nationalAddress" class="client-upload-drop__surface">
-      <span class="client-upload-drop__icon" aria-hidden="true">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-      </span>
-      <span class="client-upload-drop__title">{{ t('clientWizard.upload.browse') }}</span>
-      <span class="client-upload-drop__hint">{{ t('clientWizard.upload.dragHint') }}</span>
-      <span class="client-upload-drop__formats">{{ t('clientWizard.upload.formatsHint') }}</span>
-    </label>
-  </div>
-  <div v-if="nationalAddressAttachment" class="client-upload-file-row">
-    <span class="client-upload-file-row__name" :title="nationalAddressAttachment.name">{{ nationalAddressAttachment.name }}</span>
-    <div class="client-upload-file-row__actions">
-      <button type="button" class="ghost-btn" @click="openUploadPreview(nationalAddressAttachment, t('clientWizard.fields.nationalAddressAttachment'))">
-        {{ t('clientWizard.actions.preview') }}
-      </button>
-      <button type="button" class="ghost-btn" @click="triggerFilePick(FILE_INPUT_IDS.nationalAddress)">
-        {{ t('clientWizard.upload.replace') }}
-      </button>
-      <button type="button" class="ghost-btn client-upload-file-row__remove" @click="clearNationalAddressAttachment">
-        {{ t('clientWizard.upload.remove') }}
-      </button>
-    </div>
-  </div>
-  <p v-if="fieldErrors.national_address_attachment" class="client-form-error">{{ fieldErrors.national_address_attachment }}</p>
-</div>
+                <div class="client-form-group client-form-group--full">
+                  <label class="client-form-label">{{ t('clientWizard.fields.address') }} <span class="client-required-mark">*</span></label>
+                  <textarea
+                    v-model="details.address"
+                    rows="4"
+                    class="client-form-control client-form-control--textarea"
+                    :placeholder="t('clientWizard.placeholders.fullAddress')"
+                  ></textarea>
+                  <p v-if="fieldErrors['details.address']" class="client-form-error">{{ fieldErrors['details.address'] }}</p>
+                </div>
 
-<div class="client-form-group client-form-group--full">
-  <label class="client-form-label">{{ t('clientWizard.fields.address') }} <span class="client-required-mark">*</span></label>
-  <textarea
-    v-model="details.address"
-    rows="4"
-    class="client-form-control client-form-control--textarea"
-    :placeholder="t('clientWizard.placeholders.fullAddress')"
-  ></textarea>
-  <p v-if="fieldErrors['details.address']" class="client-form-error">{{ fieldErrors['details.address'] }}</p>
-</div>
-
-<div class="client-form-group client-form-group--full">
-  <label class="client-form-label">{{ t('clientWizard.fields.notes') }}</label>
-  <textarea
-    v-model="details.notes"
-    rows="4"
-    class="client-form-control client-form-control--textarea"
-    :placeholder="t('clientWizard.placeholders.notes')"
-  ></textarea>
-</div>
+                <div class="client-form-group client-form-group--full">
+                  <label class="client-form-label">{{ t('clientWizard.fields.notes') }}</label>
+                  <textarea
+                    v-model="details.notes"
+                    rows="4"
+                    class="client-form-control client-form-control--textarea"
+                    :placeholder="t('clientWizard.placeholders.notes')"
+                  ></textarea>
+                </div>
               </div>
             </div>
 
-            <div class="client-request-section">
+            <div class="client-request-section client-wizard-documents-section">
               <div class="client-request-section__head">
                 <div>
-                  <h4>{{ t('clientWizard.sections.supportingFiles') }}</h4>
-                  <p class="client-subtext">{{ t('clientWizard.sections.supportingFilesText') }}</p>
+                  <h4>{{ t('clientWizard.sections.documentsAttachments') }}</h4>
+                  <p class="client-subtext">{{ t('clientWizard.sections.documentsAttachmentsText') }}</p>
                 </div>
               </div>
 
-              <div class="client-form-grid">
+              <div class="client-form-grid client-form-grid--documents">
+                <div class="client-form-group client-form-group--full">
+                  <label class="client-form-label">{{ t('clientWizard.fields.nationalAddressAttachment') }} <span class="client-required-mark">*</span></label>
+                  <div
+                    class="client-upload-drop"
+                    @dragover.prevent
+                    @dragenter.prevent
+                    @drop="dropNationalAddressAttachment"
+                  >
+                    <input
+                      :id="FILE_INPUT_IDS.nationalAddress"
+                      type="file"
+                      class="client-file-input-hidden"
+                      @change="handleNationalAddressAttachment"
+                    />
+                    <label :for="FILE_INPUT_IDS.nationalAddress" class="client-upload-drop__surface">
+                      <span class="client-upload-drop__icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="17 8 12 3 7 8" />
+                          <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                      </span>
+                      <span class="client-upload-drop__title">{{ t('clientWizard.upload.browse') }}</span>
+                      <span class="client-upload-drop__hint">{{ t('clientWizard.upload.dragHint') }}</span>
+                      <span class="client-upload-drop__formats">{{ t('clientWizard.upload.formatsHint') }}</span>
+                    </label>
+                  </div>
+                  <div v-if="nationalAddressAttachment" class="client-upload-file-row">
+                    <span class="client-upload-file-row__name" :title="nationalAddressAttachment.name">{{ nationalAddressAttachment.name }}</span>
+                    <div class="client-upload-file-row__actions">
+                      <button type="button" class="ghost-btn" @click="openUploadPreview(nationalAddressAttachment, t('clientWizard.fields.nationalAddressAttachment'))">
+                        {{ t('clientWizard.actions.preview') }}
+                      </button>
+                      <button type="button" class="ghost-btn" @click="triggerFilePick(FILE_INPUT_IDS.nationalAddress)">
+                        {{ t('clientWizard.upload.replace') }}
+                      </button>
+                      <button type="button" class="ghost-btn client-upload-file-row__remove" @click="clearNationalAddressAttachment">
+                        {{ t('clientWizard.upload.remove') }}
+                      </button>
+                    </div>
+                  </div>
+                  <p v-if="fieldErrors.national_address_attachment" class="client-form-error">{{ fieldErrors.national_address_attachment }}</p>
+                </div>
+
                 <div class="client-form-group client-form-group--full">
                   <label class="client-form-label">{{ t('clientWizard.fields.initialAttachments') }}</label>
                   <div class="client-upload-drop" @dragover.prevent @dragenter.prevent @drop="onDropAttachments">
@@ -1067,17 +1150,6 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                   <p class="client-form-help">{{ t('clientWizard.help.initialAttachmentsOptional') }}</p>
-                </div>
-
-                <div v-if="details.finance_type === 'company'" class="client-form-group">
-                  <label class="client-form-label">{{ t('clientWizard.fields.companyCrNumber') }} <span class="client-required-mark">*</span></label>
-                  <input
-                    v-model="details.company_cr_number"
-                    type="text"
-                    class="client-form-control"
-                    :placeholder="t('clientWizard.placeholders.companyCrNumber')"
-                  />
-                  <p v-if="fieldErrors['details.company_cr_number']" class="client-form-error">{{ fieldErrors['details.company_cr_number'] }}</p>
                 </div>
 
                 <div v-if="details.finance_type === 'company'" class="client-form-group client-form-group--full">
@@ -1153,7 +1225,7 @@ onBeforeUnmount(() => {
                     <button type="button" class="client-btn-secondary" @click="removeShareholder(index)">{{ t('clientWizard.actions.remove') }}</button>
                   </div>
 
-                  <div class="client-form-grid">
+                  <div class="client-form-grid client-shareholder-card__inputs">
                     <div class="client-form-group">
                       <label class="client-form-label">{{ t('clientWizard.fields.shareholderName') }} <span class="client-required-mark">*</span></label>
                       <input
@@ -1188,7 +1260,7 @@ onBeforeUnmount(() => {
                       <p v-if="fieldErrors[`shareholders.${index}.phone_number`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.phone_number`] }}</p>
                     </div>
 
-                    <div class="client-form-group">
+                    <div class="client-form-group client-form-group--full">
                       <label class="client-form-label">{{ t('clientWizard.fields.shareholderIdNumber') }} <span class="client-required-mark">*</span></label>
                       <input
                         v-model="shareholder.id_number"
@@ -1198,8 +1270,10 @@ onBeforeUnmount(() => {
                       />
                       <p v-if="fieldErrors[`shareholders.${index}.id_number`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.id_number`] }}</p>
                     </div>
+                  </div>
 
-                    <div class="client-form-group">
+                  <div class="client-shareholder-card__upload">
+                    <div class="client-form-group client-form-group--full">
                       <label class="client-form-label">{{ t('clientWizard.fields.shareholderIdUpload') }} <span class="client-required-mark">*</span></label>
                       <div
                         class="client-upload-drop"
@@ -1270,7 +1344,7 @@ onBeforeUnmount(() => {
     <AppFilePreviewModal
       :model-value="uploadPreviewOpen"
       @update:model-value="(value) => { uploadPreviewOpen = value }"
-      :title="uploadPreviewTitle || t('clientWizard.sections.supportingFiles')"
+      :title="uploadPreviewTitle || t('clientWizard.sections.documentsAttachments')"
       :file-name="uploadPreviewFile?.name || ''"
       :mime-type="uploadPreviewFile?.type || ''"
       :local-file="uploadPreviewFile"

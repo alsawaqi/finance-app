@@ -625,6 +625,20 @@
   gap: 18px;
 }
 
+.financer-client .client-form-grid--documents {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.financer-client .client-wizard-documents-section {
+  margin-top: 8px;
+}
+
+.financer-client .client-shareholder-card__upload {
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+}
+
 .financer-client .client-form-group {
   display: grid;
   gap: 8px;

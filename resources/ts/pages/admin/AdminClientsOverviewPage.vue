@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/AppPagination.vue'
 import {
@@ -17,7 +17,12 @@ import { formatDateTime } from '@/utils/dateTime'
 import { formatRequestStatus } from '@/utils/requestStatus'
 
 const route = useRoute()
+const router = useRouter()
 const { t, locale } = useI18n()
+
+function goToRequestDetail(id: number) {
+  router.push({ name: 'admin-request-details', params: { id: String(id) } })
+}
 
 const loading = ref(true)
 const detailLoading = ref(false)
@@ -171,7 +176,7 @@ watch(
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('adminClientsOverview.hero.eyebrow') }}</p>
-        <h1>{{ isDeactivatedView ? t('adminClientsOverview.hero.deactivatedTitle') : t('adminClientsOverview.hero.title') }}</h1>
+        <h4>{{ isDeactivatedView ? t('adminClientsOverview.hero.deactivatedTitle') : t('adminClientsOverview.hero.title') }}</h4>
         <p class="subtext">
           {{ isDeactivatedView ? t('adminClientsOverview.hero.deactivatedSubtitle') : t('adminClientsOverview.hero.subtitle') }}
         </p>
@@ -239,7 +244,16 @@ watch(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="client in clients" :key="client.id">
+            <tr
+              v-for="client in clients"
+              :key="client.id"
+              class="is-clickable-row"
+              role="button"
+              tabindex="0"
+              @click="loadClientRequests(client, 1)"
+              @keydown.enter.prevent="loadClientRequests(client, 1)"
+              @keydown.space.prevent="loadClientRequests(client, 1)"
+            >
               <td>
                 <strong>{{ client.name }}</strong>
                 <div class="muted-small">{{ client.email }}</div>
@@ -251,7 +265,7 @@ watch(
               </td>
               <td>{{ dateText(client.last_request_at) }}</td>
               <td>{{ dateText(client.last_login_at) }}</td>
-              <td>
+              <td @click.stop>
                 <div class="actions-row">
                   <button class="primary-btn small-btn" type="button" @click="loadClientRequests(client, 1)">{{ t('adminClientsOverview.actions.viewRequests') }}</button>
                   <button class="ghost-btn small-btn" type="button" :disabled="actionLoadingId === client.id" @click="toggleClient(client)">
@@ -301,7 +315,16 @@ watch(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in selectedClientRequests" :key="item.id">
+            <tr
+              v-for="item in selectedClientRequests"
+              :key="item.id"
+              class="is-clickable-row"
+              role="button"
+              tabindex="0"
+              @click="goToRequestDetail(item.id)"
+              @keydown.enter.prevent="goToRequestDetail(item.id)"
+              @keydown.space.prevent="goToRequestDetail(item.id)"
+            >
               <td>
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('adminClientsOverview.states.awaitingApprovalRef') }}</div>
@@ -315,7 +338,7 @@ watch(
                 <span class="status-badge">{{ formatRequestStatus(item.status, locale, t('adminClientsOverview.states.emptyValue')) }}</span>
                 <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
-              <td>
+              <td @click.stop>
                 <RouterLink :to="{ name: 'admin-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('adminClientsOverview.actions.open') }}</RouterLink>
               </td>
             </tr>

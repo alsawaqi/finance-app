@@ -47,7 +47,15 @@ class AdminAssignmentController extends Controller
                 $query->whereIn('status', [
                     ContractStatus::FULLY_SIGNED->value,
                     ContractStatus::CLIENT_SIGNED->value,
-                ]);
+                ])->where(function ($contractQuery) {
+                    $contractQuery
+                        ->where('requires_commercial_registration', false)
+                        ->orWhere(function ($commercialQuery) {
+                            $commercialQuery
+                                ->whereNotNull('client_commercial_contract_path')
+                                ->whereNotNull('admin_commercial_contract_path');
+                        });
+                });
             })
             ->whereIn('workflow_stage', [
                 FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
@@ -124,13 +132,7 @@ class AdminAssignmentController extends Controller
     public function assign(AssignStaffToFinanceRequestRequest $request, FinanceRequest $financeRequest): JsonResponse
     {
         $admin = $request->user();
-        $contract = $financeRequest->currentContract;
-
-        abort_unless(
-            $contract && in_array($contract->status?->value ?? $contract->status, [ContractStatus::FULLY_SIGNED->value, ContractStatus::CLIENT_SIGNED->value], true),
-            422,
-            'This request must have a fully signed contract before it can be assigned.'
-        );
+        $this->ensureRequestReadyForAssignment($financeRequest);
 
         $staffIds = collect($request->validated('staff_ids'))->map(fn ($id) => (int) $id)->values();
         $primaryStaffId = $request->filled('primary_staff_id')
@@ -247,5 +249,31 @@ class AdminAssignmentController extends Controller
             'from' => $paginator->firstItem(),
             'to' => $paginator->lastItem(),
         ];
+    }
+
+    private function ensureRequestReadyForAssignment(FinanceRequest $financeRequest): void
+    {
+        $contract = $financeRequest->currentContract;
+        $workflowStage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+
+        abort_unless(
+            $workflowStage === FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
+            422,
+            'This request is not currently ready for staff assignment.'
+        );
+
+        abort_unless(
+            $contract && in_array($contract->status?->value ?? $contract->status, [ContractStatus::FULLY_SIGNED->value, ContractStatus::CLIENT_SIGNED->value], true),
+            422,
+            'This request must have a signed contract before it can be assigned.'
+        );
+
+        if ((bool) $contract->requires_commercial_registration) {
+            abort_unless(
+                filled($contract->client_commercial_contract_path) && filled($contract->admin_commercial_contract_path),
+                422,
+                'Commercial registration contracts from both client and admin are required before staff assignment.'
+            );
+        }
     }
 }

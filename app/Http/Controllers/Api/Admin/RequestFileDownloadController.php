@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\DocumentUploadStep;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestShareholder;
 use App\Models\RequestAdditionalDocument;
@@ -13,10 +14,40 @@ use App\Models\RequestEmailAttachment;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class RequestFileDownloadController extends Controller
 {
+    public function attachmentBundle(Request $request, FinanceRequest $financeRequest): BinaryFileResponse
+    {
+        $this->authorizeRequestDownload($request->user(), $financeRequest);
+
+        $attachments = RequestAttachment::query()
+            ->where('finance_request_id', $financeRequest->id)
+            ->orderByDesc('id')
+            ->get();
+
+        abort_if($attachments->isEmpty(), 404, 'No request attachments are available for download.');
+
+        $entries = $attachments
+            ->map(fn (RequestAttachment $attachment, int $index): array => [
+                'disk' => $attachment->disk ?: 'public',
+                'path' => $attachment->file_path,
+                'filename' => $this->buildArchiveEntryName(
+                    $index + 1,
+                    $attachment->file_name ?: ('request-attachment-' . $attachment->id)
+                ),
+            ])
+            ->all();
+
+        return $this->downloadZipFromEntries(
+            $entries,
+            'request-attachments-' . $financeRequest->reference_number . '.zip'
+        );
+    }
+
     public function attachment(Request $request, FinanceRequest $financeRequest, RequestAttachment $attachment): StreamedResponse
     {
         $this->authorizeRequestDownload($request->user(), $financeRequest);
@@ -53,6 +84,45 @@ class RequestFileDownloadController extends Controller
             path: $requestDocumentUpload->file_path,
             filename: $requestDocumentUpload->file_name,
             preview: $request->boolean('preview'),
+        );
+    }
+
+    public function requiredDocumentBundle(
+        Request $request,
+        FinanceRequest $financeRequest,
+        DocumentUploadStep $documentUploadStep
+    ): BinaryFileResponse {
+        $this->authorizeRequestDownload($request->user(), $financeRequest);
+
+        $uploads = RequestDocumentUpload::query()
+            ->where('finance_request_id', $financeRequest->id)
+            ->where('document_upload_step_id', $documentUploadStep->id)
+            ->orderByDesc('id')
+            ->get();
+
+        abort_if($uploads->isEmpty(), 404, 'No uploaded files are available for this required document step.');
+
+        $entries = $uploads
+            ->map(fn (RequestDocumentUpload $upload, int $index): array => [
+                'disk' => $upload->disk ?: 'public',
+                'path' => $upload->file_path,
+                'filename' => $this->buildArchiveEntryName(
+                    $index + 1,
+                    $upload->file_name ?: ('required-document-' . $upload->id),
+                    $upload->status?->value ?? (string) $upload->status
+                ),
+            ])
+            ->all();
+
+        $stepCode = $documentUploadStep->code ?: ('step-' . $documentUploadStep->id);
+
+        return $this->downloadZipFromEntries(
+            $entries,
+            sprintf(
+                'required-documents-%s-%s.zip',
+                $financeRequest->reference_number,
+                $this->sanitizeArchiveName($stepCode)
+            )
         );
     }
 
@@ -126,6 +196,71 @@ class RequestFileDownloadController extends Controller
         }
 
         return Storage::disk($disk)->download($path, $resolvedFilename);
+    }
+
+    /**
+     * @param  array<int, array{disk:string,path:string,filename:string}>  $entries
+     */
+    private function downloadZipFromEntries(array $entries, string $archiveFilename): BinaryFileResponse
+    {
+        $tempPath = tempnam(sys_get_temp_dir(), 'finance-req-');
+        abort_if($tempPath === false, 500, 'Unable to prepare archive download.');
+
+        $zip = new ZipArchive();
+        $opened = $zip->open($tempPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        if ($opened !== true) {
+            @unlink($tempPath);
+            abort(500, 'Unable to create archive.');
+        }
+
+        foreach ($entries as $entry) {
+            $disk = (string) ($entry['disk'] ?? 'public');
+            $path = (string) ($entry['path'] ?? '');
+
+            if ($path === '' || ! Storage::disk($disk)->exists($path)) {
+                continue;
+            }
+
+            $entryFilename = $this->sanitizeArchiveName((string) ($entry['filename'] ?? basename($path)));
+            $zip->addFromString($entryFilename, Storage::disk($disk)->get($path));
+        }
+
+        $addedFiles = $zip->numFiles;
+        $zip->close();
+
+        if ($addedFiles === 0) {
+            @unlink($tempPath);
+            abort(404, 'No downloadable files were found in storage.');
+        }
+
+        $safeArchiveFilename = $this->sanitizeArchiveName($archiveFilename);
+        if (! str_ends_with(strtolower($safeArchiveFilename), '.zip')) {
+            $safeArchiveFilename .= '.zip';
+        }
+
+        return response()
+            ->download($tempPath, $safeArchiveFilename, ['Content-Type' => 'application/zip'])
+            ->deleteFileAfterSend(true);
+    }
+
+    private function buildArchiveEntryName(int $position, string $filename, ?string $status = null): string
+    {
+        $prefix = str_pad((string) $position, 2, '0', STR_PAD_LEFT);
+        $safeFilename = $this->sanitizeArchiveName($filename);
+
+        if (filled($status)) {
+            return $prefix . '-' . $this->sanitizeArchiveName($status) . '-' . $safeFilename;
+        }
+
+        return $prefix . '-' . $safeFilename;
+    }
+
+    private function sanitizeArchiveName(string $value): string
+    {
+        $sanitized = preg_replace('/[^A-Za-z0-9._-]+/', '-', trim($value)) ?? '';
+        $sanitized = trim($sanitized, '-.');
+
+        return $sanitized !== '' ? $sanitized : 'file';
     }
 
     private function detectMimeType(string $disk, string $path, string $filename): string

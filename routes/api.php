@@ -73,6 +73,7 @@ Route::prefix('client')
         Route::get('/requests/{financeRequest}/contract', [ClientContractController::class, 'show']);
         Route::post('/requests/{financeRequest}/sign', [ClientContractController::class, 'sign']);
         Route::post('/requests/{financeRequest}/contract/sign', [ClientContractController::class, 'sign']);
+        Route::post('/requests/{financeRequest}/contract/commercial-registration', [ClientContractController::class, 'uploadCommercialRegistration']);
         Route::get('/requests/{financeRequest}/contract/download', [ClientContractController::class, 'downloadPdf']);
     });
 
@@ -90,12 +91,19 @@ Route::prefix('admin')
         Route::get('/requests/new', [AdminFinanceRequestController::class, 'indexNew']);
         Route::get('/requests/{financeRequest}', [AdminFinanceRequestController::class, 'show']);
         Route::post('/requests/{financeRequest}/approve', [AdminFinanceRequestController::class, 'approve']);
+        Route::post('/requests/{financeRequest}/final-approve', [AdminFinanceRequestController::class, 'finalApprove']);
         Route::post('/requests/{financeRequest}/reject', [AdminFinanceRequestController::class, 'reject']);
+        Route::post('/requests/{financeRequest}/comments', [StaffRequestWorkspaceController::class, 'storeComment']);
         Route::get('/requests/{financeRequest}/contract', [AdminContractController::class, 'show']);
         Route::post('/requests/{financeRequest}/contract', [AdminContractController::class, 'storeAndSend']);
+        Route::post('/requests/{financeRequest}/contract/commercial-registration/admin-upload', [AdminContractController::class, 'uploadAdminCommercialRegistration']);
         Route::get('/requests/{financeRequest}/contract/download', [AdminContractController::class, 'downloadPdf']);
+        Route::get('/requests/{financeRequest}/contract/commercial-registration/{party}/download', [AdminContractController::class, 'downloadCommercialRegistration'])
+            ->whereIn('party', ['client', 'admin']);
+        Route::get('/requests/{financeRequest}/attachments/download-all', [RequestFileDownloadController::class, 'attachmentBundle']);
         Route::get('/requests/{financeRequest}/attachments/{attachment}/download', [RequestFileDownloadController::class, 'attachment']);
         Route::get('/requests/{financeRequest}/shareholders/{shareholder}/id-file/download', [RequestFileDownloadController::class, 'shareholderId']);
+        Route::get('/requests/{financeRequest}/required-documents/steps/{documentUploadStep}/download-all', [RequestFileDownloadController::class, 'requiredDocumentBundle']);
         Route::get('/requests/{financeRequest}/required-documents/{requestDocumentUpload}/download', [RequestFileDownloadController::class, 'requiredDocument']);
         Route::get('/requests/{financeRequest}/additional-documents/{additionalDocument}/download', [RequestFileDownloadController::class, 'additionalDocument']);
         Route::get('/requests/{financeRequest}/emails/{requestEmail}/attachments/{requestEmailAttachment}/download', [RequestFileDownloadController::class, 'emailAttachment']);

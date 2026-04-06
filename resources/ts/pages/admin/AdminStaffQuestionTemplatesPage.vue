@@ -619,7 +619,16 @@ function extractErrorMessage(error: unknown, fallback: string) {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(row, index) in templates" :key="row.id">
+                <tr
+                  v-for="(row, index) in templates"
+                  :key="row.id"
+                  class="is-clickable-row"
+                  role="button"
+                  tabindex="0"
+                  @click="editTemplate(row)"
+                  @keydown.enter.prevent="editTemplate(row)"
+                  @keydown.space.prevent="editTemplate(row)"
+                >
                   <td>{{ index + 1 }}</td>
                   <td>{{ row.code || '—' }}</td>
                   <td>
@@ -639,7 +648,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
                       {{ row.is_active ? t('adminStaffQuestionTemplatesPage.table.active') : t('adminStaffQuestionTemplatesPage.table.inactive') }}
                     </span>
                   </td>
-                  <td>
+                  <td @click.stop>
                     <div class="admin-table-actions">
                       <button type="button" class="admin-inline-link" @click="editTemplate(row)">
                         {{ t('adminStaffQuestionTemplatesPage.table.edit') }}

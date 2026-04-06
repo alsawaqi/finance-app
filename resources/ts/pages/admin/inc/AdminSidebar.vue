@@ -224,11 +224,7 @@ function handleNavClick() {
     </div>
 
     <div class="admin-sidebar__body">
-      <section class="admin-sidebar__intro">
-        <span class="admin-sidebar__intro-kicker">{{ t('adminTopbar.eyebrow') }}</span>
-        <h2>{{ workspaceTitle }}</h2>
-        <p>{{ workspaceSubtitle }}</p>
-      </section>
+     
 
       <div class="admin-sidebar__section">
         <span class="admin-sidebar__label">{{ t('adminSidebar.mainNavigation') }}</span>
@@ -238,7 +234,7 @@ function handleNavClick() {
             <RouterLink v-if="item.to" :to="item.to" class="admin-sidebar__link" :class="{ 'is-active': item.active }" @click="handleNavClick">
               <span class="admin-sidebar__link-icon"><i :class="item.icon"></i></span>
               <span class="admin-sidebar__link-text">{{ item.label }}</span>
-              <span v-if="item.badge" class="admin-sidebar__link-badge">{{ item.badge }}</span>
+          
             </RouterLink>
           </template>
         </nav>
@@ -252,31 +248,13 @@ function handleNavClick() {
             <RouterLink v-if="item.to" :to="item.to" class="admin-sidebar__link" :class="{ 'is-active': item.active }" @click="handleNavClick">
               <span class="admin-sidebar__link-icon"><i :class="item.icon"></i></span>
               <span class="admin-sidebar__link-text">{{ item.label }}</span>
-              <span v-if="item.badge" class="admin-sidebar__link-badge">{{ item.badge }}</span>
+              
             </RouterLink>
           </template>
         </nav>
       </div>
     </div>
 
-    <div class="admin-sidebar__footer">
-      <div class="admin-sidebar__user-card">
-        <div class="admin-sidebar__user-main">
-          <span class="admin-profile-chip__avatar">{{ displayName.charAt(0).toUpperCase() }}</span>
-          <div>
-            <strong>{{ displayName }}</strong>
-            <small>{{ displayEmail }}</small>
-          </div>
-        </div>
-
-        <div class="admin-sidebar__footer-actions">
-          <AppLocaleSelect id="admin-sidebar-locale" mode="admin" short-labels />
-          <button type="button" class="admin-logout-btn admin-logout-btn--sidebar" @click="handleLogout">
-            <i class="fas fa-sign-out-alt"></i>
-            <span>{{ t('adminTopbar.logout') }}</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    
   </aside>
 </template>

@@ -100,11 +100,19 @@ export type FinanceRequestDetail = AdminRequestListItem & {
     id: number
     version_no: number
     status: string
+    contract_source?: string | null
+    client_signature_skipped?: boolean
+    requires_commercial_registration?: boolean
     terms_json?: Record<string, unknown> | null
     contract_content?: string | null
     admin_signed_at?: string | null
     client_signed_at?: string | null
     contract_pdf_path?: string | null
+    admin_uploaded_contract_at?: string | null
+    client_commercial_uploaded_at?: string | null
+    admin_commercial_uploaded_at?: string | null
+    client_commercial_contract_path?: string | null
+    admin_commercial_contract_path?: string | null
   } | null
   emails?: RequestEmailLog[]
 }
@@ -154,6 +162,11 @@ export async function approveAdminRequest(id: number | string, payload: { approv
   return data
 }
 
+export async function finalizeAdminRequest(id: number | string, payload: { final_approval_notes?: string }) {
+  const { data } = await api.post(`/api/admin/requests/${id}/final-approve`, payload)
+  return data
+}
+
 export async function getAdminContract(id: number | string) {
   const { data } = await api.get(`/api/admin/requests/${id}/contract`)
   return data as {
@@ -172,12 +185,39 @@ export async function getAdminContract(id: number | string) {
 export async function saveAdminContract(
   id: number | string,
   payload: {
-    contract_template_slug: string
-    contract_body_html: string
-    signature_data_url: string
+    contract_template_slug?: string
+    contract_body_html?: string
+    signature_data_url?: string
+    uploaded_contract_file?: File | null
+    requires_commercial_registration?: boolean
   },
 ) {
-  const { data } = await api.post(`/api/admin/requests/${id}/contract`, payload)
+  const formData = new FormData()
+  if (payload.contract_template_slug) formData.append('contract_template_slug', payload.contract_template_slug)
+  if (payload.contract_body_html !== undefined) formData.append('contract_body_html', payload.contract_body_html)
+  if (payload.signature_data_url !== undefined) formData.append('signature_data_url', payload.signature_data_url)
+  if (typeof payload.requires_commercial_registration === 'boolean') {
+    formData.append('requires_commercial_registration', String(payload.requires_commercial_registration))
+  }
+  if (payload.uploaded_contract_file) formData.append('uploaded_contract_file', payload.uploaded_contract_file)
+
+  const { data } = await api.post(`/api/admin/requests/${id}/contract`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function uploadAdminCommercialContract(
+  id: number | string,
+  payload: { file: File },
+) {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/admin/requests/${id}/contract/commercial-registration/admin-upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
   return data
 }
 
@@ -185,8 +225,16 @@ export function adminContractDownloadUrl(id: number | string) {
   return `/api/admin/requests/${id}/contract/download`
 }
 
+export function adminContractCommercialDownloadUrl(id: number | string, party: 'client' | 'admin') {
+  return `/api/admin/requests/${id}/contract/commercial-registration/${party}/download`
+}
+
 export function adminRequestAttachmentDownloadUrl(id: number | string, attachmentId: number | string) {
   return `/api/admin/requests/${id}/attachments/${attachmentId}/download`
+}
+
+export function adminRequestAttachmentsBundleDownloadUrl(id: number | string) {
+  return `/api/admin/requests/${id}/attachments/download-all`
 }
 
 export function adminRequestShareholderIdDownloadUrl(id: number | string, shareholderId: number | string) {
@@ -195,6 +243,10 @@ export function adminRequestShareholderIdDownloadUrl(id: number | string, shareh
 
 export function adminRequiredDocumentDownloadUrl(id: number | string, uploadId: number | string) {
   return `/api/admin/requests/${id}/required-documents/${uploadId}/download`
+}
+
+export function adminRequiredDocumentStepBundleDownloadUrl(id: number | string, stepId: number | string) {
+  return `/api/admin/requests/${id}/required-documents/steps/${stepId}/download-all`
 }
 
 export function adminAdditionalDocumentDownloadUrl(id: number | string, additionalDocumentId: number | string) {
@@ -308,6 +360,26 @@ export async function rejectAdminRequest(
 ) {
   const { data } = await api.post(`/api/admin/requests/${id}/reject`, payload)
   return data
+}
+
+export async function addAdminRequestComment(
+  id: number | string,
+  payload: { comment_text: string; visibility?: 'internal' | 'admin_only' | 'client_visible' },
+) {
+  const { data } = await api.post(`/api/admin/requests/${id}/comments`, payload)
+  return data as {
+    message: string
+    comment: {
+      id: number
+      comment_text: string
+      visibility: string
+      created_at: string
+      user?: { id: number; name: string; email?: string | null } | null
+    }
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
 }
 
 

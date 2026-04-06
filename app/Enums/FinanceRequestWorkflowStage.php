@@ -18,6 +18,8 @@ enum FinanceRequestWorkflowStage: string
     case SUBMITTED_FOR_REVIEW = 'submitted_for_review';
     case ADMIN_CONTRACT_PREPARATION = 'admin_contract_preparation';
     case AWAITING_CLIENT_SIGNATURE = 'awaiting_client_signature';
+    case AWAITING_CLIENT_COMMERCIAL_REGISTRATION_UPLOAD = 'awaiting_client_commercial_registration_upload';
+    case AWAITING_ADMIN_COMMERCIAL_REGISTRATION_UPLOAD = 'awaiting_admin_commercial_registration_upload';
     case AWAITING_STAFF_ASSIGNMENT = 'awaiting_staff_assignment';
     case AWAITING_CLIENT_DOCUMENTS = 'awaiting_client_documents';
     case CLIENT_UPDATE_REQUESTED = 'client_update_requested';

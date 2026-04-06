@@ -7,6 +7,7 @@ defineProps<{
   allowedFileTypes: string[]
   maxFileSizeMb: number | null
   isRequired: boolean
+  isMultiple: boolean
   isActive: boolean
 }>()
 
@@ -29,6 +30,9 @@ const { t } = useI18n()
         </span>
         <span class="document-step-pill" :class="isActive ? 'is-active' : 'is-inactive'">
           {{ isActive ? t('adminSharedWidgets.states.active') : t('adminSharedWidgets.states.inactive') }}
+        </span>
+        <span class="document-step-pill is-info">
+          {{ isMultiple ? t('adminSharedWidgets.states.multipleFiles') : t('adminSharedWidgets.states.singleFile') }}
         </span>
       </div>
 

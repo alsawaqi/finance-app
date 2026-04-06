@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/AppPagination.vue'
 import {
@@ -17,6 +17,11 @@ const errorMessage = ref('')
 const requests = ref<AssignmentReadyRequest[]>([])
 const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const { t, locale } = useI18n()
+const router = useRouter()
+
+function goToAssignment(id: number) {
+  router.push({ name: 'admin-assignment-details', params: { id: String(id) } })
+}
 
 const signedCount = computed(() => requests.value.filter((item) => Boolean(item.current_contract?.client_signed_at)).length)
 
@@ -55,11 +60,11 @@ onMounted(load)
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('adminAssignments.hero.eyebrow') }}</p>
-        <h1>{{ t('adminAssignments.hero.title') }}</h1>
+        <h4>{{ t('adminAssignments.hero.title') }}</h4>
         <p class="subtext">{{ t('adminAssignments.hero.subtitle') }}</p>
       </div>
       <div class="actions-row">
-        <button class="ghost-btn" type="button" @click="load">{{ t('adminAssignments.hero.refreshQueue') }}</button>
+        <button class="ghost-btn" type="button" @click="() => load()">{{ t('adminAssignments.hero.refreshQueue') }}</button>
       </div>
     </div>
 
@@ -109,7 +114,16 @@ onMounted(load)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in requests" :key="item.id">
+            <tr
+              v-for="item in requests"
+              :key="item.id"
+              class="is-clickable-row"
+              role="button"
+              tabindex="0"
+              @click="goToAssignment(item.id)"
+              @keydown.enter.prevent="goToAssignment(item.id)"
+              @keydown.space.prevent="goToAssignment(item.id)"
+            >
               <td>
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('adminAssignments.states.approvalPending') }}</div>
@@ -128,7 +142,7 @@ onMounted(load)
                 <span class="status-badge">{{ stageMeta(item.workflow_stage).label }}</span>
                 <div class="muted-small">{{ staffPreview(item) }}</div>
               </td>
-              <td>
+              <td @click.stop>
                 <RouterLink :to="{ name: 'admin-assignment-details', params: { id: item.id } }" class="primary-btn small-btn">
                   {{ t('adminAssignments.actions.manage') }}
                 </RouterLink>

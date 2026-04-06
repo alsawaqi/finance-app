@@ -124,6 +124,7 @@ class RequestQuestionController extends Controller
             'code' => $question->code,
             'question_text' => $question->question_text,
             'question_type' => $question->question_type,
+            'finance_type' => $question->finance_type ?? 'all',
             'options_json' => $options,
             'options_count' => count($options),
             'placeholder' => $question->placeholder,

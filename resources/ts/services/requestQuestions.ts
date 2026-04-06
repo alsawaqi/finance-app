@@ -13,11 +13,14 @@ export type QuestionType =
   | 'phone'
   | 'currency'
 
+export type QuestionFinanceType = 'all' | 'individual' | 'company'
+
 export interface RequestQuestionItem {
   id: number
   code: string | null
   question_text: string
   question_type: QuestionType
+  finance_type: QuestionFinanceType
   options_json: string[]
   options_count: number
   placeholder: string | null
@@ -34,6 +37,7 @@ export interface RequestQuestionPayload {
   code?: string | null
   question_text: string
   question_type: QuestionType
+  finance_type: QuestionFinanceType
   options_json?: string[] | null
   placeholder?: string | null
   help_text?: string | null

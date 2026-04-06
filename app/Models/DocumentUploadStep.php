@@ -15,6 +15,7 @@ class DocumentUploadStep extends Model
         'name',
         'description',
         'is_required',
+        'is_multiple',
         'allowed_file_types_json',
         'max_file_size_mb',
         'sort_order',
@@ -25,6 +26,7 @@ class DocumentUploadStep extends Model
     {
         return [
             'is_required'             => 'boolean',
+            'is_multiple'             => 'boolean',
             'allowed_file_types_json' => 'array',
             'is_active'               => 'boolean',
         ];

@@ -1,6 +1,10 @@
+<script setup lang="ts">
+import AppToastStack from '@/components/AppToastStack.vue'
+import AppTopProgressBar from '@/components/AppTopProgressBar.vue'
+</script>
+
 <template>
-    <RouterView />
-  </template>
-  
-  <script setup lang="ts">
-  </script>
+  <AppTopProgressBar />
+  <RouterView />
+  <AppToastStack />
+</template>

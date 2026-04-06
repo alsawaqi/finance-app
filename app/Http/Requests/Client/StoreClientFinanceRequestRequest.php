@@ -54,7 +54,7 @@ class StoreClientFinanceRequestRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            $financeType = $this->input('details.finance_type');
+            $financeType = strtolower((string) $this->input('details.finance_type', 'individual'));
 
             if ($financeType === 'company') {
                 if (blank($this->input('details.company_name'))) {
@@ -102,14 +102,34 @@ class StoreClientFinanceRequestRequest extends FormRequest
                 }
             }
 
-            $questions = RequestQuestion::query()
+            $questionsQuery = RequestQuestion::query()
                 ->where('is_active', true)
-                ->orderBy('sort_order')
+                ->orderBy('sort_order');
+
+            if (in_array($financeType, ['individual', 'company'], true)) {
+                $questionsQuery->where(function ($query) use ($financeType): void {
+                    $query
+                        ->where('finance_type', 'all')
+                        ->orWhere('finance_type', $financeType);
+                });
+            }
+
+            $questions = $questionsQuery
                 ->get()
-                ->keyBy('id');
+                ->keyBy(fn (RequestQuestion $question) => (int) $question->id);
 
             $answers = collect($this->input('answers', []))
                 ->keyBy(fn ($answer) => (int) ($answer['question_id'] ?? 0));
+
+            $invalidQuestionIds = $answers
+                ->keys()
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn (int $id) => $id > 0 && ! $questions->has($id))
+                ->values();
+
+            if ($invalidQuestionIds->isNotEmpty()) {
+                $validator->errors()->add('answers', 'One or more answers are not valid for the selected applicant type.');
+            }
 
             foreach ($questions as $questionId => $question) {
                 $submitted = $answers->get((int) $questionId);

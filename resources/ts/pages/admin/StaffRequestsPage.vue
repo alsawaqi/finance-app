@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/AppPagination.vue'
 import { getStaffRequests, type StaffWorkspaceRequestSummary } from '@/services/staffWorkspace'
@@ -17,6 +17,11 @@ const workflowStage = ref('')
 const requests = ref<StaffWorkspaceRequestSummary[]>([])
 const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 12 })
 const { t, locale } = useI18n()
+const router = useRouter()
+
+function goToRequest(id: number) {
+  router.push({ name: 'staff-request-details', params: { id: String(id) } })
+}
 
 const availableStages = computed(() => [
   'awaiting_client_documents',
@@ -64,11 +69,11 @@ onMounted(load)
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('staffRequests.hero.eyebrow') }}</p>
-        <h1>{{ t('staffRequests.hero.title') }}</h1>
+        <h4>{{ t('staffRequests.hero.title') }}</h4>
         <p class="subtext">{{ t('staffRequests.hero.subtitle') }}</p>
       </div>
       <div class="actions-row">
-        <button class="ghost-btn" type="button" @click="load">{{ t('staffRequests.actions.refresh') }}</button>
+        <button class="ghost-btn" type="button" @click="() => load()">{{ t('staffRequests.actions.refresh') }}</button>
       </div>
     </div>
 
@@ -124,7 +129,16 @@ onMounted(load)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in requests" :key="item.id">
+            <tr
+              v-for="item in requests"
+              :key="item.id"
+              class="is-clickable-row"
+              role="button"
+              tabindex="0"
+              @click="goToRequest(item.id)"
+              @keydown.enter.prevent="goToRequest(item.id)"
+              @keydown.space.prevent="goToRequest(item.id)"
+            >
               <td>
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('staffRequests.states.awaitingApprovalRef') }}</div>
@@ -142,7 +156,7 @@ onMounted(load)
               <td>{{ item.comments_count || 0 }}</td>
               <td>{{ formatDateTime(item.latest_activity_at, locale, t('staffRequests.states.emptyValue')) }}</td>
               <td><span class="status-badge">{{ stageMeta(item.workflow_stage).label }}</span></td>
-              <td>
+              <td @click.stop>
                 <RouterLink :to="{ name: 'staff-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('staffRequests.actions.view') }}</RouterLink>
               </td>
             </tr>

@@ -3,15 +3,19 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
+  addAdminRequestComment,
   adminAdditionalDocumentDownloadUrl,
   adminContractDownloadUrl,
+  adminRequestAttachmentsBundleDownloadUrl,
   adminRequestEmailAttachmentDownloadUrl,
   adminRequiredDocumentDownloadUrl,
+  adminRequiredDocumentStepBundleDownloadUrl,
   adminRequestAttachmentDownloadUrl,
   adminRequestShareholderIdDownloadUrl,
   approveAdminRequest,
   cancelAdminUpdateBatch,
   createAdminUpdateBatch,
+  finalizeAdminRequest,
   getAdminRequestAgentAssignmentOptions,
   getAdminRequestDetails,
   rejectAdminRequest,
@@ -52,12 +56,17 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const approving = ref(false)
 const approvalNotes = ref('')
+const finalizingApproval = ref(false)
+const finalApprovalNotes = ref('')
 const rejectingRequest = ref(false)
 const rejectReason = ref('')
 const reviewingUnderstudy = ref(false)
 const understudyReviewNote = ref('')
 const creatingBatch = ref(false)
 const cancellingBatch = ref(false)
+const savingComment = ref(false)
+const commentText = ref('')
+const commentVisibility = ref<'internal' | 'admin_only' | 'client_visible'>('internal')
 const reviewingUpdateItems = ref<Record<number, boolean>>({})
 const batchReasonEn = ref('')
 const batchReasonAr = ref('')
@@ -157,6 +166,10 @@ const timelineRows = computed(() => buildTimelineRows(requestItem.value?.timelin
 
 function timelineDateLabel(value: unknown) {
   return formatTimelineDate(value, locale.value)
+}
+
+function inlineText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
 }
 
 const quickViewTitle = computed(() => {
@@ -276,6 +289,25 @@ const canSaveAgentAssignments = computed(() => {
 const canRejectRequest = computed(() => {
   const status = String(requestItem.value?.status || '').toLowerCase()
   return Boolean(requestItem.value) && !['rejected', 'completed', 'cancelled'].includes(status)
+})
+
+const canFinalizeApproval = computed(() => {
+  if (!requestItem.value) return false
+
+  const status = String(requestItem.value?.status || '').toLowerCase()
+  const stage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+
+  if (['rejected', 'completed', 'cancelled'].includes(status)) return false
+
+  return ['processing', 'ready_for_processing'].includes(stage)
+})
+
+const canOpenStaffAssignment = computed(() => {
+  const workflowStage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+  const contractStatus = String(requestItem.value?.current_contract?.status || '').toLowerCase()
+  const hasSignedContractState = ['fully_signed', 'client_signed'].includes(contractStatus)
+
+  return Boolean(requestItem.value?.current_contract) && hasSignedContractState && workflowStage === 'awaiting_staff_assignment'
 })
 
 const draftItemTypeOptions = computed(() => [
@@ -448,6 +480,7 @@ function readableCommentVisibility(value: string | null | undefined) {
   const key = String(value || '').trim().toLowerCase()
   if (key === 'internal') return uiText('Internal', '\u062f\u0627\u062e\u0644\u064a')
   if (key === 'admin_only') return uiText('Admin only', '\u0644\u0644\u0625\u062f\u0627\u0631\u0629 \u0641\u0642\u0637')
+  if (key === 'client_visible') return uiText('Client visible', '\u0645\u0631\u0626\u064a \u0644\u0644\u0639\u0645\u064a\u0644')
   return key || t('adminRequestDetails.states.emptyValue')
 }
 
@@ -627,6 +660,10 @@ function attachmentDownloadUrl(attachmentId: number | string) {
   return adminRequestAttachmentDownloadUrl(requestId.value, attachmentId)
 }
 
+function attachmentBundleDownloadUrl() {
+  return adminRequestAttachmentsBundleDownloadUrl(requestId.value)
+}
+
 function shareholderIdDownloadUrl(shareholderId: number | string) {
   return adminRequestShareholderIdDownloadUrl(requestId.value, shareholderId)
 }
@@ -658,6 +695,30 @@ async function submitUnderstudyReview(action: 'approve' | 'reject') {
   }
 }
 
+async function submitComment() {
+  if (!requestItem.value || !commentText.value.trim() || savingComment.value) return
+
+  savingComment.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await addAdminRequestComment(requestItem.value.id, {
+      comment_text: commentText.value.trim(),
+      visibility: commentVisibility.value,
+    })
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    commentText.value = ''
+    successMessage.value = data.message || uiText('Comment added successfully.', 'تمت إضافة التعليق بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to add the comment.', 'تعذر إضافة التعليق.')
+  } finally {
+    savingComment.value = false
+  }
+}
+
 async function rejectRequest() {
   if (!requestItem.value || !canRejectRequest.value || rejectingRequest.value) return
   if (!window.confirm(t('adminRequestDetails.confirm.rejectRequest'))) return
@@ -681,8 +742,57 @@ async function rejectRequest() {
   }
 }
 
+async function finalizeRequest() {
+  if (!requestItem.value || !canFinalizeApproval.value || finalizingApproval.value) return
+  if (!window.confirm(t('adminRequestDetails.confirm.finalApproveRequest'))) return
+
+  finalizingApproval.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await finalizeAdminRequest(requestItem.value.id, {
+      final_approval_notes: finalApprovalNotes.value || undefined,
+    })
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    successMessage.value = data.message || t('adminRequestDetails.messages.requestFinalApproved')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || t('adminRequestDetails.errors.finalApproveFailed')
+  } finally {
+    finalizingApproval.value = false
+  }
+}
+
 function requiredDocumentDownloadUrl(uploadId: number | string) {
   return adminRequiredDocumentDownloadUrl(requestId.value, uploadId)
+}
+
+function requiredDocumentStepBundleDownloadUrl(stepId: number | string) {
+  return adminRequiredDocumentStepBundleDownloadUrl(requestId.value, stepId)
+}
+
+function normalizedRequiredUploads(item: any) {
+  const uploads = Array.isArray(item?.uploads) ? [...item.uploads] : []
+  if (!uploads.length && item?.upload?.id) {
+    uploads.push(item.upload)
+  }
+
+  return uploads
+}
+
+function latestRequiredUpload(item: any) {
+  return normalizedRequiredUploads(item)[0] ?? null
+}
+
+function requiredUploadStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'approved') return inlineText('Approved', 'معتمد')
+  if (key === 'rejected') return inlineText('Change requested', 'طُلب تعديل')
+  if (key === 'uploaded') return inlineText('Uploaded', 'مرفوع')
+  if (key === 'pending') return inlineText('Pending', 'قيد الانتظار')
+  return key || t('adminRequestDetails.states.emptyValue')
 }
 
 function additionalDocumentDownloadUrl(additionalDocumentId: number | string) {
@@ -815,7 +925,7 @@ onMounted(() => {
       </button>
       <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.hero.downloadContractPdf') }}</a>
       <RouterLink v-if="requestItem?.approval_reference_number || requestItem?.current_contract" :to="{ name: 'admin-request-contract', params: { id: requestId } }" class="primary-btn">{{ t('adminRequestDetails.hero.goToContract') }}</RouterLink>
-      <RouterLink v-if="requestItem?.current_contract?.client_signed_at" :to="{ name: 'admin-assignment-details', params: { id: requestId }, query: { return_to: String(route.fullPath || `/admin/requests/${requestId}`) } }" class="ghost-btn">{{ t('adminRequestDetails.hero.assignStaff') }}</RouterLink>
+      <RouterLink v-if="canOpenStaffAssignment" :to="{ name: 'admin-assignment-details', params: { id: requestId }, query: { return_to: String(route.fullPath || `/admin/requests/${requestId}`) } }" class="ghost-btn">{{ t('adminRequestDetails.hero.assignStaff') }}</RouterLink>
     </template>
 
     <template #loading>{{ t('adminRequestDetails.states.loading') }}</template>
@@ -845,6 +955,17 @@ onMounted(() => {
             <div class="approve-actions">
               <button class="ghost-btn" type="button" :disabled="rejectingRequest" @click="rejectRequest">
                 {{ rejectingRequest ? t('adminRequestDetails.rejectRequest.rejecting') : t('adminRequestDetails.rejectRequest.rejectNow') }}
+              </button>
+            </div>
+          </article>
+
+          <article v-if="canFinalizeApproval" class="panel-card slim-card action-card">
+            <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.finalApproveRequest') }}</h2></div>
+            <p class="subtext">{{ t('adminRequestDetails.sections.finalApproveSubtitle') }}</p>
+            <textarea v-model="finalApprovalNotes" rows="4" class="admin-textarea" :placeholder="t('adminRequestDetails.sections.finalApprovePlaceholder')"></textarea>
+            <div class="approve-actions">
+              <button class="primary-btn" type="button" :disabled="finalizingApproval" @click="finalizeRequest">
+                {{ finalizingApproval ? t('adminRequestDetails.actions.finalizingApproval') : t('adminRequestDetails.actions.finalApproveNow') }}
               </button>
             </div>
           </article>
@@ -931,6 +1052,54 @@ onMounted(() => {
             <strong>{{ t('adminRequestDetails.quick.timeline') }}</strong>
             <span>{{ t('adminRequestDetails.quick.eventsCount', { count: activityCounts.timeline }) }}</span>
           </button>
+        </div>
+      </article>
+
+      <article class="panel-card slim-card">
+        <div class="panel-head">
+          <div>
+            <h2>{{ uiText('Follow-up comments', 'تعليقات المتابعة') }}</h2>
+            <p class="subtext">{{ uiText('Send comments internally, to admins only, or directly to the client.', 'أرسل التعليقات داخلياً أو للإدارة فقط أو بشكل مرئي للعميل.') }}</p>
+          </div>
+        </div>
+
+        <div class="admin-inline-block-grid">
+          <div class="field-block field-block--grow">
+            <span>{{ uiText('Visibility', 'الظهور') }}</span>
+            <select v-model="commentVisibility" class="admin-select">
+              <option value="internal">{{ uiText('Internal', 'داخلي') }}</option>
+              <option value="admin_only">{{ uiText('Admin only', 'للإدارة فقط') }}</option>
+              <option value="client_visible">{{ uiText('Client visible', 'مرئي للعميل') }}</option>
+            </select>
+          </div>
+        </div>
+
+        <textarea
+          v-model="commentText"
+          rows="4"
+          class="admin-textarea"
+          :placeholder="uiText('Write a clear follow-up comment for this request.', 'اكتب تعليق متابعة واضح لهذا الطلب.')"
+        />
+
+        <div class="approve-actions">
+          <button class="primary-btn" type="button" :disabled="savingComment || !commentText.trim()" @click="submitComment">
+            {{ savingComment ? t('adminRequestDetails.actions.saving') : uiText('Save comment', 'حفظ التعليق') }}
+          </button>
+          <button type="button" class="ghost-btn" @click="quickView = 'comments'">
+            {{ uiText('Open all comments', 'فتح جميع التعليقات') }}
+          </button>
+        </div>
+
+        <div v-if="requestItem.comments?.length" class="timeline-list compact-list" style="margin-top: 1rem;">
+          <div
+            v-for="comment in (requestItem.comments || []).slice(0, 3)"
+            :key="`comment-inline-${comment.id}`"
+            class="timeline-item"
+          >
+            <strong>{{ comment.user?.name || t('adminRequestDetails.states.system') }}</strong>
+            <p>{{ comment.comment_text }}</p>
+            <span>{{ formatDateTime(comment.created_at, locale, t('adminRequestDetails.states.emptyValue')) }} · {{ readableCommentVisibility(comment.visibility) }}</span>
+          </div>
         </div>
       </article>
 
@@ -1299,17 +1468,40 @@ onMounted(() => {
                 {{ item.is_change_requested ? t('adminRequestDetails.requiredDocuments.status.changeRequested') : item.is_uploaded ? t('adminRequestDetails.requiredDocuments.status.uploaded') : t('adminRequestDetails.requiredDocuments.status.pending') }}
               </span>
             </div>
-            <p>{{ item.is_uploaded || item.is_change_requested ? t('adminRequestDetails.requiredDocuments.latestFileLabel', { file: item.upload?.file_name || t('adminRequestDetails.requiredDocuments.uploadedFileFallback') }) : t('adminRequestDetails.requiredDocuments.waitingForClient') }}</p>
+            <p>{{ item.is_uploaded || item.is_change_requested ? t('adminRequestDetails.requiredDocuments.latestFileLabel', { file: latestRequiredUpload(item)?.file_name || t('adminRequestDetails.requiredDocuments.uploadedFileFallback') }) : t('adminRequestDetails.requiredDocuments.waitingForClient') }}</p>
             <p v-if="item.rejection_reason" class="form-help form-help--error">{{ t('adminRequestDetails.requiredDocuments.reasonLabel', { reason: item.rejection_reason }) }}</p>
-            <div v-if="item.upload?.id" class="approve-actions">
-              <button
-                type="button"
+
+            <div v-if="normalizedRequiredUploads(item).length" class="file-list request-inline-stack">
+              <div v-for="upload in normalizedRequiredUploads(item)" :key="`required-upload-${item.document_upload_step_id}-${upload.id}`" class="file-item">
+                <div>
+                  <strong>{{ upload.file_name || t('adminRequestDetails.requiredDocuments.uploadedFileFallback') }}</strong>
+                  <span>
+                    {{ inlineText('Status', 'الحالة') }}: {{ requiredUploadStatusLabel(upload.status) }}
+                    <template v-if="upload.uploaded_at"> · {{ formatDateTime(upload.uploaded_at, locale, t('adminRequestDetails.states.emptyValue')) }}</template>
+                  </span>
+                </div>
+                <div class="approve-actions">
+                  <button
+                    type="button"
+                    class="ghost-btn"
+                    @click="openFilePreview(upload.file_name, requiredDocumentDownloadUrl(upload.id), upload.mime_type || upload.file_extension)"
+                  >
+                    {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+                  </button>
+                  <a :href="requiredDocumentDownloadUrl(upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="Number(item.uploads_count || normalizedRequiredUploads(item).length) > 1" class="approve-actions">
+              <a
+                :href="requiredDocumentStepBundleDownloadUrl(item.document_upload_step_id)"
+                target="_blank"
+                rel="noopener"
                 class="ghost-btn"
-                @click="openFilePreview(item.upload?.file_name, requiredDocumentDownloadUrl(item.upload.id))"
               >
-                {{ t('adminRequestDetails.agentAssignments.previewFile') }}
-              </button>
-              <a :href="requiredDocumentDownloadUrl(item.upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.requiredDocuments.downloadLatest') }}</a>
+                {{ inlineText('Download all files', 'تنزيل جميع الملفات') }}
+              </a>
             </div>
           </article>
           <p v-else class="empty-state">{{ t('adminRequestDetails.requiredDocuments.empty') }}</p>
@@ -1343,22 +1535,29 @@ onMounted(() => {
         />
 
         <div v-else-if="quickView === 'attachments'" class="file-list">
-          <div v-if="requestItem.attachments?.length" v-for="file in requestItem.attachments" :key="file.id" class="file-item">
-            <div>
-              <strong>{{ file.file_name }}</strong>
-              <span>{{ file.category }}</span>
+          <template v-if="requestItem.attachments?.length">
+            <div v-if="requestItem.attachments.length > 1" class="approve-actions" style="margin-bottom: 0.7rem;">
+              <a :href="attachmentBundleDownloadUrl()" target="_blank" rel="noopener" class="ghost-btn">
+                {{ inlineText('Download all files', 'تنزيل جميع الملفات') }}
+              </a>
             </div>
-            <div class="approve-actions">
-              <button
-                type="button"
-                class="ghost-btn"
-                @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))"
-              >
-                {{ t('adminRequestDetails.agentAssignments.previewFile') }}
-              </button>
-              <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+            <div v-for="file in requestItem.attachments" :key="file.id" class="file-item">
+              <div>
+                <strong>{{ file.file_name }}</strong>
+                <span>{{ file.category }}</span>
+              </div>
+              <div class="approve-actions">
+                <button
+                  type="button"
+                  class="ghost-btn"
+                  @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))"
+                >
+                  {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+                </button>
+                <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+              </div>
             </div>
-          </div>
+          </template>
           <p v-else class="empty-state">{{ t('adminRequestDetails.states.noInitialAttachments') }}</p>
         </div>
 

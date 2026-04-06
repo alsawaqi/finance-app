@@ -860,13 +860,15 @@ const ar = {
     },
     sections: {
       applicantDetails: 'بيانات مقدم الطلب',
-      applicantDetailsText: 'ابدأ بنوع مقدم الطلب والدولة والمبلغ وبيانات التواصل.',
+      applicantDetailsText: 'أكمل الحقول أدناه. المرفقات في القسم التالي لتنسيق أوضح.',
+      documentsAttachments: 'المستندات والمرفقات',
+      documentsAttachmentsText: 'إثبات العنوان الوطني، الملفات الداعمة الاختيارية، ونسخة السجل التجاري (لطلبات الشركات).',
       supportingFiles: 'الملفات الداعمة',
       supportingFilesText: 'افصل الملفات الاختيارية عن ملفات الشركة المطلوبة في قسم واضح.',
       shareholders: 'المساهمون',
       shareholdersText: 'لكل مساهم بطاقة مستقلة للحفاظ على وضوح النموذج.',
       shareholderCardTitle: 'المساهم {index}',
-      shareholderCardText: 'أضف بيانات تواصل المساهم ورقم الهوية وملف الهوية.',
+      shareholderCardText: 'أدخل البيانات أولاً ثم ارفع مستند الهوية في الأسفل.',
     },
     fields: {
       requestType: 'نوع الطلب',
@@ -1187,6 +1189,7 @@ const ar = {
       visibility: 'الظهور',
       internal: 'داخلي',
       adminOnly: 'للإدارة فقط',
+      clientVisible: 'مرئي للعميل',
       bank: 'البنك',
       allBanks: 'كل البنوك',
       agents: 'الوكلاء',
@@ -1331,6 +1334,8 @@ const ar = {
       requiredDesc: 'يجب على العميل رفع هذا المستند للمتابعة.',
       activeTitle: 'نشط',
       activeDesc: 'عرض هذه الخطوة عند وصول الطلب لمرحلة المستندات.',
+      multipleTitle: 'السماح بعدة ملفات',
+      multipleDesc: 'إبقاء هذه الخطوة مفتوحة ليتمكن العميل من رفع أكثر من ملف.',
     },
     actions: {
       clear: 'مسح',
@@ -1371,6 +1376,8 @@ const ar = {
       default: 'افتراضي',
       required: 'إجباري',
       optional: 'اختياري',
+      single: 'ملف واحد',
+      multiple: 'عدة ملفات',
       active: 'نشط',
       inactive: 'غير نشط',
       savingOrder: 'جارٍ حفظ الترتيب الجديد...',
@@ -1562,6 +1569,8 @@ const ar = {
       inactive: 'غير نشط',
       required: 'إجباري',
       optional: 'اختياري',
+      singleFile: 'ملف واحد',
+      multipleFiles: 'عدة ملفات',
     },
     taskPanel: {
       eyebrow: 'مركز الإجراءات',
@@ -1618,6 +1627,7 @@ const ar = {
     errors: {
       loadFailed: 'تعذر تحميل تفاصيل الطلب.',
       approveFailed: 'تعذرت الموافقة على الطلب.',
+      finalApproveFailed: 'تعذر الاعتماد النهائي للطلب.',
       allowedAgentsSaveFailed: 'تعذر حفظ الوكلاء البنكيين المسموحين لهذا الطلب.',
       understudyReviewFailed: 'تعذر مراجعة حزمة الدراسة.',
       rejectFailed: 'تعذر رفض الطلب.',
@@ -1657,6 +1667,9 @@ const ar = {
       approveRequest: 'الموافقة على الطلب',
       approveSubtitle: 'الموافقة تنشئ مرجع الموافقة وتفتح مرحلة صياغة العقد.',
       approvePlaceholder: 'أضف ملاحظة مراجعة قصيرة في تسلسل الموافقة (اختياري)',
+      finalApproveRequest: 'الاعتماد النهائي',
+      finalApproveSubtitle: 'اعتمد الطلب بشكل نهائي في المرحلة الأخيرة وحوله إلى مكتمل مع إشعار العميل.',
+      finalApprovePlaceholder: 'ملاحظة اعتماد نهائية (اختياري)',
     },
     summary: {
       status: 'الحالة',
@@ -1698,6 +1711,8 @@ const ar = {
     actions: {
       approving: 'جارٍ الموافقة...',
       approveAndContinue: 'الموافقة والمتابعة',
+      finalizingApproval: 'جارٍ الاعتماد النهائي...',
+      finalApproveNow: 'اعتماد الطلب نهائيًا',
       saving: 'جارٍ الحفظ...',
       reject: 'رفض',
       approve: 'اعتماد',
@@ -1735,12 +1750,14 @@ const ar = {
     messages: {
       allowedAgentsSaved: 'تم حفظ الوكلاء البنكيين المسموحين بنجاح.',
       requestRejected: 'تم رفض الطلب بنجاح.',
+      requestFinalApproved: 'تم الاعتماد النهائي للطلب بنجاح.',
       updateBatchCreated: 'تم إنشاء دفعة تحديث العميل بنجاح.',
       updateBatchCancelled: 'تم إلغاء دفعة تحديث العميل بنجاح.',
       updateItemReviewed: 'تمت مراجعة عنصر التحديث بنجاح.',
     },
     confirm: {
       rejectRequest: 'هل تريد رفض هذا الطلب الآن؟ سيؤدي هذا الإجراء إلى تحويل حالة الطلب إلى مرفوض.',
+      finalApproveRequest: 'هل تريد الاعتماد النهائي لهذا الطلب الآن؟ سيتم تحويله إلى مكتمل وإشعار العميل.',
       cancelUpdateBatch: 'هل تريد إلغاء دفعة تحديث العميل الحالية؟ سيؤدي ذلك إلى إغلاق طلب التحديث النشط وإزالة العناصر غير المحسومة.',
     },
     requiredDocuments: {
@@ -2516,6 +2533,17 @@ const ar = {
     },
   },
   adminRequestQuestionsPage: {
+    financeTypeField: {
+      label: '\u0646\u0648\u0639 \u0627\u0644\u062a\u0645\u0648\u064a\u0644',
+      help: '\u062d\u062f\u062f \u0645\u0627 \u0625\u0630\u0627 \u0643\u0627\u0646 \u0647\u0630\u0627 \u0627\u0644\u0633\u0624\u0627\u0644 \u064a\u062e\u0635 \u0643\u0644 \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0623\u0648 \u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0623\u0641\u0631\u0627\u062f \u0641\u0642\u0637 \u0623\u0648 \u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0627\u062a \u0641\u0642\u0637.',
+      column: '\u0646\u0648\u0639 \u0627\u0644\u062a\u0645\u0648\u064a\u0644',
+      preview: '\u0646\u0648\u0639 \u0627\u0644\u062a\u0645\u0648\u064a\u0644',
+    },
+    financeTypes: {
+      all: '\u0643\u0644 \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0637\u0644\u0628\u0627\u062a',
+      individual: '\u0623\u0641\u0631\u0627\u062f \u0641\u0642\u0637',
+      company: '\u0634\u0631\u0643\u0627\u062a \u0641\u0642\u0637',
+    },
     hero: {
       eyebrow: 'منشئ أسئلة الطلب',
       title: 'حدد أسئلة الطلب التي يجيب عليها العميل قبل الإرسال.',

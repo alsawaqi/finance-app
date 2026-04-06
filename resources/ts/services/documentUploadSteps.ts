@@ -7,6 +7,7 @@ export interface DocumentUploadStepItem {
   name: string
   description: string | null
   is_required: boolean
+  is_multiple: boolean
   allowed_file_types_json: string[]
   allowed_file_types_count: number
   max_file_size_mb: number | null
@@ -22,6 +23,7 @@ export interface DocumentUploadStepPayload {
   name: string
   description?: string | null
   is_required?: boolean
+  is_multiple?: boolean
   allowed_file_types_json?: string[] | null
   max_file_size_mb?: number | null
   sort_order?: number

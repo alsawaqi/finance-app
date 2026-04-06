@@ -98,7 +98,7 @@ onMounted(load)
     <div class="panel-card">
       <div class="panel-head">
         <h2>{{ t('clientRequests.table.title') }}</h2>
-        <button class="ghost-btn" type="button" @click="load">{{ t('clientRequests.table.refresh') }}</button>
+        <button class="ghost-btn" type="button" @click="() => load()">{{ t('clientRequests.table.refresh') }}</button>
       </div>
       <p v-if="loading" class="empty-state">{{ t('clientRequests.states.loading') }}</p>
       <p v-else-if="errorMessage" class="error-state">{{ errorMessage }}</p>

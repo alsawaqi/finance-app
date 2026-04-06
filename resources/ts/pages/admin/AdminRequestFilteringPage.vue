@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/AppPagination.vue'
 import {
@@ -35,6 +35,7 @@ const selectedStaffId = ref<number | ''>('')
 const selectedBankId = ref<number | ''>('')
 const selectedAgentId = ref<number | ''>('')
 const { t, locale } = useI18n()
+const router = useRouter()
 
 function uiText(en: string, ar: string) {
   return locale.value === 'ar' ? ar : en
@@ -119,6 +120,31 @@ function applyFilters() {
   load(1)
 }
 
+function applyBreakdownBank(bank: FilterBreakdownBank) {
+  selectedStaffId.value = ''
+  selectedBankId.value = bank.id
+  selectedAgentId.value = ''
+  load(1)
+}
+
+function applyBreakdownAgent(agent: FilterBreakdownAgent) {
+  selectedStaffId.value = ''
+  let bankId: number | '' = ''
+  if (agent.bank_id != null) {
+    bankId = agent.bank_id
+  } else if (agent.bank_name) {
+    const match = bankOptions.value.find((b) => b.name === agent.bank_name)
+    if (match) bankId = match.id
+  }
+  selectedBankId.value = bankId
+  selectedAgentId.value = bankId !== '' ? agent.id : ''
+  load(1)
+}
+
+function goToRequestDetail(id: number) {
+  router.push({ name: 'admin-request-details', params: { id: String(id) } })
+}
+
 function resetFilters() {
   selectedStage.value = ''
   selectedStaffId.value = ''
@@ -163,7 +189,7 @@ onMounted(load)
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('adminRequestFiltering.hero.eyebrow') }}</p>
-        <h1>{{ t('adminRequestFiltering.hero.title') }}</h1>
+        <h4>{{ t('adminRequestFiltering.hero.title') }}</h4>
         <p class="subtext">
           {{ t('adminRequestFiltering.hero.subtitle') }}
         </p>
@@ -258,7 +284,16 @@ onMounted(load)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="bank in bankBreakdown.slice(0, 8)" :key="bank.id">
+              <tr
+                v-for="bank in bankBreakdown.slice(0, 8)"
+                :key="bank.id"
+                class="is-clickable-row"
+                role="button"
+                tabindex="0"
+                @click="applyBreakdownBank(bank)"
+                @keydown.enter.prevent="applyBreakdownBank(bank)"
+                @keydown.space.prevent="applyBreakdownBank(bank)"
+              >
                 <td>
                   <strong>{{ bank.short_name || bank.name }}</strong>
                   <div class="muted-small">{{ bank.name }}</div>
@@ -290,7 +325,16 @@ onMounted(load)
               </tr>
             </thead>
             <tbody>
-              <tr v-for="agent in agentBreakdown.slice(0, 8)" :key="agent.id">
+              <tr
+                v-for="agent in agentBreakdown.slice(0, 8)"
+                :key="agent.id"
+                class="is-clickable-row"
+                role="button"
+                tabindex="0"
+                @click="applyBreakdownAgent(agent)"
+                @keydown.enter.prevent="applyBreakdownAgent(agent)"
+                @keydown.space.prevent="applyBreakdownAgent(agent)"
+              >
                 <td>
                   <strong>{{ agent.name }}</strong>
                   <div class="muted-small">{{ agent.email || t('adminRequestFiltering.states.emptyValue') }}</div>
@@ -331,7 +375,16 @@ onMounted(load)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in requests" :key="item.id">
+            <tr
+              v-for="item in requests"
+              :key="item.id"
+              class="is-clickable-row"
+              role="button"
+              tabindex="0"
+              @click="goToRequestDetail(item.id)"
+              @keydown.enter.prevent="goToRequestDetail(item.id)"
+              @keydown.space.prevent="goToRequestDetail(item.id)"
+            >
               <td>
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('adminRequestFiltering.states.awaitingApprovalRef') }}</div>
@@ -358,7 +411,7 @@ onMounted(load)
                 <span class="status-badge">{{ formatRequestStatus(item.status, locale, t('adminRequestFiltering.states.emptyValue')) }}</span>
                 <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
-              <td>
+              <td @click.stop>
                 <RouterLink :to="{ name: 'admin-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('adminRequestFiltering.actions.view') }}</RouterLink>
               </td>
             </tr>

@@ -61,6 +61,12 @@ function handleDrop(targetId: number) {
   dragOverId.value = null
   draggingId.value = null
 }
+
+function financeTypeLabel(financeType: RequestQuestionItem['finance_type']) {
+  if (financeType === 'individual') return t('adminRequestQuestionsPage.financeTypes.individual')
+  if (financeType === 'company') return t('adminRequestQuestionsPage.financeTypes.company')
+  return t('adminRequestQuestionsPage.financeTypes.all')
+}
 </script>
 
 <template>
@@ -83,6 +89,7 @@ function handleDrop(targetId: number) {
             <th>{{ t('adminQuestionLibrary.columns.code') }}</th>
             <th>{{ t('adminQuestionLibrary.columns.question') }}</th>
             <th>{{ t('adminQuestionLibrary.columns.type') }}</th>
+            <th>{{ t('adminRequestQuestionsPage.financeTypeField.column') }}</th>
             <th>{{ t('adminQuestionLibrary.columns.required') }}</th>
             <th>{{ t('adminQuestionLibrary.columns.options') }}</th>
             <th>{{ t('adminQuestionLibrary.columns.status') }}</th>
@@ -115,6 +122,7 @@ function handleDrop(targetId: number) {
               </div>
             </td>
             <td><span class="admin-status-pill">{{ row.question_type }}</span></td>
+            <td><span class="admin-status-pill is-muted">{{ financeTypeLabel(row.finance_type) }}</span></td>
             <td>{{ row.is_required ? t('adminQuestionLibrary.states.yes') : t('adminQuestionLibrary.states.no') }}</td>
             <td>{{ row.options_count }}</td>
             <td>

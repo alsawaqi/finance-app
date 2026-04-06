@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { QuestionType } from '@/services/requestQuestions'
+import type { QuestionFinanceType, QuestionType } from '@/services/requestQuestions'
 
 type QuestionForm = {
   id: number | null
   code: string
   question_text: string
   question_type: QuestionType
+  finance_type: QuestionFinanceType
   placeholder: string
   help_text: string
   validation_rules: string
@@ -18,6 +19,7 @@ type QuestionForm = {
 
 defineProps<{
   form: QuestionForm
+  financeTypeOptions: Array<{ value: QuestionFinanceType; label: string }>
   options: string[]
   showOptions: boolean
 }>()
@@ -81,6 +83,15 @@ const { t } = useI18n()
       </div>
 
       <div class="admin-question-preview__notes">
+        <div class="admin-question-preview__note">
+          <span>{{ t('adminRequestQuestionsPage.financeTypeField.preview') }}</span>
+          <strong>
+            {{
+              financeTypeOptions.find((option) => option.value === form.finance_type)?.label
+              ?? t('adminRequestQuestionsPage.financeTypes.all')
+            }}
+          </strong>
+        </div>
         <div class="admin-question-preview__note">
           <span>{{ t('adminSharedWidgets.questionPreview.validation') }}</span>
           <strong>{{ form.validation_rules || t('adminSharedWidgets.questionPreview.noValidation') }}</strong>

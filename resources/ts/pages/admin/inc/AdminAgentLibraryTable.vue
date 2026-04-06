@@ -46,7 +46,16 @@ const { t } = useI18n()
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in rows" :key="row.id">
+            <tr
+              v-for="row in rows"
+              :key="row.id"
+              class="is-clickable-row"
+              role="button"
+              tabindex="0"
+              @click="$emit('edit', row)"
+              @keydown.enter.prevent="$emit('edit', row)"
+              @keydown.space.prevent="$emit('edit', row)"
+            >
               <td>
                 <div class="admin-question-table__text">
                   <strong>{{ row.name }}</strong>
@@ -74,7 +83,7 @@ const { t } = useI18n()
                   <small>{{ row.creator_name || t('adminAgentLibrary.states.system') }}</small>
                 </div>
               </td>
-              <td>
+              <td @click.stop>
                 <div class="admin-table-actions">
                   <button type="button" class="admin-inline-link" @click="$emit('edit', row)">{{ t('adminAgentLibrary.actions.edit') }}</button>
                   <button type="button" class="admin-inline-link" @click="$emit('toggle', row)">

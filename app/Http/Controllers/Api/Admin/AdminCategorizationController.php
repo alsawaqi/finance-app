@@ -144,6 +144,7 @@ class AdminCategorizationController extends Controller
                     ]),
                     'financeRequests as needs_action_count' => fn ($query) => $query->whereIn('workflow_stage', [
                         'awaiting_client_signature',
+                        'awaiting_client_commercial_registration_upload',
                         'awaiting_client_documents',
                         'awaiting_additional_documents',
                         'client_update_requested',
@@ -217,6 +218,8 @@ class AdminCategorizationController extends Controller
                 FinanceRequestWorkflowStage::ADMIN_CONTRACT_PREPARATION->value,
                 FinanceRequestWorkflowStage::CONTRACT->value,
                 FinanceRequestWorkflowStage::AWAITING_CLIENT_SIGNATURE->value,
+                FinanceRequestWorkflowStage::AWAITING_CLIENT_COMMERCIAL_REGISTRATION_UPLOAD->value,
+                FinanceRequestWorkflowStage::AWAITING_ADMIN_COMMERCIAL_REGISTRATION_UPLOAD->value,
             ])
             ->count();
 
@@ -240,6 +243,7 @@ class AdminCategorizationController extends Controller
         $clientsNeedingAction = (clone $clientsBase)
             ->whereHas('financeRequests', fn ($query) => $query->whereIn('workflow_stage', [
                 'awaiting_client_signature',
+                'awaiting_client_commercial_registration_upload',
                 'awaiting_client_documents',
                 'awaiting_additional_documents',
                 'client_update_requested',

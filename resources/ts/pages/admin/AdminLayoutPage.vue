@@ -6,7 +6,6 @@ import './inc/admin-theme.css'
 import './inc/admin-theme-refresh.css'
 import AdminSidebar from './inc/AdminSidebar.vue'
 import AdminTopbar from './inc/AdminTopbar.vue'
-import AppToastStack from '@/components/AppToastStack.vue'
 
 const route = useRoute()
 const sidebarOpen = ref(false)
@@ -70,7 +69,5 @@ onBeforeUnmount(() => {
         <router-view />
       </main>
     </div>
-
-    <AppToastStack />
   </div>
 </template>

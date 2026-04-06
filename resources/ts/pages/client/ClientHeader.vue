@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '../../../stores/auth'
+import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import AppLocaleSelect from '../public/inc/AppLocaleSelect.vue'
 
@@ -34,7 +34,7 @@ const userName = computed(() => auth.user?.name || t('clientHeader.defaultUserNa
 const userInitials = computed(() => {
   return userName.value
     .split(' ')
-    .map((part) => part[0])
+    .map((part: string) => part[0])
     .slice(0, 2)
     .join('')
     .toUpperCase()

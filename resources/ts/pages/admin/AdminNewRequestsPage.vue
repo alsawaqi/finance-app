@@ -32,6 +32,10 @@ function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
 }
 
+function goToRequest(id: number) {
+  router.push({ name: 'admin-request-details', params: { id: String(id) } })
+}
+
 async function load(page = pagination.value.current_page) {
   loading.value = true
   errorMessage.value = ''
@@ -103,13 +107,13 @@ onMounted(() => {
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('adminNewRequests.hero.eyebrow') }}</p>
-        <h1>{{ t('adminNewRequests.hero.title') }}</h1>
+        <h4>{{ t('adminNewRequests.hero.title') }}</h4>
         <p class="subtext">
           {{ t('adminNewRequests.hero.subtitle') }}
         </p>
       </div>
 
-      <button class="ghost-btn" type="button" @click="load">{{ t('adminNewRequests.actions.refresh') }}</button>
+      <button class="ghost-btn" type="button" @click="() => load()">{{ t('adminNewRequests.actions.refresh') }}</button>
     </div>
 
     <div class="admin-question-stats-grid admin-reveal-up">
@@ -153,7 +157,16 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in requests" :key="item.id">
+            <tr
+              v-for="item in requests"
+              :key="item.id"
+              class="is-clickable-row"
+              role="button"
+              tabindex="0"
+              @click="goToRequest(item.id)"
+              @keydown.enter.prevent="goToRequest(item.id)"
+              @keydown.space.prevent="goToRequest(item.id)"
+            >
               <td>
                 <strong>{{ item.reference_number }}</strong>
                 <div class="muted-small">{{ item.approval_reference_number || t('adminNewRequests.states.awaitingApproval') }}</div>
@@ -186,7 +199,7 @@ onMounted(() => {
                 <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
 
-              <td>
+              <td @click.stop>
                 <RouterLink :to="{ name: 'admin-request-details', params: { id: item.id } }" class="primary-btn small-btn">
                   {{ t('adminNewRequests.actions.review') }}
                 </RouterLink>

@@ -2,12 +2,15 @@
 
 namespace App\Services;
 
+use App\Enums\RequestCommentVisibility;
 use App\Enums\UserAccountType;
 use App\Models\FinanceRequest;
 use App\Models\RequestTimeline;
 use App\Models\User;
 use App\Notifications\AppSystemNotification;
+use App\Services\Twilio\ClientStageWhatsAppNotifier;
 use Illuminate\Support\Collection;
+use Throwable;
 
 class RequestNotificationService
 {
@@ -16,18 +19,29 @@ class RequestNotificationService
      */
     private array $clientAllowedEvents = [
         'contract.admin_signed',
+        'contract.admin_uploaded_and_auto_completed',
+        'request.comment_added',
         'request.client_update_requested',
         'request.required_document_change_requested',
         'request.additional_document_requested',
+        'request.final_approved',
         'request.rejected',
     ];
+
+    public function __construct(
+        private readonly ClientStageWhatsAppNotifier $clientStageWhatsAppNotifier,
+    ) {
+    }
 
     public function dispatchFromTimeline(FinanceRequest $financeRequest, RequestTimeline $timeline): void
     {
         $eventType = (string) $timeline->event_type;
         $actorUserId = $timeline->actor_user_id ? (int) $timeline->actor_user_id : null;
+        $metadata = is_array($timeline->metadata_json) ? $timeline->metadata_json : [];
 
-        $recipients = $this->resolveRecipients($financeRequest, $eventType, $actorUserId);
+        $this->dispatchClientWhatsApp($financeRequest, $timeline);
+
+        $recipients = $this->resolveRecipients($financeRequest, $eventType, $actorUserId, $metadata);
 
         if ($recipients->isEmpty()) {
             return;
@@ -50,6 +64,7 @@ class RequestNotificationService
         FinanceRequest $financeRequest,
         string $eventType,
         ?int $actorUserId,
+        array $metadata = [],
     ): Collection {
         $recipientIds = collect();
 
@@ -83,7 +98,7 @@ class RequestNotificationService
             $recipientIds = $recipientIds->merge($staffIds);
         }
 
-        if ($this->shouldNotifyClient($eventType) && $financeRequest->user_id) {
+        if ($this->shouldNotifyClient($eventType, $metadata) && $financeRequest->user_id) {
             $clientId = User::query()
                 ->where('id', (int) $financeRequest->user_id)
                 ->where('is_active', true)
@@ -115,9 +130,22 @@ class RequestNotificationService
             ->get();
     }
 
-    private function shouldNotifyClient(string $eventType): bool
+    private function shouldNotifyClient(string $eventType, array $metadata = []): bool
     {
+        if ($eventType === 'request.comment_added') {
+            return (string) ($metadata['visibility'] ?? '') === RequestCommentVisibility::CLIENT_VISIBLE->value;
+        }
+
         return in_array($eventType, $this->clientAllowedEvents, true);
+    }
+
+    private function dispatchClientWhatsApp(FinanceRequest $financeRequest, RequestTimeline $timeline): void
+    {
+        try {
+            $this->clientStageWhatsAppNotifier->notifyFromTimeline($financeRequest, $timeline);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     private function resolveRecipientRole(User $recipient): string

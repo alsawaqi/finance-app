@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { QuestionType } from '@/services/requestQuestions'
+import type { QuestionFinanceType, QuestionType } from '@/services/requestQuestions'
 
 type QuestionForm = {
   id: number | null
   code: string
   question_text: string
   question_type: QuestionType
+  finance_type: QuestionFinanceType
   placeholder: string
   help_text: string
   validation_rules: string
@@ -20,6 +21,7 @@ type QuestionForm = {
 const props = defineProps<{
   modelValue: QuestionForm
   questionTypeOptions: Array<{ value: QuestionType; label: string; helper: string }>
+  financeTypeOptions: Array<{ value: QuestionFinanceType; label: string }>
   showOptions: boolean
   isEditing: boolean
   isSaving: boolean
@@ -94,6 +96,26 @@ function firstError(field: string) {
           </option>
         </select>
         <small v-if="firstError('question_type')" class="admin-form-error">{{ firstError('question_type') }}</small>
+      </label>
+
+      <label class="admin-form-field">
+        <span>{{ t('adminRequestQuestionsPage.financeTypeField.label') }}</span>
+        <select
+          :value="form.finance_type"
+          class="admin-form-select"
+          :class="{ 'has-error': firstError('finance_type') }"
+          @change="updateField('finance_type', ($event.target as HTMLSelectElement).value as QuestionFinanceType)"
+        >
+          <option
+            v-for="option in financeTypeOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+        <small class="admin-form-help">{{ t('adminRequestQuestionsPage.financeTypeField.help') }}</small>
+        <small v-if="firstError('finance_type')" class="admin-form-error">{{ firstError('finance_type') }}</small>
       </label>
 
       <label class="admin-form-field admin-form-field--full">

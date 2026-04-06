@@ -120,6 +120,7 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, select, textarea {
   position: fixed;
   inset: 0;
   background: rgba(17, 24, 39, 0.4);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   z-index: 45;
   border: none;
@@ -338,8 +339,8 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, select, textarea {
   justify-content: space-between;
   padding-inline: clamp(16px, 3vw, 32px);
   background: rgba(243, 244, 246, 0.85);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--admin-border);
 }
 
@@ -366,7 +367,7 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, select, textarea {
   background: var(--admin-surface-hover);
 }
 
-.admin-topbar__title-wrap h1 {
+.admin-topbar__title-wrap h4 {
   margin: 0;
   font-size: clamp(1.1rem, 2vw, 1.4rem);
   font-weight: 800;
@@ -816,6 +817,7 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, select, textarea {
   position: fixed;
   inset: 0;
   background: rgba(17, 24, 39, 0.6);
+  -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   z-index: 100;
   display: grid;

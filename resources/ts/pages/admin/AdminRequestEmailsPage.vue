@@ -150,7 +150,7 @@ onMounted(load)
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('adminRequestDetails.emailActivity.title') }}</p>
-        <h1>{{ t('adminRequestDetails.emailActivity.title') }}</h1>
+        <h4>{{ t('adminRequestDetails.emailActivity.title') }}</h4>
         <p class="subtext">{{ t('adminRequestDetails.hero.subtitle') }}</p>
       </div>
       <div class="actions-row">

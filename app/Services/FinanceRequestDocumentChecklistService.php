@@ -22,31 +22,47 @@ class FinanceRequestDocumentChecklistService
             ->orderBy('id')
             ->get();
 
-        $latestUploadsByStep = $financeRequest->documentUploads()
-            ->with('documentUploadStep:id,name,code,is_required')
+        $uploadsByStep = $financeRequest->documentUploads()
+            ->with('documentUploadStep:id,name,code,is_required,is_multiple')
             ->whereIn('document_upload_step_id', $requiredSteps->pluck('id'))
             ->orderByDesc('id')
             ->get()
-            ->groupBy('document_upload_step_id')
+            ->groupBy('document_upload_step_id');
+
+        $latestUploadsByStep = $uploadsByStep
             ->map(fn (Collection $items) => $items->first());
 
-        return $requiredSteps->map(function (DocumentUploadStep $step) use ($latestUploadsByStep) {
+        return $requiredSteps->map(function (DocumentUploadStep $step) use ($latestUploadsByStep, $uploadsByStep) {
             $latestUpload = $latestUploadsByStep->get($step->id);
             $status = $latestUpload?->status?->value ?? (string) ($latestUpload?->status ?? 'pending');
             $isRejected = $status === RequestDocumentUploadStatus::REJECTED->value;
-            $isSatisfied = $latestUpload !== null && ! $isRejected;
+            $stepUploads = $uploadsByStep->get($step->id, collect());
+
+            $acceptedUploadsCount = $stepUploads
+                ->filter(function ($upload): bool {
+                    $uploadStatus = $upload->status?->value ?? (string) ($upload->status ?? '');
+
+                    return $uploadStatus !== RequestDocumentUploadStatus::REJECTED->value;
+                })
+                ->count();
+            $isSatisfied = $acceptedUploadsCount > 0;
+            $isMultiple = (bool) $step->is_multiple;
 
             return [
                 'document_upload_step_id' => $step->id,
                 'code' => $step->code,
                 'name' => $step->name,
                 'is_required' => true,
+                'is_multiple' => $isMultiple,
                 'status' => $status,
                 'is_uploaded' => $isSatisfied,
-                'can_client_upload' => $latestUpload === null || $isRejected,
+                'can_client_upload' => $isMultiple || $latestUpload === null || $isRejected,
                 'is_change_requested' => $isRejected,
                 'rejection_reason' => $latestUpload?->rejection_reason,
+                'uploads_count' => $stepUploads->count(),
+                'accepted_uploads_count' => $acceptedUploadsCount,
                 'upload' => $latestUpload,
+                'uploads' => $stepUploads->values(),
             ];
         });
     }

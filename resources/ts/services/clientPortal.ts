@@ -35,6 +35,20 @@ export async function signClientContract(id: number | string, payload: { signatu
   }
 }
 
+export async function uploadClientCommercialContract(
+  id: number | string,
+  payload: { file: File },
+) {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/client/requests/${id}/contract/commercial-registration`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
+  return data
+}
+
 export async function uploadClientRequiredDocument(id: number | string, payload: { document_upload_step_id: number; file: File }) {
   const formData = new FormData()
   formData.append('document_upload_step_id', String(payload.document_upload_step_id))

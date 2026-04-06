@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAppToast } from '@/composables/useAppToast'
+import { useAppProgress } from '@/composables/useAppProgress'
 
 /**
  * Vite inlines VITE_* at build time. A local URL in .env (e.g. http://127.0.0.1:8000)
@@ -31,7 +32,7 @@ const api = axios.create({
 })
 
 const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
-const ADMIN_TOAST_PATH_PREFIXES = ['/api/admin/', '/api/staff/']
+const TOAST_PATH_PREFIXES = ['/api/admin/', '/api/staff/', '/api/client/']
 
 function resolveRequestPath(url: string | undefined) {
   if (!url) return ''
@@ -50,7 +51,28 @@ function shouldToast(config: { method?: string; url?: string } | undefined) {
   if (!MUTATING_METHODS.has(method)) return false
 
   const path = resolveRequestPath(config.url)
-  return ADMIN_TOAST_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
+  return TOAST_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
+}
+
+function shouldTrackProgress(config: { headers?: unknown } | undefined) {
+  if (!config) return true
+
+  const headers = (config.headers ?? {}) as Record<string, unknown>
+  const rawSkip = headers['X-Skip-Progress']
+
+  if (typeof rawSkip === 'string' && ['1', 'true', 'yes'].includes(rawSkip.toLowerCase())) {
+    return false
+  }
+
+  if (typeof rawSkip === 'number' && rawSkip === 1) {
+    return false
+  }
+
+  if (typeof rawSkip === 'boolean' && rawSkip) {
+    return false
+  }
+
+  return true
 }
 
 function extractMessage(payload: unknown) {
@@ -92,8 +114,32 @@ function defaultErrorMessage() {
     : 'Unable to complete this action. Please try again.'
 }
 
+const appProgress = useAppProgress()
+
+api.interceptors.request.use(
+  (config) => {
+    if (shouldTrackProgress(config)) {
+      ;(config as Record<string, unknown>).__trackProgress = true
+      appProgress.beginRequest()
+    }
+
+    return config
+  },
+  (error) => {
+    const config = (error as { config?: Record<string, unknown> })?.config
+    if (config?.__trackProgress) {
+      appProgress.endRequest()
+    }
+    return Promise.reject(error)
+  },
+)
+
 api.interceptors.response.use(
   (response) => {
+    if ((response.config as Record<string, unknown>).__trackProgress) {
+      appProgress.endRequest()
+    }
+
     if (shouldToast(response.config)) {
       const { showSuccess } = useAppToast()
       const message = extractMessage(response.data) || defaultSuccessMessage()
@@ -103,6 +149,11 @@ api.interceptors.response.use(
     return response
   },
   (error) => {
+    const config = (error as { config?: Record<string, unknown> })?.config
+    if (config?.__trackProgress) {
+      appProgress.endRequest()
+    }
+
     if (axios.isAxiosError(error) && error.code !== 'ERR_CANCELED' && shouldToast(error.config)) {
       const { showError } = useAppToast()
       const message = extractMessage(error.response?.data)

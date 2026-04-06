@@ -334,7 +334,7 @@
   
   .financer-auth .auth-input-wrap i {
     position: absolute;
-    left: 18px;
+    inset-inline-start: 18px;
     top: 50%;
     transform: translateY(-50%);
     color: #64748b;
@@ -348,7 +348,9 @@
     border-radius: 18px;
     border: 1px solid #dbe4f0;
     background: #ffffff;
-    padding: 0 18px 0 50px;
+    padding-block: 0;
+    padding-inline-start: 50px;
+    padding-inline-end: 18px;
     color: #0f172a;
     font-size: 15px;
     transition: all 0.25s ease;
@@ -370,16 +372,22 @@
     outline: none;
   }
   
+  /* inline-end = right in LTR, left in RTL (matches where password text ends) */
   .financer-auth .auth-password-toggle {
     position: absolute;
     top: 50%;
-    right: 16px;
+    inset-inline-end: 16px;
     transform: translateY(-50%);
     border: 0;
     background: transparent;
     color: #64748b;
     font-size: 13px;
     font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .financer-auth .auth-input-wrap:has(.auth-password-toggle) .auth-input {
+    padding-inline-end: 6.75rem;
   }
   
   .financer-auth .auth-row-between {

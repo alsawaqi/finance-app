@@ -7,6 +7,7 @@ use App\Enums\FinanceRequestWorkflowStage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AdvanceFinanceRequestFromUnderstudyRequest;
 use App\Http\Requests\Admin\ApproveFinanceRequestRequest;
+use App\Http\Requests\Admin\FinalApproveFinanceRequestRequest;
 use App\Http\Requests\Admin\RejectFinanceRequestRequest;
 use App\Http\Requests\Admin\ReviewFinanceRequestUnderstudyRequest;
 use App\Http\Requests\Admin\ReviewFinanceRequestStaffQuestionRequest;
@@ -51,6 +52,8 @@ class AdminFinanceRequestController extends Controller
             FinanceRequestWorkflowStage::ADMIN_CONTRACT_PREPARATION->value,
             FinanceRequestWorkflowStage::CONTRACT->value,
             FinanceRequestWorkflowStage::AWAITING_CLIENT_SIGNATURE->value,
+            FinanceRequestWorkflowStage::AWAITING_CLIENT_COMMERCIAL_REGISTRATION_UPLOAD->value,
+            FinanceRequestWorkflowStage::AWAITING_ADMIN_COMMERCIAL_REGISTRATION_UPLOAD->value,
         ];
 
         $baseQuery = FinanceRequest::query()
@@ -94,7 +97,9 @@ class AdminFinanceRequestController extends Controller
                     WHEN workflow_stage = ? THEN 3
                     WHEN workflow_stage = ? THEN 4
                     WHEN workflow_stage = ? THEN 5
-                    ELSE 6
+                    WHEN workflow_stage = ? THEN 6
+                    WHEN workflow_stage = ? THEN 7
+                    ELSE 8
                 END",
                 [
                     FinanceRequestWorkflowStage::SUBMITTED_FOR_REVIEW->value,
@@ -103,6 +108,8 @@ class AdminFinanceRequestController extends Controller
                     FinanceRequestWorkflowStage::ADMIN_CONTRACT_PREPARATION->value,
                     FinanceRequestWorkflowStage::CONTRACT->value,
                     FinanceRequestWorkflowStage::AWAITING_CLIENT_SIGNATURE->value,
+                    FinanceRequestWorkflowStage::AWAITING_CLIENT_COMMERCIAL_REGISTRATION_UPLOAD->value,
+                    FinanceRequestWorkflowStage::AWAITING_ADMIN_COMMERCIAL_REGISTRATION_UPLOAD->value,
                 ]
             )
             ->orderByDesc('submitted_at')
@@ -176,6 +183,60 @@ class AdminFinanceRequestController extends Controller
         return response()->json([
             'message' => 'Request approved successfully.',
             'request' => $financeRequest->fresh(['client:id,name,email', 'currentContract']),
+        ]);
+    }
+
+    public function finalApprove(FinalApproveFinanceRequestRequest $request, FinanceRequest $financeRequest): JsonResponse
+    {
+        $admin = $request->user();
+        $status = $financeRequest->status?->value ?? (string) $financeRequest->status;
+        $stage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+
+        if (in_array($status, [
+            FinanceRequestStatus::REJECTED->value,
+            FinanceRequestStatus::COMPLETED->value,
+            FinanceRequestStatus::CANCELLED->value,
+        ], true)) {
+            return response()->json([
+                'message' => 'This request cannot be finalized from its current status.',
+            ], 422);
+        }
+
+        if (! in_array($stage, [
+            FinanceRequestWorkflowStage::PROCESSING->value,
+            FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
+        ], true)) {
+            return response()->json([
+                'message' => 'Final approval is available only at the final processing stage.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($financeRequest, $admin, $request) {
+            $this->workflowService->markCompleted($financeRequest);
+
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.final_approved',
+                $admin?->id,
+                'Request finally approved and completed',
+                'تمت الموافقة النهائية على الطلب واكتماله',
+                $request->validated('final_approval_notes') ?: 'The admin finalized the request approval and marked it as completed.',
+                $request->validated('final_approval_notes') ?: 'قام المسؤول باعتماد الطلب نهائياً وتم تحويله إلى حالة مكتمل.',
+                [
+                    'status' => FinanceRequestStatus::COMPLETED->value,
+                    'workflow_stage' => FinanceRequestWorkflowStage::COMPLETED->value,
+                    'completed_at' => optional($financeRequest->completed_at)->toISOString(),
+                ],
+            );
+        });
+
+        $financeRequest = $this->loadRequestGraph($financeRequest->fresh());
+
+        return response()->json([
+            'message' => 'Request finalized successfully.',
+            'request' => $financeRequest,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($financeRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($financeRequest),
         ]);
     }
 
@@ -320,7 +381,7 @@ class AdminFinanceRequestController extends Controller
             'currentContract',
             'contracts',
             'shareholders',
-            'documentUploads.step:id,code,name,description,is_required,allowed_file_types_json,max_file_size_mb',
+            'documentUploads.step:id,code,name,description,is_required,is_multiple,allowed_file_types_json,max_file_size_mb',
             'documentUploads.uploader:id,name,email',
             'documentUploads.reviewer:id,name,email',
             'additionalDocuments.requester:id,name,email',

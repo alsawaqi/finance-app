@@ -11,6 +11,8 @@ const STAGE_META: Record<string, { en: string; ar: string; tone: ClientStageTone
 
   contract: { en: 'Signature', ar: '\u0627\u0644\u062a\u0648\u0642\u064a\u0639', tone: 'purple' },
   awaiting_client_signature: { en: 'Signature', ar: '\u0627\u0644\u062a\u0648\u0642\u064a\u0639', tone: 'purple' },
+  awaiting_client_commercial_registration_upload: { en: 'Commercial registration upload', ar: '\u0631\u0641\u0639 \u062a\u0648\u062b\u064a\u0642 \u0627\u0644\u063a\u0631\u0641\u0629', tone: 'purple' },
+  awaiting_admin_commercial_registration_upload: { en: 'Pending admin commercial registration', ar: '\u0628\u0627\u0646\u062a\u0638\u0627\u0631 \u062a\u0648\u062b\u064a\u0642 \u0627\u0644\u0625\u062f\u0627\u0631\u0629', tone: 'blue' },
   awaiting_staff_assignment: { en: 'Processing', ar: '\u0642\u064a\u062f \u0627\u0644\u0645\u0639\u0627\u0644\u062c\u0629', tone: 'blue' },
 
   document_collection: { en: 'Document collection', ar: '\u062c\u0645\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f\u0627\u062a', tone: 'amber' },

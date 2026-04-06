@@ -22,6 +22,7 @@ use App\Models\FinanceRequestStaffQuestion;
 use App\Models\RequestAdditionalDocument;
 use App\Models\RequestComment;
 use App\Models\RequestDocumentUpload;
+use App\Models\User;
 use App\Services\FinanceRequestAgentAssignmentService;
 use App\Services\FinanceRequestDocumentChecklistService;
 use App\Services\FinanceRequestEmailService;
@@ -139,7 +140,7 @@ class StaffRequestWorkspaceController extends Controller
     {
         $this->ensureVisibleToUser($request->user(), $financeRequest);
 
-        $financeRequest = $this->loadRequestGraph($financeRequest);
+        $financeRequest = $this->loadRequestGraph($financeRequest, $request->user());
 
         return response()->json([
             'request' => $financeRequest,
@@ -171,10 +172,10 @@ class StaffRequestWorkspaceController extends Controller
                 $financeRequest,
                 'request.comment_added',
                 $user?->id,
-                'Internal follow-up comment added',
-                'تمت إضافة ملاحظة متابعة داخلية',
+                'Request comment added',
+                'تمت إضافة تعليق على الطلب',
                 str($comment->comment_text)->limit(240)->toString(),
-                'تمت إضافة ملاحظة متابعة داخلية على الطلب.',
+                'تمت إضافة تعليق جديد على الطلب.',
                 [
                     'comment_id' => $comment->id,
                     'visibility' => $comment->visibility?->value,
@@ -184,7 +185,7 @@ class StaffRequestWorkspaceController extends Controller
             return $comment->load('user:id,name,email');
         });
 
-        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh(), $user);
 
         return response()->json([
             'message' => 'Comment added successfully.',
@@ -220,7 +221,7 @@ class StaffRequestWorkspaceController extends Controller
             return $answeredQuestion;
         });
 
-        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh(), $user);
 
         return response()->json([
             'message' => 'Staff study question answered successfully.',
@@ -247,7 +248,7 @@ class StaffRequestWorkspaceController extends Controller
             );
         });
 
-        $freshRequest = $this->loadRequestGraph($updatedRequest->fresh());
+        $freshRequest = $this->loadRequestGraph($updatedRequest->fresh(), $user);
 
         return response()->json([
             'message' => 'Understudy draft saved successfully.',
@@ -272,7 +273,7 @@ class StaffRequestWorkspaceController extends Controller
             );
         });
 
-        $freshRequest = $this->loadRequestGraph($updatedRequest->fresh());
+        $freshRequest = $this->loadRequestGraph($updatedRequest->fresh(), $user);
 
         return response()->json([
             'message' => 'Understudy submitted to admin successfully.',
@@ -332,7 +333,7 @@ class StaffRequestWorkspaceController extends Controller
             );
         });
 
-        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh(), $user);
 
         return response()->json([
             'message' => 'The client can now upload a corrected version of this required document.',
@@ -378,7 +379,7 @@ class StaffRequestWorkspaceController extends Controller
             return $additionalDocument->load('requester:id,name,email');
         });
 
-        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh(), $user);
 
         return response()->json([
             'message' => 'Additional document request created successfully.',
@@ -401,7 +402,7 @@ class StaffRequestWorkspaceController extends Controller
             $request->validated(),
         );
 
-        $freshRequest = $this->loadRequestGraph($financeRequest->fresh());
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh(), $user);
 
         return response()->json([
             'message' => 'Request email sent successfully.',
@@ -469,8 +470,10 @@ class StaffRequestWorkspaceController extends Controller
         ]);
     }
 
-    private function loadRequestGraph(FinanceRequest $financeRequest): FinanceRequest
+    private function loadRequestGraph(FinanceRequest $financeRequest, ?User $viewer = null): FinanceRequest
     {
+        $viewer ??= auth()->user();
+
         $financeRequest->load([
             'client:id,name,email,phone',
             'primaryStaff:id,name,email,phone',
@@ -493,7 +496,13 @@ class StaffRequestWorkspaceController extends Controller
             'agentAssignments.allowedDocuments',
             'shareholders',
             'assignments' => fn ($query) => $query->where('is_active', true)->with(['staff:id,name,email', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
-            'comments' => fn ($query) => $query->with('user:id,name,email')->latest(),
+            'comments' => function ($query) use ($viewer) {
+                $query->with('user:id,name,email')->latest();
+
+                if ($viewer && ! $viewer->hasRole('admin')) {
+                    $query->where('visibility', '!=', RequestCommentVisibility::ADMIN_ONLY->value);
+                }
+            },
             'additionalDocuments.requester:id,name',
             'additionalDocuments.uploader:id,name',
             'emails' => fn ($query) => $query

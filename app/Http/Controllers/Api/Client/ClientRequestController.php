@@ -8,6 +8,7 @@ use App\Enums\FinanceRequestWorkflowStage;
 use App\Enums\FinanceRequestUpdateBatchStatus;
 use App\Enums\FinanceRequestUpdateItemStatus;
 use App\Enums\RequestAdditionalDocumentStatus;
+use App\Enums\RequestCommentVisibility;
 use App\Enums\RequestDocumentUploadStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\StoreClientFinanceRequestRequest;
@@ -26,6 +27,7 @@ use App\Support\RequestTimelineLogger;
 use App\Services\FinanceRequestDocumentChecklistService;
 use App\Services\FinanceRequestWorkflowService;
 use App\Services\FinanceRequestUpdateService;
+use App\Services\Twilio\ClientRequestSubmittedWhatsAppNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -44,18 +46,35 @@ class ClientRequestController extends Controller
     ) {
     }
 
-    public function questions(): JsonResponse
+    public function questions(Request $request): JsonResponse
     {
-        $questions = RequestQuestion::query()
+        $validated = $request->validate([
+            'finance_type' => ['nullable', 'string', 'in:individual,company'],
+        ]);
+
+        $financeType = $validated['finance_type'] ?? null;
+
+        $questionsQuery = RequestQuestion::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->orderBy('id')
+            ->orderBy('id');
+
+        if ($financeType) {
+            $questionsQuery->where(function ($query) use ($financeType): void {
+                $query
+                    ->where('finance_type', 'all')
+                    ->orWhere('finance_type', $financeType);
+            });
+        }
+
+        $questions = $questionsQuery
             ->get()
             ->map(fn (RequestQuestion $question) => [
                 'id' => $question->id,
                 'code' => $question->code,
                 'question_text' => $question->question_text,
                 'question_type' => $question->question_type,
+                'finance_type' => $question->finance_type ?? 'all',
                 'options_json' => $question->options_json ?? [],
                 'placeholder' => $question->placeholder,
                 'help_text' => $question->help_text,
@@ -102,8 +121,8 @@ class ClientRequestController extends Controller
         ]);
     }
 
-   public function store(StoreClientFinanceRequestRequest $request): JsonResponse
-{
+    public function store(StoreClientFinanceRequestRequest $request, ClientRequestSubmittedWhatsAppNotifier $requestSubmittedWhatsApp): JsonResponse
+    {
     $user = $request->user();
     $validated = $request->validated();
     $details = Arr::get($validated, 'details', []);
@@ -286,11 +305,18 @@ class ClientRequestController extends Controller
         return $financeRequest->fresh(['answers.question', 'attachments', 'shareholders', 'additionalDocuments', 'currentContract', 'financeRequestType']);
     });
 
-    return response()->json([
-        'message' => 'Request submitted successfully.',
-        'request' => $this->transformRequestDetails($financeRequest),
-    ], 201);
-}
+        $requestSubmittedWhatsApp->notify(
+            $user,
+            (string) $financeRequest->reference_number,
+            Arr::get($validated, 'details', []),
+            $request->header('Accept-Language'),
+        );
+
+        return response()->json([
+            'message' => 'Request submitted successfully.',
+            'request' => $this->transformRequestDetails($financeRequest),
+        ], 201);
+    }
 
     public function show(Request $request, FinanceRequest $financeRequest): JsonResponse
     {
@@ -304,6 +330,10 @@ class ClientRequestController extends Controller
             'financeRequestType',
             'shareholders',
             'additionalDocuments',
+            'comments' => fn ($query) => $query
+                ->where('visibility', RequestCommentVisibility::CLIENT_VISIBLE->value)
+                ->with('user:id,name,email')
+                ->latest('created_at'),
             'updateBatches.requester:id,name,email',
             'updateBatches.items.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',
         ]);
@@ -338,7 +368,7 @@ class ClientRequestController extends Controller
 
         $latestStatus = $latestUpload?->status?->value ?? (string) ($latestUpload?->status ?? 'pending');
 
-        if ($latestUpload && $latestStatus !== RequestDocumentUploadStatus::REJECTED->value) {
+        if (! $step->is_multiple && $latestUpload && $latestStatus !== RequestDocumentUploadStatus::REJECTED->value) {
             abort(422, 'This required document is already locked after upload. A new version can only be uploaded after staff requests a change.');
         }
 
@@ -372,6 +402,7 @@ class ClientRequestController extends Controller
                 [
                     'document_upload_step_id' => $step->id,
                     'document_name' => $step->name,
+                    'is_multiple_step' => (bool) $step->is_multiple,
                     'is_resubmission' => $latestUpload !== null,
                     'previous_upload_id' => $latestUpload?->id,
                 ],
@@ -560,8 +591,14 @@ class ClientRequestController extends Controller
                 'id' => $financeRequest->currentContract->id,
                 'version_no' => $financeRequest->currentContract->version_no,
                 'status' => $financeRequest->currentContract->status?->value ?? (string) $financeRequest->currentContract->status,
+                'contract_source' => $financeRequest->currentContract->contract_source,
+                'client_signature_skipped' => (bool) $financeRequest->currentContract->client_signature_skipped,
+                'requires_commercial_registration' => (bool) $financeRequest->currentContract->requires_commercial_registration,
                 'admin_signed_at' => optional($financeRequest->currentContract->admin_signed_at)->toISOString(),
                 'client_signed_at' => optional($financeRequest->currentContract->client_signed_at)->toISOString(),
+                'admin_uploaded_contract_at' => optional($financeRequest->currentContract->admin_uploaded_contract_at)->toISOString(),
+                'client_commercial_uploaded_at' => optional($financeRequest->currentContract->client_commercial_uploaded_at)->toISOString(),
+                'admin_commercial_uploaded_at' => optional($financeRequest->currentContract->admin_commercial_uploaded_at)->toISOString(),
                 'contract_pdf_path' => $financeRequest->currentContract->contract_pdf_path,
             ] : null,
         ];
@@ -589,12 +626,17 @@ class ClientRequestController extends Controller
             'latest_activity_at' => optional($financeRequest->latest_activity_at)->toISOString(),
             'intake_details' => $details,
             'intake_details_json' => $details,
-            'can_sign' => $financeRequest->currentContract && ($financeRequest->currentContract->status?->value ?? (string) $financeRequest->currentContract->status) === 'admin_signed',
-           'can_upload_documents' => in_array($stage, [
-    FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
-    FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
-    FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
-], true),
+            'can_sign' => $financeRequest->currentContract
+                && ($financeRequest->currentContract->status?->value ?? (string) $financeRequest->currentContract->status) === 'admin_signed'
+                && $stage === FinanceRequestWorkflowStage::AWAITING_CLIENT_SIGNATURE->value,
+            'can_upload_client_commercial_contract' => $financeRequest->currentContract
+                && (bool) $financeRequest->currentContract->requires_commercial_registration
+                && $stage === FinanceRequestWorkflowStage::AWAITING_CLIENT_COMMERCIAL_REGISTRATION_UPLOAD->value,
+            'can_upload_documents' => in_array($stage, [
+                FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+                FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+                FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
+            ], true),
             'can_submit_client_updates' => $stage === FinanceRequestWorkflowStage::CLIENT_UPDATE_REQUESTED->value,
             'active_update_batch' => ($activeBatch = $this->updateService->getActiveClientBatch($financeRequest)) ? [
                 'id' => $activeBatch->id,
@@ -635,8 +677,14 @@ class ClientRequestController extends Controller
                 'id' => $financeRequest->currentContract->id,
                 'version_no' => $financeRequest->currentContract->version_no,
                 'status' => $financeRequest->currentContract->status?->value ?? (string) $financeRequest->currentContract->status,
+                'contract_source' => $financeRequest->currentContract->contract_source,
+                'client_signature_skipped' => (bool) $financeRequest->currentContract->client_signature_skipped,
+                'requires_commercial_registration' => (bool) $financeRequest->currentContract->requires_commercial_registration,
                 'admin_signed_at' => optional($financeRequest->currentContract->admin_signed_at)->toISOString(),
                 'client_signed_at' => optional($financeRequest->currentContract->client_signed_at)->toISOString(),
+                'admin_uploaded_contract_at' => optional($financeRequest->currentContract->admin_uploaded_contract_at)->toISOString(),
+                'client_commercial_uploaded_at' => optional($financeRequest->currentContract->client_commercial_uploaded_at)->toISOString(),
+                'admin_commercial_uploaded_at' => optional($financeRequest->currentContract->admin_commercial_uploaded_at)->toISOString(),
                 'contract_pdf_path' => $financeRequest->currentContract->contract_pdf_path,
             ] : null,
             'answers' => $financeRequest->answers
@@ -677,7 +725,12 @@ class ClientRequestController extends Controller
                         'uploaded_at' => optional($shareholder->created_at)->toISOString(),
                     ])->values(),
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($financeRequest)->map(function (array $item) {
-                $upload = $item['upload'];
+                $upload = $item['upload'] ?? null;
+                $uploads = collect($item['uploads'] ?? []);
+
+                if ($uploads->isEmpty() && $upload) {
+                    $uploads = collect([$upload]);
+                }
 
                 return [
                     'document_upload_step_id' => $item['document_upload_step_id'],
@@ -685,17 +738,45 @@ class ClientRequestController extends Controller
                     'name' => $item['name'],
                     'status' => $item['status'],
                     'is_required' => $item['is_required'],
+                    'is_multiple' => (bool) ($item['is_multiple'] ?? false),
                     'is_uploaded' => $item['is_uploaded'],
                     'can_client_upload' => $item['can_client_upload'],
                     'is_change_requested' => $item['is_change_requested'],
                     'rejection_reason' => $item['rejection_reason'],
+                    'uploads_count' => (int) ($item['uploads_count'] ?? 0),
+                    'accepted_uploads_count' => (int) ($item['accepted_uploads_count'] ?? 0),
+                    'uploads' => $uploads->map(function ($uploadItem) {
+                        $id = is_array($uploadItem) ? ($uploadItem['id'] ?? null) : ($uploadItem->id ?? null);
+                        $fileName = is_array($uploadItem) ? ($uploadItem['file_name'] ?? null) : ($uploadItem->file_name ?? null);
+                        $filePath = is_array($uploadItem) ? ($uploadItem['file_path'] ?? null) : ($uploadItem->file_path ?? null);
+                        $disk = is_array($uploadItem) ? ($uploadItem['disk'] ?? null) : ($uploadItem->disk ?? null);
+                        $status = is_array($uploadItem)
+                            ? (($uploadItem['status'] ?? null) ?: '')
+                            : ($uploadItem->status?->value ?? (string) ($uploadItem->status ?? ''));
+                        $uploadedAt = is_array($uploadItem)
+                            ? ($uploadItem['uploaded_at'] ?? null)
+                            : optional($uploadItem->uploaded_at)->toISOString();
+
+                        return [
+                            'id' => $id,
+                            'file_name' => $fileName,
+                            'file_path' => $filePath,
+                            'disk' => $disk,
+                            'status' => $status,
+                            'uploaded_at' => $uploadedAt,
+                        ];
+                    })->values(),
                     'upload' => $upload ? [
-                        'id' => $upload->id,
-                        'file_name' => $upload->file_name,
-                        'file_path' => $upload->file_path,
-                        'disk' => $upload->disk,
-                        'status' => $upload->status?->value ?? (string) $upload->status,
-                        'uploaded_at' => optional($upload->uploaded_at)->toISOString(),
+                        'id' => is_array($upload) ? ($upload['id'] ?? null) : ($upload->id ?? null),
+                        'file_name' => is_array($upload) ? ($upload['file_name'] ?? null) : ($upload->file_name ?? null),
+                        'file_path' => is_array($upload) ? ($upload['file_path'] ?? null) : ($upload->file_path ?? null),
+                        'disk' => is_array($upload) ? ($upload['disk'] ?? null) : ($upload->disk ?? null),
+                        'status' => is_array($upload)
+                            ? (($upload['status'] ?? null) ?: '')
+                            : ($upload->status?->value ?? (string) ($upload->status ?? '')),
+                        'uploaded_at' => is_array($upload)
+                            ? ($upload['uploaded_at'] ?? null)
+                            : optional($upload->uploaded_at)->toISOString(),
                     ] : null,
                 ];
             })->values(),
@@ -715,6 +796,20 @@ class ClientRequestController extends Controller
                     RequestAdditionalDocumentStatus::REJECTED->value,
                 ], true),
             ])->values(),
+            'comments' => $financeRequest->comments
+                ->filter(fn ($comment) => ($comment->visibility?->value ?? (string) $comment->visibility) === RequestCommentVisibility::CLIENT_VISIBLE->value)
+                ->values()
+                ->map(fn ($comment) => [
+                    'id' => $comment->id,
+                    'comment_text' => $comment->comment_text,
+                    'visibility' => $comment->visibility?->value ?? (string) $comment->visibility,
+                    'created_at' => optional($comment->created_at)->toISOString(),
+                    'user' => $comment->user ? [
+                        'id' => $comment->user->id,
+                        'name' => $comment->user->name,
+                        'email' => $comment->user->email,
+                    ] : null,
+                ]),
         ];
     }
     private function serializeActiveFinanceRequestTypes(): array

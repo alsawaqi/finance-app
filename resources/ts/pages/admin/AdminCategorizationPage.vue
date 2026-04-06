@@ -134,7 +134,7 @@ watch(
     <div class="page-topbar">
       <div>
         <p class="eyebrow">{{ t('adminCategorizationPage.hero.eyebrow') }}</p>
-        <h1>{{ t('adminCategorizationPage.hero.title') }}</h1>
+        <h4>{{ t('adminCategorizationPage.hero.title') }}</h4>
         <p class="subtext">
           {{ t('adminCategorizationPage.hero.subtitle') }}
         </p>

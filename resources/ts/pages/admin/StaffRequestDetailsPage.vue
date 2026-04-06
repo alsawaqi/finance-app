@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
   adminAdditionalDocumentDownloadUrl,
-  adminContractDownloadUrl,
   adminRequiredDocumentDownloadUrl,
 } from '@/services/adminRequests'
 import {
@@ -18,6 +17,8 @@ import {
   saveUnderstudyDraft,
   sendStaffRequestEmail,
   staffAttachmentDownloadUrl,
+  staffAttachmentsBundleDownloadUrl,
+  staffRequiredDocumentStepBundleDownloadUrl,
   staffShareholderIdDownloadUrl,
   submitUnderstudy,
   type AgentOption,
@@ -76,9 +77,10 @@ const understudyNote = ref('')
 const savingStudyAnswer = ref<Record<number, boolean>>({})
 const savingUnderstudyDraftState = ref(false)
 const submittingUnderstudyState = ref(false)
+const understudySectionOpen = ref(true)
 
 const commentText = ref('')
-const commentVisibility = ref<'internal' | 'admin_only'>('internal')
+const commentVisibility = ref<'internal' | 'admin_only' | 'client_visible'>('internal')
 const additionalDocumentTitle = ref('')
 const additionalDocumentReason = ref('')
 
@@ -123,6 +125,8 @@ const staffQuestions = computed<StaffStudyQuestion[]>(() => {
   })
 })
 const understudyLocked = computed(() => ['submitted', 'approved'].includes(String(requestItem.value?.understudy_status || '').toLowerCase()) || String(requestItem.value?.workflow_stage || '').toLowerCase() === 'awaiting_understudy_review')
+const understudyQuestionsCompleted = computed(() => Boolean(staffQuestionSummary.value?.all_required_answered))
+const understudyQuestionInputsLocked = computed(() => understudyLocked.value || understudyQuestionsCompleted.value)
 const canSubmitUnderstudyPackage = computed(() => !understudyLocked.value && Boolean(staffQuestionSummary.value?.all_required_answered) && understudyNote.value.trim().length > 0)
 const emailComposerVisible = computed(() =>
   ['awaiting_agent_assignment', 'processing'].includes(String(requestItem.value?.workflow_stage || '').toLowerCase())
@@ -150,6 +154,15 @@ const activityCounts = computed(() => ({
   additionalDocuments: requestItem.value?.additional_documents?.length ?? 0,
   emails: requestItem.value?.emails?.length ?? 0,
 }))
+
+watch(
+  understudyQuestionsCompleted,
+  (completed) => {
+    if (completed) {
+      understudySectionOpen.value = false
+    }
+  },
+)
 
 function uiText(en: string, ar: string) {
   return locale.value === 'ar' ? ar : en
@@ -216,6 +229,12 @@ function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
 }
 
+function syncUnderstudySectionState(event: Event) {
+  const target = event.target as HTMLDetailsElement | null
+  if (!target) return
+  understudySectionOpen.value = target.open
+}
+
 function updateStatusLabel(status: string | null | undefined) {
   const key = String(status || '').toLowerCase()
   if (key === 'updated') return uiText('Submitted for review', 'تم الإرسال للمراجعة')
@@ -231,6 +250,14 @@ function updateStatusClass(status: string | null | undefined) {
   if (key === 'updated') return 'client-badge client-badge--blue'
   if (key === 'rejected') return 'client-badge client-badge--rose'
   return 'client-badge client-badge--amber'
+}
+
+function readableCommentVisibility(value: string | null | undefined) {
+  const key = String(value || '').trim().toLowerCase()
+  if (key === 'internal') return uiText('Internal', 'داخلي')
+  if (key === 'admin_only') return uiText('Admin only', 'للإدارة فقط')
+  if (key === 'client_visible') return uiText('Client visible', 'مرئي للعميل')
+  return key || t('staffRequestDetails.states.emptyValue')
 }
 
 function answerText(answer: any) {
@@ -636,6 +663,10 @@ function requiredDocumentDownloadUrl(uploadId: number | string) {
   return adminRequiredDocumentDownloadUrl(requestId.value, uploadId)
 }
 
+function requiredDocumentStepBundleDownloadUrl(stepId: number | string) {
+  return staffRequiredDocumentStepBundleDownloadUrl(requestId.value, stepId)
+}
+
 function additionalDocumentDownloadUrl(additionalDocumentId: number | string) {
   return adminAdditionalDocumentDownloadUrl(requestId.value, additionalDocumentId)
 }
@@ -644,8 +675,34 @@ function attachmentDownloadUrl(attachmentId: number | string) {
   return staffAttachmentDownloadUrl(requestId.value, attachmentId)
 }
 
+function attachmentBundleDownloadUrl() {
+  return staffAttachmentsBundleDownloadUrl(requestId.value)
+}
+
 function shareholderIdDownloadUrl(shareholderId: number | string) {
   return staffShareholderIdDownloadUrl(requestId.value, shareholderId)
+}
+
+function normalizedRequiredUploads(item: RequiredDocumentChecklistItem | any) {
+  const uploads = Array.isArray(item?.uploads) ? [...item.uploads] : []
+  if (!uploads.length && item?.upload?.id) {
+    uploads.push(item.upload)
+  }
+
+  return uploads
+}
+
+function latestRequiredUpload(item: RequiredDocumentChecklistItem | any) {
+  return normalizedRequiredUploads(item)[0] ?? null
+}
+
+function requiredUploadStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'approved') return uiText('Approved', 'معتمد')
+  if (key === 'rejected') return uiText('Change requested', 'طُلب تعديل')
+  if (key === 'uploaded') return uiText('Uploaded', 'مرفوع')
+  if (key === 'pending') return uiText('Pending', 'قيد الانتظار')
+  return key || t('staffRequestDetails.states.emptyValue')
 }
 
  
@@ -687,15 +744,6 @@ onMounted(load)
     <template #topbar-actions>
       <RouterLink :to="{ name: 'staff-requests' }" class="ghost-btn">{{ t('staffRequestDetails.hero.backToAssignedRequests') }}</RouterLink>
       <RouterLink :to="{ name: 'staff-request-send-email', params: { id: requestId } }" class="primary-btn">{{ uiText('Send email', 'إرسال بريد') }}</RouterLink>
-      <button
-        v-if="requestItem?.current_contract?.contract_pdf_path"
-        type="button"
-        class="ghost-btn"
-        @click="openFilePreview(`contract-${requestId}.pdf`, adminContractDownloadUrl(requestId), 'application/pdf')"
-      >
-        Preview
-      </button>
-      <a v-if="requestItem?.current_contract?.contract_pdf_path" :href="adminContractDownloadUrl(requestId)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.hero.downloadContractPdf') }}</a>
     </template>
 
     <template #loading>{{ t('staffRequestDetails.states.loading') }}</template>
@@ -833,16 +881,41 @@ onMounted(load)
                       {{ item.is_change_requested ? t('staffRequestDetails.states.changeRequested') : item.is_uploaded ? t('staffRequestDetails.states.uploaded') : t('staffRequestDetails.states.pending') }}
                     </span>
                   </div>
-                  <p>{{ item.is_uploaded || item.is_change_requested ? t('staffRequestDetails.states.latestFileLabel', { file: item.upload?.file_name || t('staffRequestDetails.states.uploadedFile') }) : t('staffRequestDetails.states.waitingForClientUpload') }}</p>
-                  <div v-if="item.upload?.id" class="approve-actions">
-                    <button
-                      type="button"
-                      class="ghost-btn"
-                      @click="openFilePreview(item.upload?.file_name, requiredDocumentDownloadUrl(item.upload.id))"
+                  <p>{{ item.is_uploaded || item.is_change_requested ? t('staffRequestDetails.states.latestFileLabel', { file: latestRequiredUpload(item)?.file_name || t('staffRequestDetails.states.uploadedFile') }) : t('staffRequestDetails.states.waitingForClientUpload') }}</p>
+                  <div v-if="normalizedRequiredUploads(item).length" class="file-list request-inline-stack">
+                    <div
+                      v-for="upload in normalizedRequiredUploads(item)"
+                      :key="`staff-required-upload-${item.document_upload_step_id}-${upload.id}`"
+                      class="file-item"
                     >
-                      Preview
-                    </button>
-                    <a :href="requiredDocumentDownloadUrl(item.upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadLatestFile') }}</a>
+                      <div>
+                        <strong>{{ upload.file_name || t('staffRequestDetails.states.uploadedFile') }}</strong>
+                        <span>
+                          {{ uiText('Status', 'الحالة') }}: {{ requiredUploadStatusLabel(upload.status) }}
+                          <template v-if="upload.uploaded_at"> · {{ readableDateTime(upload.uploaded_at) }}</template>
+                        </span>
+                      </div>
+                      <div class="approve-actions">
+                        <button
+                          type="button"
+                          class="ghost-btn"
+                          @click="openFilePreview(upload.file_name, requiredDocumentDownloadUrl(upload.id), upload.mime_type || upload.file_extension)"
+                        >
+                          {{ uiText('Preview', 'معاينة') }}
+                        </button>
+                        <a :href="requiredDocumentDownloadUrl(upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="Number(item.uploads_count || normalizedRequiredUploads(item).length) > 1" class="approve-actions">
+                    <a
+                      :href="requiredDocumentStepBundleDownloadUrl(item.document_upload_step_id)"
+                      target="_blank"
+                      rel="noopener"
+                      class="ghost-btn"
+                    >
+                      {{ uiText('Download all files', 'تنزيل جميع الملفات') }}
+                    </a>
                   </div>
                   <p v-if="item.rejection_reason" class="form-help form-help--error">{{ t('staffRequestDetails.states.reasonLabel') }}: {{ item.rejection_reason }}</p>
 
@@ -870,7 +943,7 @@ onMounted(load)
             </div>
           </details>
 
-          <details class="admin-accordion-card">
+          <details class="admin-accordion-card" :open="understudySectionOpen" @toggle="syncUnderstudySectionState">
             <summary>
               <div>
                 <h2>{{ uiText('Understudy package', 'حزمة الدراسة') }}</h2>
@@ -885,6 +958,10 @@ onMounted(load)
                   {{ staffQuestionSummary?.pending_required_total || 0 }} {{ uiText('required questions still pending', 'أسئلة إلزامية ما زالت بانتظار الإجابة') }}
                 </p>
               </div>
+
+              <p v-if="understudyQuestionsCompleted" class="client-subtext" style="margin-bottom: 1rem;">
+                {{ uiText('All required study questions are complete. This section is now minimized.', 'تمت إجابة جميع أسئلة الدراسة الإلزامية. تم تصغير هذا القسم.') }}
+              </p>
 
               <div v-if="requestItem?.understudy_submitted_at" class="notes-box" style="margin-bottom: 1rem;">
                 <span>{{ uiText('Submission status', 'حالة الإرسال') }}</span>
@@ -914,7 +991,7 @@ onMounted(load)
                     :type="studyQuestionType(question) === 'currency' ? 'number' : studyQuestionType(question) === 'phone' ? 'tel' : studyQuestionType(question)"
                     class="admin-input"
                     :step="studyQuestionType(question) === 'currency' ? '0.01' : undefined"
-                    :disabled="understudyLocked"
+                    :disabled="understudyQuestionInputsLocked"
                     :placeholder="studyQuestionPlaceholder(question) || 'Write your answer here'"
                     :value="studyAnswerTextValue(question.id)"
                     @input="updateStudyQuestionValue(question.id, ($event.target as HTMLInputElement).value)"
@@ -925,7 +1002,7 @@ onMounted(load)
                     :value="studyAnswerTextValue(question.id)"
                     rows="4"
                     class="admin-textarea"
-                    :disabled="understudyLocked"
+                    :disabled="understudyQuestionInputsLocked"
                     :placeholder="studyQuestionPlaceholder(question) || 'Write your answer here'"
                     @input="updateStudyQuestionValue(question.id, ($event.target as HTMLTextAreaElement).value)"
                   ></textarea>
@@ -933,7 +1010,7 @@ onMounted(load)
                   <select
                     v-else-if="studyQuestionType(question) === 'select'"
                     class="admin-select"
-                    :disabled="understudyLocked"
+                    :disabled="understudyQuestionInputsLocked"
                     :value="Array.isArray(studyAnswers[question.id]) ? '' : studyAnswerTextValue(question.id)"
                     @change="updateStudyQuestionValue(question.id, ($event.target as HTMLSelectElement).value)"
                   >
@@ -950,7 +1027,7 @@ onMounted(load)
                         :name="`staff-study-question-${question.id}`"
                         :checked="studyAnswers[question.id] === option"
                         :value="option"
-                        :disabled="understudyLocked"
+                        :disabled="understudyQuestionInputsLocked"
                         @change="updateStudyQuestionValue(question.id, option)"
                       />
                       <span>{{ option }}</span>
@@ -962,7 +1039,7 @@ onMounted(load)
                       <input
                         type="checkbox"
                         :checked="isStudyCheckboxChecked(question.id, option)"
-                        :disabled="understudyLocked"
+                        :disabled="understudyQuestionInputsLocked"
                         @change="updateStudyCheckbox(question.id, option, ($event.target as HTMLInputElement).checked)"
                       />
                       <span>{{ option }}</span>
@@ -973,7 +1050,7 @@ onMounted(load)
                     v-else
                     type="text"
                     class="admin-input"
-                    :disabled="understudyLocked"
+                    :disabled="understudyQuestionInputsLocked"
                     :placeholder="studyQuestionPlaceholder(question) || 'Write your answer here'"
                     :value="studyAnswerTextValue(question.id)"
                     @input="updateStudyQuestionValue(question.id, ($event.target as HTMLInputElement).value)"
@@ -985,7 +1062,7 @@ onMounted(load)
                     <button
                       type="button"
                       class="ghost-btn"
-                      :disabled="understudyLocked || savingStudyAnswer[question.id]"
+                      :disabled="understudyQuestionInputsLocked || savingStudyAnswer[question.id]"
                       @click="saveStudyQuestionAnswer(question)"
                     >
                       {{ savingStudyAnswer[question.id] ? 'Saving...' : 'Save answer' }}
@@ -1033,6 +1110,7 @@ onMounted(load)
                     <select v-model="commentVisibility" class="admin-select">
                       <option value="internal">{{ t('staffRequestDetails.form.internal') }}</option>
                       <option value="admin_only">{{ t('staffRequestDetails.form.adminOnly') }}</option>
+                      <option value="client_visible">{{ t('staffRequestDetails.form.clientVisible') }}</option>
                     </select>
                   </div>
                   <textarea v-model="commentText" rows="5" class="admin-textarea" :placeholder="t('staffRequestDetails.placeholders.commentText')"></textarea>
@@ -1374,22 +1452,29 @@ onMounted(load)
         </div>
 
         <div v-else-if="quickView === 'attachments'" class="file-list">
-          <div v-if="requestItem.attachments?.length" v-for="file in requestItem.attachments" :key="file.id" class="file-item">
-            <div>
-              <strong>{{ file.file_name }}</strong>
-              <span>{{ file.category }}</span>
+          <template v-if="requestItem.attachments?.length">
+            <div v-if="requestItem.attachments.length > 1" class="approve-actions" style="margin-bottom: 0.7rem;">
+              <a :href="attachmentBundleDownloadUrl()" target="_blank" rel="noopener" class="ghost-btn">
+                {{ uiText('Download all files', 'تنزيل جميع الملفات') }}
+              </a>
             </div>
-            <div class="approve-actions">
-              <button
-                type="button"
-                class="ghost-btn"
-                @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))"
-              >
-                Preview
-              </button>
-              <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
+            <div v-for="file in requestItem.attachments" :key="file.id" class="file-item">
+              <div>
+                <strong>{{ file.file_name }}</strong>
+                <span>{{ file.category }}</span>
+              </div>
+              <div class="approve-actions">
+                <button
+                  type="button"
+                  class="ghost-btn"
+                  @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))"
+                >
+                  {{ uiText('Preview', 'معاينة') }}
+                </button>
+                <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
+              </div>
             </div>
-          </div>
+          </template>
           <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInitialFilesUploaded') }}</p>
         </div>
 
@@ -1427,7 +1512,7 @@ onMounted(load)
           <div v-if="requestItem.comments?.length" v-for="comment in requestItem.comments" :key="comment.id" class="timeline-item">
             <strong>{{ comment.user?.name || t('staffRequestDetails.states.system') }}</strong>
             <p>{{ comment.comment_text }}</p>
-            <span>{{ readableDateTime(comment.created_at) }}</span>
+            <span>{{ readableDateTime(comment.created_at) }} · {{ readableCommentVisibility(comment.visibility) }}</span>
           </div>
           <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInternalComments') }}</p>
         </div>

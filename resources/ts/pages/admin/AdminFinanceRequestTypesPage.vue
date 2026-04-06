@@ -408,7 +408,16 @@ function extractErrorMessage(error: unknown, fallback: string) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in rows" :key="row.id">
+              <tr
+                v-for="row in rows"
+                :key="row.id"
+                class="is-clickable-row"
+                role="button"
+                tabindex="0"
+                @click="editRow(row)"
+                @keydown.enter.prevent="editRow(row)"
+                @keydown.space.prevent="editRow(row)"
+              >
                 <td>
                   <div class="admin-question-table__text">
                     <strong>{{ localizedTypeName(row) }}</strong>
@@ -422,7 +431,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
                     {{ row.is_active ? t('adminFinanceRequestTypesPage.states.active') : t('adminFinanceRequestTypesPage.states.inactive') }}
                   </span>
                 </td>
-                <td>
+                <td @click.stop>
                   <div class="admin-table-actions">
                     <button type="button" class="admin-inline-link" @click="editRow(row)">
                       {{ t('adminFinanceRequestTypesPage.table.actions.edit') }}

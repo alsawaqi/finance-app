@@ -8,6 +8,7 @@ import {
   clientContractDownloadUrl,
   getClientRequest,
   submitClientUpdateValue,
+  uploadClientCommercialContract,
 } from '@/services/clientPortal'
 import { buildPreviewUrl } from '@/utils/filePreview'
 import { countryNameFromCode } from '@/utils/countries'
@@ -21,6 +22,9 @@ import {
   formatUpdateBatchStatus,
 } from '@/utils/requestStatus'
 import ClientQuestionField from './inc/ClientQuestionField.vue'
+
+/** Shape stored for ClientQuestionField + native inputs (v-model rejects `unknown`). */
+type UpdateDraftValue = string | number | string[] | null | undefined
 
 const route = useRoute()
 const requestId = computed(() => route.params.id as string)
@@ -36,9 +40,11 @@ const filePreviewMime = ref('')
 const filePreviewUrl = ref('')
 const fileDownloadUrl = ref('')
 
-const updateDraftValues = ref<Record<number, unknown>>({})
+const updateDraftValues = ref<Record<number, UpdateDraftValue>>({})
 const submittingUpdateItems = ref<Record<number, boolean>>({})
 const financeRequestTypes = ref<FinanceRequestTypeOption[]>([])
+const commercialContractFile = ref<File | null>(null)
+const uploadingCommercialContract = ref(false)
 const isArabic = computed(() => locale.value === 'ar')
 const emptyValueLabel = computed(() => t('clientRequestDetails.states.emptyValue'))
 
@@ -83,6 +89,7 @@ function additionalDocumentStatusLabel(value: unknown) {
 const activeUpdateBatch = computed(() => requestItem.value?.active_update_batch ?? null)
 const valueUpdateItems = computed(() => (activeUpdateBatch.value?.items ?? []).filter((item: any) => item.item_type !== 'attachment'))
 const fileUpdateItems = computed(() => (activeUpdateBatch.value?.items ?? []).filter((item: any) => item.item_type === 'attachment'))
+const canUploadClientCommercialContract = computed(() => Boolean(requestItem.value?.can_upload_client_commercial_contract))
 
 function localizedText(en?: string | null, ar?: string | null, fallback?: string) {
   const resolvedFallback = fallback ?? emptyValueLabel.value
@@ -121,9 +128,9 @@ function extractInitialUpdateValue(item: any) {
 }
 
 function seedUpdateDraftValues() {
-  const next: Record<number, unknown> = {}
+  const next: Record<number, UpdateDraftValue> = {}
   valueUpdateItems.value.forEach((item: any) => {
-    next[item.id] = updateDraftValues.value[item.id] ?? extractInitialUpdateValue(item)
+    next[item.id] = (updateDraftValues.value[item.id] ?? extractInitialUpdateValue(item)) as UpdateDraftValue
   })
   updateDraftValues.value = next
 }
@@ -212,6 +219,32 @@ function openContractPreview() {
   filePreviewOpen.value = true
 }
 
+function onCommercialContractFileChange(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  commercialContractFile.value = input?.files?.[0] ?? null
+}
+
+async function submitCommercialContractUpload() {
+  if (!commercialContractFile.value || uploadingCommercialContract.value) return
+
+  uploadingCommercialContract.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await uploadClientCommercialContract(requestId.value, {
+      file: commercialContractFile.value,
+    })
+    await load()
+    commercialContractFile.value = null
+    successMessage.value = data.message || uiText('Commercial registration contract uploaded successfully.', 'تم رفع عقد توثيق الغرفة التجارية بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to upload the commercial registration contract.', 'تعذر رفع عقد توثيق الغرفة التجارية.')
+  } finally {
+    uploadingCommercialContract.value = false
+  }
+}
+
 function applyRequestFromResponse(data: any) {
   if (data?.request) {
     requestItem.value = data.request
@@ -248,6 +281,7 @@ async function load() {
   loading.value = true
   errorMessage.value = ''
   successMessage.value = ''
+  commercialContractFile.value = null
   try {
     const data = await getClientRequest(requestId.value)
     requestItem.value = data.request ?? null
@@ -472,6 +506,19 @@ onMounted(load)
               </article>
             </div>
 
+            <article v-if="requestItem.comments?.length" class="panel-card slim-card">
+              <div class="panel-head">
+                <h3>{{ uiText('Team comments', 'تعليقات الفريق') }}</h3>
+              </div>
+              <div class="timeline-list compact-list">
+                <div v-for="comment in requestItem.comments" :key="comment.id" class="timeline-item">
+                  <strong>{{ comment.user?.name || uiText('Team', 'الفريق') }}</strong>
+                  <p>{{ comment.comment_text }}</p>
+                  <span>{{ dateTimeText(comment.created_at) }}</span>
+                </div>
+              </div>
+            </article>
+
             <article v-if="requestItem.shareholders?.length" class="panel-card slim-card">
               <div class="panel-head"><h3>{{ t('clientRequestDetails.sections.shareholders') }}</h3></div>
               <div class="qa-list compact-list">
@@ -498,6 +545,41 @@ onMounted(load)
               <div><span>{{ t('clientRequestDetails.summary.adminSigned') }}</span><strong>{{ dateTimeText(requestItem.current_contract?.admin_signed_at, t('clientRequestDetails.states.pending')) }}</strong></div>
               <div><span>{{ t('clientRequestDetails.summary.clientSigned') }}</span><strong>{{ dateTimeText(requestItem.current_contract?.client_signed_at, t('clientRequestDetails.states.pending')) }}</strong></div>
             </div>
+
+            <article v-if="requestItem.current_contract?.requires_commercial_registration" class="panel-card slim-card client-commercial-card">
+              <div class="panel-head">
+                <h3>{{ uiText('Commercial registration authentication', 'توثيق الغرفة التجارية') }}</h3>
+              </div>
+              <div class="summary-grid summary-grid--compact summary-grid--three">
+                <div>
+                  <span>{{ uiText('Client upload', 'رفع العميل') }}</span>
+                  <strong>{{ dateTimeText(requestItem.current_contract?.client_commercial_uploaded_at, uiText('Pending', 'بانتظار الرفع')) }}</strong>
+                </div>
+                <div>
+                  <span>{{ uiText('Admin upload', 'رفع الإدارة') }}</span>
+                  <strong>{{ dateTimeText(requestItem.current_contract?.admin_commercial_uploaded_at, uiText('Pending', 'بانتظار الرفع')) }}</strong>
+                </div>
+                <div>
+                  <span>{{ uiText('Current step', 'الخطوة الحالية') }}</span>
+                  <strong>{{ stageMeta(requestItem.workflow_stage).label }}</strong>
+                </div>
+              </div>
+
+              <div v-if="canUploadClientCommercialContract" class="client-inline-actions client-inline-actions--stackable client-commercial-upload">
+                <input class="client-form-control" type="file" @change="onCommercialContractFileChange" />
+                <button type="button" class="client-btn-primary" :disabled="!commercialContractFile || uploadingCommercialContract" @click="submitCommercialContractUpload">
+                  {{ uploadingCommercialContract ? uiText('Uploading...', 'جاري الرفع...') : uiText('Upload authenticated contract', 'رفع العقد الموثق') }}
+                </button>
+              </div>
+
+              <p v-else class="client-muted">
+                {{
+                  requestItem.current_contract?.admin_commercial_uploaded_at
+                    ? uiText('Commercial registration uploads are complete.', 'تم استكمال رفع توثيق الغرفة التجارية.')
+                    : uiText('Waiting for the next commercial registration action.', 'بانتظار الإجراء التالي الخاص بتوثيق الغرفة التجارية.')
+                }}
+              </p>
+            </article>
 
             <div class="client-two-col-grid">
               <article class="panel-card slim-card">

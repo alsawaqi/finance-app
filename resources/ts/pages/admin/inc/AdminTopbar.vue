@@ -63,7 +63,7 @@ async function handleLogout() {
 
       <div class="admin-topbar__title-wrap">
         <span class="admin-topbar__eyebrow">{{ t('adminTopbar.eyebrow') }}</span>
-        <h1>{{ currentSectionLabel }}</h1>
+        <h4>{{ currentSectionLabel }}</h4>
         <p>{{ t('adminTopbar.subtitle') }}</p>
       </div>
     </div>

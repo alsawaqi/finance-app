@@ -6,7 +6,7 @@ import AppPagination from '@/components/AppPagination.vue'
 import AdminQuestionBuilderForm from './inc/AdminQuestionBuilderForm.vue'
 import AdminQuestionPreviewCard from './inc/AdminQuestionPreviewCard.vue'
 import AdminQuestionLibraryTable from './inc/AdminQuestionLibraryTable.vue'
-import type { QuestionType, RequestQuestionItem, RequestQuestionPayload } from '@/services/requestQuestions'
+import type { QuestionFinanceType, QuestionType, RequestQuestionItem, RequestQuestionPayload } from '@/services/requestQuestions'
 import {
   createRequestQuestion,
   listRequestQuestions,
@@ -21,6 +21,7 @@ type QuestionForm = {
   code: string
   question_text: string
   question_type: QuestionType
+  finance_type: QuestionFinanceType
   placeholder: string
   help_text: string
   validation_rules: string
@@ -43,6 +44,12 @@ const questionTypeOptions = computed<Array<{ value: QuestionType; label: string;
   { value: 'email', label: t('adminRequestQuestionsPage.types.email.label'), helper: t('adminRequestQuestionsPage.types.email.helper') },
   { value: 'phone', label: t('adminRequestQuestionsPage.types.phone.label'), helper: t('adminRequestQuestionsPage.types.phone.helper') },
   { value: 'currency', label: t('adminRequestQuestionsPage.types.currency.label'), helper: t('adminRequestQuestionsPage.types.currency.helper') },
+])
+
+const financeTypeOptions = computed<Array<{ value: QuestionFinanceType; label: string }>>(() => [
+  { value: 'all', label: t('adminRequestQuestionsPage.financeTypes.all') },
+  { value: 'individual', label: t('adminRequestQuestionsPage.financeTypes.individual') },
+  { value: 'company', label: t('adminRequestQuestionsPage.financeTypes.company') },
 ])
 
 const questions = ref<RequestQuestionItem[]>([])
@@ -91,6 +98,7 @@ function createDefaultForm(): QuestionForm {
     code: '',
     question_text: '',
     question_type: 'text',
+    finance_type: 'all',
     placeholder: '',
     help_text: '',
     validation_rules: '',
@@ -143,6 +151,7 @@ function buildPayload(): RequestQuestionPayload {
     code: form.value.code.trim() || null,
     question_text: form.value.question_text.trim(),
     question_type: form.value.question_type,
+    finance_type: form.value.finance_type,
     options_json: needsOptions.value ? parsedOptions.value : null,
     placeholder: form.value.placeholder.trim() || null,
     help_text: form.value.help_text.trim() || null,
@@ -187,6 +196,7 @@ function editQuestion(row: RequestQuestionItem) {
     code: row.code ?? '',
     question_text: row.question_text,
     question_type: row.question_type,
+    finance_type: row.finance_type,
     placeholder: row.placeholder ?? '',
     help_text: row.help_text ?? '',
     validation_rules: row.validation_rules ?? '',
@@ -299,6 +309,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <AdminQuestionBuilderForm
         v-model="form"
         :question-type-options="questionTypeOptions"
+        :finance-type-options="financeTypeOptions"
         :show-options="needsOptions"
         :is-editing="isEditing"
         :is-saving="isSaving"
@@ -309,6 +320,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
 
       <AdminQuestionPreviewCard
         :form="form"
+        :finance-type-options="financeTypeOptions"
         :options="parsedOptions"
         :show-options="needsOptions"
       />

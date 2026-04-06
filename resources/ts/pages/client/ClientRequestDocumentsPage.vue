@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppFilePreviewModal from '@/components/AppFilePreviewModal.vue'
@@ -10,6 +11,7 @@ import {
   uploadClientRequiredDocument,
 } from '@/services/clientPortal'
 import { getClientWorkflowStageMeta } from '@/utils/clientRequestStage'
+import { formatDateTime } from '@/utils/dateTime'
 
 const route = useRoute()
 const requestId = computed(() => route.params.id as string)
@@ -105,6 +107,35 @@ function additionalStatusClass(status: string | null | undefined) {
   return 'client-badge--amber'
 }
 
+function requiredUploads(item: any) {
+  const uploads = Array.isArray(item?.uploads) ? [...item.uploads] : []
+  if (!uploads.length && item?.upload?.id) {
+    uploads.push(item.upload)
+  }
+
+  return uploads
+}
+
+function requiredUploadStatusLabel(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'approved') return uiText('Approved', 'معتمد')
+  if (key === 'rejected') return uiText('Needs another upload', 'يتطلب إعادة الرفع')
+  if (key === 'uploaded') return uiText('Uploaded', 'تم الرفع')
+  if (key === 'pending') return uiText('Pending', 'قيد الانتظار')
+  return key || emptyValueLabel.value
+}
+
+function requiredUploadStatusClass(status: string | null | undefined) {
+  const key = String(status || '').toLowerCase()
+  if (key === 'approved' || key === 'uploaded') return 'client-badge--green'
+  if (key === 'rejected') return 'client-badge--red'
+  return 'client-badge--amber'
+}
+
+function readableDateTime(value: unknown) {
+  return formatDateTime(value, locale, emptyValueLabel.value)
+}
+
 async function load() {
   loading.value = true
   errorMessage.value = ''
@@ -119,16 +150,25 @@ async function load() {
   }
 }
 
-function setRequiredFileRef(stepId: number, el: Element | null) {
-  requiredFileInputs.value[stepId] = el as HTMLInputElement | null
+/** Vue template ref callbacks pass Element or (for components) ComponentPublicInstance. */
+function refCallbackToInput(
+  el: Element | ComponentPublicInstance | null,
+): HTMLInputElement | null {
+  if (el == null) return null
+  const node = el instanceof Element ? el : el.$el
+  return node instanceof HTMLInputElement ? node : null
 }
 
-function setAdditionalFileRef(documentId: number, el: Element | null) {
-  additionalFileInputs.value[documentId] = el as HTMLInputElement | null
+function setRequiredFileRef(stepId: number, el: Element | ComponentPublicInstance | null) {
+  requiredFileInputs.value[stepId] = refCallbackToInput(el)
 }
 
-function setUpdateFileRef(itemId: number, el: Element | null) {
-  updateFileInputs.value[itemId] = el as HTMLInputElement | null
+function setAdditionalFileRef(documentId: number, el: Element | ComponentPublicInstance | null) {
+  additionalFileInputs.value[documentId] = refCallbackToInput(el)
+}
+
+function setUpdateFileRef(itemId: number, el: Element | ComponentPublicInstance | null) {
+  updateFileInputs.value[itemId] = refCallbackToInput(el)
 }
 
 function openRequiredPicker(stepId: number) {
@@ -157,6 +197,7 @@ function additionalUploadButtonLabel(item: any) {
 
 function requiredUploadButtonLabel(item: any) {
   if (uploadingRequired.value[item.document_upload_step_id]) return t('clientDocuments.actions.uploading')
+  if (item.is_multiple && item.is_uploaded) return uiText('Upload another file', 'رفع ملف إضافي')
   if (item.is_change_requested) return t('clientDocuments.actions.uploadCorrected')
   if (!item.can_client_upload && item.is_uploaded) return t('clientDocuments.states.uploaded')
   return t('clientDocuments.actions.uploadFile')
@@ -173,13 +214,15 @@ function clearUploadPreview() {
   pendingUpload.value = null
 }
 
-async function onRequiredFileChange(stepId: number, event: Event) {
+async function onRequiredFileChange(item: any, event: Event) {
+  const stepId = Number(item?.document_upload_step_id || 0)
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
+  const selectedFiles = Array.from(input.files ?? [])
 
-  if (!file) return
+  if (!selectedFiles.length || !stepId) return
+  const filesToUpload = item?.is_multiple ? selectedFiles : selectedFiles.slice(0, 1)
 
-  pendingUpload.value = { kind: 'required', id: stepId, file, title: t('clientDocuments.sections.requiredTitle') }
+  pendingUpload.value = { kind: 'required', id: stepId, file: filesToUpload[0], title: t('clientDocuments.sections.requiredTitle') }
   uploadPreviewOpen.value = true
 
   uploadingRequired.value = {
@@ -189,16 +232,29 @@ async function onRequiredFileChange(stepId: number, event: Event) {
 
   errorMessage.value = ''
   successMessage.value = ''
+  let uploadedCount = 0
 
   try {
-    const data = await uploadClientRequiredDocument(requestId.value, {
-      document_upload_step_id: stepId,
-      file,
-    })
+    for (const file of filesToUpload) {
+      const data = await uploadClientRequiredDocument(requestId.value, {
+        document_upload_step_id: stepId,
+        file,
+      })
 
-    applyRequestFromResponse(data)
-    successMessage.value = data.message || t('clientDocuments.success.requiredUploaded')
+      applyRequestFromResponse(data)
+      uploadedCount += 1
+    }
+
+    successMessage.value = uploadedCount > 1
+      ? uiText(`${uploadedCount} files uploaded successfully.`, `تم رفع ${uploadedCount} ملفات بنجاح.`)
+      : t('clientDocuments.success.requiredUploaded')
   } catch (error: any) {
+    if (uploadedCount > 0) {
+      successMessage.value = uiText(
+        `${uploadedCount} files uploaded before an error occurred.`,
+        `تم رفع ${uploadedCount} ملفات قبل حدوث خطأ.`,
+      )
+    }
     errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.requiredUploadFailed')
   } finally {
     uploadingRequired.value = {
@@ -420,6 +476,28 @@ onMounted(load)
                 <p v-if="item.upload?.file_name" class="client-subtext">
                   {{ t('clientDocuments.states.latestFile') }}: {{ item.upload.file_name }}
                 </p>
+                <p v-if="item.is_multiple" class="client-subtext">
+                  {{ uiText('Multiple files allowed', 'يسمح بعدة ملفات') }}
+                  <span v-if="Number(item.uploads_count || 0) > 0"> - {{ uiText('Uploaded files', 'الملفات المرفوعة') }}: {{ item.uploads_count }}</span>
+                </p>
+
+                <div v-if="requiredUploads(item).length" class="client-required-upload-list">
+                  <div
+                    v-for="upload in requiredUploads(item)"
+                    :key="`client-required-upload-${item.document_upload_step_id}-${upload.id}`"
+                    class="client-required-upload-row"
+                  >
+                    <div>
+                      <strong>{{ upload.file_name || t('clientDocuments.states.latestFile') }}</strong>
+                      <p class="client-subtext">
+                        {{ uiText('Uploaded at', 'تاريخ الرفع') }}: {{ readableDateTime(upload.uploaded_at) }}
+                      </p>
+                    </div>
+                    <span class="client-badge" :class="requiredUploadStatusClass(upload.status)">
+                      {{ requiredUploadStatusLabel(upload.status) }}
+                    </span>
+                  </div>
+                </div>
 
                 <p v-if="item.rejection_reason" class="client-form-error">{{ item.rejection_reason }}</p>
 
@@ -432,8 +510,9 @@ onMounted(load)
                     :id="`required-file-${item.document_upload_step_id}`"
                     :ref="(el) => setRequiredFileRef(item.document_upload_step_id, el)"
                     type="file"
+                    :multiple="item.is_multiple"
                     class="sr-only"
-                    @change.stop="onRequiredFileChange(item.document_upload_step_id, $event)"
+                    @change.stop="onRequiredFileChange(item, $event)"
                   />
 
                   <button
@@ -525,3 +604,37 @@ onMounted(load)
     />
   </section>
 </template>
+
+<style scoped>
+.client-required-upload-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-block: 0.45rem 0.2rem;
+}
+
+.client-required-upload-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.client-required-upload-row strong {
+  display: block;
+  font-size: 0.86rem;
+}
+
+.client-required-upload-row .client-subtext {
+  margin: 0.2rem 0 0;
+}
+
+@media (max-width: 640px) {
+  .client-required-upload-row {
+    flex-direction: column;
+  }
+}
+</style>

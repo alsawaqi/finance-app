@@ -37,11 +37,14 @@ export type RequiredDocumentChecklistItem = {
   code?: string | null
   name: string
   is_required: boolean
+  is_multiple?: boolean
   status: string
   is_uploaded: boolean
   can_client_upload?: boolean
   is_change_requested?: boolean
   rejection_reason?: string | null
+  uploads_count?: number
+  accepted_uploads_count?: number
   upload?: {
     id: number
     file_name: string
@@ -49,6 +52,13 @@ export type RequiredDocumentChecklistItem = {
     status: string
     uploaded_at?: string | null
   } | null
+  uploads?: Array<{
+    id: number
+    file_name: string
+    file_path: string
+    status: string
+    uploaded_at?: string | null
+  }>
 }
 
 export type AdditionalDocumentItem = {
@@ -351,7 +361,7 @@ export async function submitUnderstudy(
 
 export async function addStaffComment(
   id: string | number,
-  payload: { comment_text: string; visibility?: 'internal' | 'admin_only' },
+  payload: { comment_text: string; visibility?: 'internal' | 'admin_only' | 'client_visible' },
 ) {
   const { data } = await api.post(`/api/staff/requests/${id}/comments`, payload)
   return data as {
@@ -435,8 +445,19 @@ export function staffAttachmentDownloadUrl(requestId: string | number, attachmen
   return `/api/admin/requests/${requestId}/attachments/${attachmentId}/download`
 }
 
+export function staffAttachmentsBundleDownloadUrl(requestId: string | number) {
+  return `/api/admin/requests/${requestId}/attachments/download-all`
+}
+
 export function staffShareholderIdDownloadUrl(requestId: string | number, shareholderId: string | number) {
   return `/api/admin/requests/${requestId}/shareholders/${shareholderId}/id-file/download`
+}
+
+export function staffRequiredDocumentStepBundleDownloadUrl(
+  requestId: string | number,
+  stepId: string | number,
+) {
+  return `/api/admin/requests/${requestId}/required-documents/steps/${stepId}/download-all`
 }
 
 export function staffRequestEmailAttachmentDownloadUrl(

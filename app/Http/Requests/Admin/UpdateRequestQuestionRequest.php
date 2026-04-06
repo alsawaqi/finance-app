@@ -32,6 +32,7 @@ class UpdateRequestQuestionRequest extends FormRequest
                 'phone',
                 'currency',
             ])],
+            'finance_type' => ['nullable', 'string', Rule::in(['all', 'individual', 'company'])],
             'options_json' => [
                 Rule::requiredIf(fn () => in_array($this->input('question_type'), ['select', 'radio', 'checkbox'], true)),
                 'nullable',
@@ -54,6 +55,7 @@ class UpdateRequestQuestionRequest extends FormRequest
         $placeholder = trim((string) $this->input('placeholder', ''));
         $helpText = trim((string) $this->input('help_text', ''));
         $validationRules = trim((string) $this->input('validation_rules', ''));
+        $financeType = strtolower(trim((string) $this->input('finance_type', 'all')));
 
         $options = collect($this->input('options_json', []))
             ->map(fn ($value) => trim((string) $value))
@@ -66,6 +68,7 @@ class UpdateRequestQuestionRequest extends FormRequest
             'placeholder' => $placeholder !== '' ? $placeholder : null,
             'help_text' => $helpText !== '' ? $helpText : null,
             'validation_rules' => $validationRules !== '' ? $validationRules : null,
+            'finance_type' => $financeType !== '' ? $financeType : 'all',
             'options_json' => count($options) > 0 ? $options : null,
             'is_required' => $this->boolean('is_required'),
             'is_active' => $this->has('is_active') ? $this->boolean('is_active') : false,

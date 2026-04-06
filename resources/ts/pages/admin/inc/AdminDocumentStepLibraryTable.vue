@@ -86,8 +86,13 @@ function onDrop(targetId: number) {
             <td class="document-step-drag">::</td>
             <td>#{{ row.sort_order }}</td>
             <td>
-              <strong>{{ row.name }}</strong>
-              <div class="document-step-row-sub">{{ row.code || t('adminDocumentStepLibrary.states.autoCode') }}</div>
+              <div class="document-step-name-line">
+                <strong>{{ row.name }}</strong>
+                <span class="document-step-code-inline">{{ row.code || t('adminDocumentStepLibrary.states.autoCode') }}</span>
+              </div>
+              <div class="document-step-row-sub">
+                {{ row.is_multiple ? t('adminDocumentStepLibrary.states.multiple') : t('adminDocumentStepLibrary.states.single') }}
+              </div>
             </td>
             <td>
               <div class="document-step-chip-row compact">

@@ -26,6 +26,7 @@ type StepForm = {
   max_file_size_mb: number | null
   sort_order: number
   is_required: boolean
+  is_multiple: boolean
   is_active: boolean
 }
 
@@ -78,6 +79,7 @@ function createDefaultForm(): StepForm {
     max_file_size_mb: 10,
     sort_order: steps.value.length + 1,
     is_required: true,
+    is_multiple: false,
     is_active: true,
   }
 }
@@ -102,6 +104,7 @@ function buildPayload(): DocumentUploadStepPayload {
     max_file_size_mb: form.value.max_file_size_mb,
     sort_order: form.value.sort_order,
     is_required: form.value.is_required,
+    is_multiple: form.value.is_multiple,
     is_active: form.value.is_active,
   }
 }
@@ -165,6 +168,7 @@ function editStep(row: DocumentUploadStepItem) {
     max_file_size_mb: row.max_file_size_mb,
     sort_order: row.sort_order,
     is_required: row.is_required,
+    is_multiple: row.is_multiple,
     is_active: row.is_active,
   }
 
@@ -253,7 +257,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
     <section class="document-step-hero">
       <div>
         <span class="document-step-hero__eyebrow">{{ t('adminDocumentUploadStepsPage.hero.eyebrow') }}</span>
-        <h1>{{ t('adminDocumentUploadStepsPage.hero.title') }}</h1>
+        <h4>{{ t('adminDocumentUploadStepsPage.hero.title') }}</h4>
         <p>
           {{ t('adminDocumentUploadStepsPage.hero.subtitle') }}
         </p>
@@ -295,6 +299,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
         :allowed-file-types="parsedAllowedFileTypes"
         :max-file-size-mb="form.max_file_size_mb"
         :is-required="form.is_required"
+        :is-multiple="form.is_multiple"
         :is-active="form.is_active"
       />
     </div>
@@ -353,7 +358,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
   letter-spacing: .08em;
 }
 
-.document-step-hero h1,
+.document-step-hero h4,
 .document-step-panel__head h2 {
   margin: 14px 0 10px;
   font-size: 30px;
@@ -484,7 +489,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
 
 .document-step-switches {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -606,10 +611,32 @@ function extractErrorMessage(error: unknown, fallback: string) {
 .document-step-pill.is-optional { background: #e2e8f0; color: #334155; }
 .document-step-pill.is-active { background: #dcfce7; color: #166534; }
 .document-step-pill.is-inactive { background: #fee2e2; color: #991b1b; }
+.document-step-pill.is-info { background: #e0e7ff; color: #3730a3; }
 
 .document-step-chip { background: #eef2ff; color: #4338ca; }
 .document-step-chip.is-muted { background: #f1f5f9; color: #475569; }
 .document-step-chip-row.compact .document-step-chip { min-height: 28px; }
+
+.document-step-name-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.document-step-code-inline {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid #dbe4f0;
+  color: #475569;
+  background: #f8fafc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
 
 .document-step-upload-box {
   border: 2px dashed #cbd5e1;
@@ -673,7 +700,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
   .document-step-hero,
   .document-step-panel { padding: 20px; }
   .document-step-hero { flex-direction: column; }
-  .document-step-hero h1,
+  .document-step-hero h4,
   .document-step-panel__head h2 { font-size: 24px; }
   .document-step-upload-box { flex-direction: column; align-items: flex-start; }
 }

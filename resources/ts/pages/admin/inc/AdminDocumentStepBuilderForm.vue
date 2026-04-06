@@ -11,6 +11,7 @@ type StepForm = {
   max_file_size_mb: number | null
   sort_order: number
   is_required: boolean
+  is_multiple: boolean
   is_active: boolean
 }
 
@@ -161,6 +162,18 @@ function firstError(field: string) {
           <div>
             <strong>{{ t('adminDocumentStepBuilder.switches.activeTitle') }}</strong>
             <span>{{ t('adminDocumentStepBuilder.switches.activeDesc') }}</span>
+          </div>
+        </label>
+
+        <label class="document-step-switch-card">
+          <input
+            :checked="form.is_multiple"
+            type="checkbox"
+            @change="updateField('is_multiple', ($event.target as HTMLInputElement).checked)"
+          />
+          <div>
+            <strong>{{ t('adminDocumentStepBuilder.switches.multipleTitle') }}</strong>
+            <span>{{ t('adminDocumentStepBuilder.switches.multipleDesc') }}</span>
           </div>
         </label>
       </div>
