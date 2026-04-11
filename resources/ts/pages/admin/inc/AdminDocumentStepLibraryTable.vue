@@ -40,6 +40,12 @@ function onDrop(targetId: number) {
   draggedId.value = null
   emit('reorder', next)
 }
+
+function financeTypeLabel(financeType: DocumentUploadStepItem['finance_type']) {
+  if (financeType === 'individual') return t('adminDocumentUploadStepsPage.financeTypes.individual')
+  if (financeType === 'company') return t('adminDocumentUploadStepsPage.financeTypes.company')
+  return t('adminDocumentUploadStepsPage.financeTypes.all')
+}
 </script>
 
 <template>
@@ -65,6 +71,7 @@ function onDrop(targetId: number) {
             <th></th>
             <th>{{ t('adminDocumentStepLibrary.columns.order') }}</th>
             <th>{{ t('adminDocumentStepLibrary.columns.name') }}</th>
+            <th>{{ t('adminDocumentStepLibrary.columns.financeType') }}</th>
             <th>{{ t('adminDocumentStepLibrary.columns.types') }}</th>
             <th>{{ t('adminDocumentStepLibrary.columns.size') }}</th>
             <th>{{ t('adminDocumentStepLibrary.columns.required') }}</th>
@@ -93,6 +100,9 @@ function onDrop(targetId: number) {
               <div class="document-step-row-sub">
                 {{ row.is_multiple ? t('adminDocumentStepLibrary.states.multiple') : t('adminDocumentStepLibrary.states.single') }}
               </div>
+            </td>
+            <td>
+              <span class="document-step-pill is-info">{{ financeTypeLabel(row.finance_type) }}</span>
             </td>
             <td>
               <div class="document-step-chip-row compact">

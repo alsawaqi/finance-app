@@ -16,6 +16,7 @@ use App\Support\RequestTimelineLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -535,12 +536,15 @@ class AdminContractController extends Controller
 
     private function downloadStoredFile(string $path, string $filename, ?string $mimeType, bool $preview = false): StreamedResponse
     {
-        abort_unless(Storage::disk('public')->exists($path), 404);
+        $disk = Storage::disk('public');
+        assert($disk instanceof FilesystemAdapter);
 
-        $resolvedMimeType = $mimeType ?: Storage::disk('public')->mimeType($path) ?: 'application/octet-stream';
+        abort_unless($disk->exists($path), 404);
+
+        $resolvedMimeType = $mimeType ?: $disk->mimeType($path) ?: 'application/octet-stream';
 
         if ($preview && $this->isPreviewableMimeType($resolvedMimeType)) {
-            return Storage::disk('public')->response(
+            return $disk->response(
                 $path,
                 $filename,
                 [
@@ -551,7 +555,7 @@ class AdminContractController extends Controller
             );
         }
 
-        return Storage::disk('public')->download($path, $filename);
+        return $disk->download($path, $filename);
     }
 
     private function isPreviewableMimeType(string $mimeType): bool

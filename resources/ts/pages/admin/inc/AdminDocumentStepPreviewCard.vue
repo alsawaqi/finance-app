@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 defineProps<{
   name: string
   description: string
+  financeType: 'all' | 'individual' | 'company'
   allowedFileTypes: string[]
   maxFileSizeMb: number | null
   isRequired: boolean
@@ -12,6 +13,12 @@ defineProps<{
 }>()
 
 const { t } = useI18n()
+
+function financeTypeLabel(financeType: 'all' | 'individual' | 'company') {
+  if (financeType === 'individual') return t('adminDocumentUploadStepsPage.financeTypes.individual')
+  if (financeType === 'company') return t('adminDocumentUploadStepsPage.financeTypes.company')
+  return t('adminDocumentUploadStepsPage.financeTypes.all')
+}
 </script>
 
 <template>
@@ -33,6 +40,9 @@ const { t } = useI18n()
         </span>
         <span class="document-step-pill is-info">
           {{ isMultiple ? t('adminSharedWidgets.states.multipleFiles') : t('adminSharedWidgets.states.singleFile') }}
+        </span>
+        <span class="document-step-pill is-info">
+          {{ financeTypeLabel(financeType) }}
         </span>
       </div>
 

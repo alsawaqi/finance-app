@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import VueApexCharts from 'vue3-apexcharts'
 import { getAdminCategorization } from '@/services/adminCategorization'
 
 const loading = ref(true)
@@ -124,7 +125,7 @@ const requestTrendOptions = computed(() => ({
     strokeDashArray: 4,
   },
   stroke: {
-    curve: 'smooth',
+    curve: 'smooth' as const,
     width: 3,
   },
   dataLabels: { enabled: false },
@@ -174,8 +175,8 @@ const bankChartOptions = computed(() => ({
     strokeDashArray: 4,
   },
   legend: {
-    position: 'top',
-    horizontalAlign: 'left',
+    position: 'top' as const,
+    horizontalAlign: 'left' as const,
     labels: {
       colors: '#475569',
     },
@@ -267,7 +268,7 @@ onMounted(load)
 
         <div v-if="loading" class="empty-state">{{ t('adminDashboard.states.chartLoading') }}</div>
         <div v-else-if="hasRequestTrend" class="admin-chart-card__body">
-          <apexchart
+          <VueApexCharts
             type="line"
             height="320"
             :options="requestTrendOptions"
@@ -284,7 +285,7 @@ onMounted(load)
 
         <div v-if="loading" class="empty-state">{{ t('adminDashboard.states.chartLoading') }}</div>
         <div v-else-if="hasBankBreakdown" class="admin-chart-card__body">
-          <apexchart
+          <VueApexCharts
             type="bar"
             height="320"
             :options="bankChartOptions"

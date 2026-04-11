@@ -23,6 +23,7 @@
     "dependencies": {
         "@heroicons/vue": "^2.2.0",
         "apexcharts": "^5.10.4",
+        "libphonenumber-js": "^1.12.41",
         "pinia": "^3.0.3",
         "primeicons": "^7.0.0",
         "primevue": "^3.53.1",

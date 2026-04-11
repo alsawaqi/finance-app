@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MailboxMessage;
 use App\Models\MailboxMessageAttachment;
 use App\Services\MailboxSyncService;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -103,14 +104,18 @@ class StaffInboxController extends Controller
         $message = $attachment->mailboxMessage;
 
         abort_unless($message && (int) $message->user_id === (int) $request->user()->id, 404);
-        $disk = $attachment->disk ?: 'local';
-        abort_unless(Storage::disk($disk)->exists($attachment->file_path), 404);
+
+        $diskName = $attachment->disk ?: 'local';
+        $storage = Storage::disk($diskName);
+        assert($storage instanceof FilesystemAdapter);
+
+        abort_unless($storage->exists($attachment->file_path), 404);
 
         if ($request->boolean('preview')) {
-            $mimeType = $attachment->mime_type ?: (Storage::disk($disk)->mimeType($attachment->file_path) ?: 'application/octet-stream');
+            $mimeType = $attachment->mime_type ?: ($storage->mimeType($attachment->file_path) ?: 'application/octet-stream');
 
             if ($this->isPreviewableMimeType($mimeType)) {
-                return Storage::disk($disk)->response(
+                return $storage->response(
                     $attachment->file_path,
                     $attachment->file_name ?: basename($attachment->file_path),
                     [
@@ -122,7 +127,7 @@ class StaffInboxController extends Controller
             }
         }
 
-        return Storage::disk($disk)->download(
+        return $storage->download(
             $attachment->file_path,
             $attachment->file_name ?: basename($attachment->file_path)
         );

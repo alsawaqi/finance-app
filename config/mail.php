@@ -16,6 +16,9 @@ return [
 
     'default' => env('MAIL_MAILER', 'log'),
 
+
+    'auth_mailer' => env('AUTH_MAIL_MAILER', 'auth_smtp'),
+
     /*
     |--------------------------------------------------------------------------
     | Mailer Configurations
@@ -48,6 +51,22 @@ return [
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
+
+
+        'auth_smtp' => [
+    'transport' => 'smtp',
+    'scheme' => env('AUTH_MAIL_SCHEME'),
+    'url' => env('AUTH_MAIL_URL'),
+    'host' => env('AUTH_MAIL_HOST', env('MAIL_HOST', '127.0.0.1')),
+    'port' => env('AUTH_MAIL_PORT', env('MAIL_PORT', 2525)),
+    'username' => env('AUTH_MAIL_USERNAME'),
+    'password' => env('AUTH_MAIL_PASSWORD'),
+    'timeout' => null,
+    'local_domain' => env(
+        'AUTH_MAIL_EHLO_DOMAIN',
+        parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)
+    ),
+],
 
         'ses' => [
             'transport' => 'ses',
@@ -114,5 +133,11 @@ return [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
+
+
+    'auth_from' => [
+    'address' => env('AUTH_MAIL_FROM_ADDRESS', env('MAIL_FROM_ADDRESS', 'hello@example.com')),
+    'name' => env('AUTH_MAIL_FROM_NAME', env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel'))),
+],
 
 ];

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { DocumentStepFinanceType } from '@/services/documentUploadSteps'
 
 type StepForm = {
   id: number | null
   code: string
   name: string
+  finance_type: DocumentStepFinanceType
   description: string
   allowed_file_types_text: string
   max_file_size_mb: number | null
@@ -17,6 +19,7 @@ type StepForm = {
 
 const props = defineProps<{
   modelValue: StepForm
+  financeTypeOptions: Array<{ value: DocumentStepFinanceType; label: string }>
   isEditing: boolean
   isSaving: boolean
   errors?: Record<string, string[]>
@@ -84,6 +87,20 @@ function firstError(field: string) {
           @input="updateField('name', ($event.target as HTMLInputElement).value)"
         />
         <small v-if="firstError('name')" class="document-step-error">{{ firstError('name') }}</small>
+      </label>
+
+      <label class="document-step-field">
+        <span>{{ t('adminDocumentStepBuilder.fields.financeType') }}</span>
+        <select
+          :value="form.finance_type"
+          class="document-step-input"
+          :class="{ 'has-error': firstError('finance_type') }"
+          @change="updateField('finance_type', ($event.target as HTMLSelectElement).value as DocumentStepFinanceType)"
+        >
+          <option v-for="option in financeTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+        <small class="document-step-help">{{ t('adminDocumentStepBuilder.help.financeType') }}</small>
+        <small v-if="firstError('finance_type')" class="document-step-error">{{ firstError('finance_type') }}</small>
       </label>
 
       <label class="document-step-field document-step-field--full">

@@ -21,6 +21,7 @@ import {
   staffRequiredDocumentStepBundleDownloadUrl,
   staffShareholderIdDownloadUrl,
   submitUnderstudy,
+  uploadStaffRequiredDocument,
   type AgentOption,
   type AllowedEmailDocument,
   type BankOption,
@@ -59,6 +60,8 @@ const savingComment = ref(false)
 const savingAdditionalDocument = ref(false)
 const savingRequiredDocumentChange = ref<Record<number, boolean>>({})
 const requiredDocumentChangeReason = ref<Record<number, string>>({})
+const uploadingRequiredDocument = ref<Record<number, boolean>>({})
+const selectedRequiredDocumentFiles = ref<Record<number, File | null>>({})
 const errorMessage = ref('')
 const successMessage = ref('')
 
@@ -128,6 +131,10 @@ const understudyLocked = computed(() => ['submitted', 'approved'].includes(Strin
 const understudyQuestionsCompleted = computed(() => Boolean(staffQuestionSummary.value?.all_required_answered))
 const understudyQuestionInputsLocked = computed(() => understudyLocked.value)
 const canSubmitUnderstudyPackage = computed(() => !understudyLocked.value && Boolean(staffQuestionSummary.value?.all_required_answered) && understudyNote.value.trim().length > 0)
+const understudySectionVisible = computed(() => {
+  const stage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+  return ['understudy', 'awaiting_staff_answers', 'awaiting_understudy_review'].includes(stage)
+})
 const emailComposerVisible = computed(() =>
   ['awaiting_agent_assignment', 'processing'].includes(String(requestItem.value?.workflow_stage || '').toLowerCase())
   || hasEmailAssignments.value,
@@ -146,8 +153,78 @@ const canSendEmail = computed(() => Boolean(
   && selectedEmailDocumentKeys.value.length > 0
   && emailBodyTextLength.value > 0,
 ))
+const allAttachmentItems = computed(() => {
+  const rows: Array<{
+    key: string
+    file_name: string
+    source_label: string
+    download_url: string
+    mime_type?: string | null
+    uploaded_at?: string | null
+  }> = []
+
+  const initialAttachments = Array.isArray(requestItem.value?.attachments) ? requestItem.value.attachments : []
+  for (const attachment of initialAttachments) {
+    if (!attachment?.id || !attachment?.file_name) continue
+    rows.push({
+      key: `initial-${attachment.id}`,
+      file_name: String(attachment.file_name),
+      source_label: uiText('Initial request file', 'ملف الطلب الأساسي'),
+      download_url: attachmentDownloadUrl(attachment.id),
+      mime_type: attachment.mime_type || attachment.file_extension || null,
+      uploaded_at: attachment.uploaded_at || attachment.created_at || null,
+    })
+  }
+
+  for (const requiredItem of requiredDocuments.value) {
+    const uploads = normalizedRequiredUploads(requiredItem)
+    for (const upload of uploads) {
+      if (!upload?.id || !upload?.file_name) continue
+      rows.push({
+        key: `required-${requiredItem.document_upload_step_id}-${upload.id}`,
+        file_name: String(upload.file_name),
+        source_label: `${uiText('Required document', 'مستند مطلوب')}: ${requiredItem.name}`,
+        download_url: requiredDocumentDownloadUrl(upload.id),
+        mime_type: upload.mime_type || upload.file_extension || null,
+        uploaded_at: upload.uploaded_at || null,
+      })
+    }
+  }
+
+  const additionalDocuments = Array.isArray(requestItem.value?.additional_documents) ? requestItem.value.additional_documents : []
+  for (const additional of additionalDocuments) {
+    if (!additional?.id || !additional?.file_name) continue
+    rows.push({
+      key: `additional-${additional.id}`,
+      file_name: String(additional.file_name),
+      source_label: `${uiText('Additional document', 'مستند إضافي')}: ${additional.title || uiText('Untitled', 'بدون عنوان')}`,
+      download_url: additionalDocumentDownloadUrl(additional.id),
+      mime_type: additional.mime_type || additional.file_extension || null,
+      uploaded_at: additional.uploaded_at || additional.created_at || null,
+    })
+  }
+
+  const shareholders = Array.isArray(requestItem.value?.shareholders) ? requestItem.value.shareholders : []
+  for (const shareholder of shareholders) {
+    if (!shareholder?.id || !shareholder?.id_file_name) continue
+    rows.push({
+      key: `shareholder-${shareholder.id}`,
+      file_name: String(shareholder.id_file_name),
+      source_label: `${uiText('Shareholder ID', 'هوية مساهم')}: ${shareholder.shareholder_name || uiText('Unknown', 'غير معروف')}`,
+      download_url: shareholderIdDownloadUrl(shareholder.id),
+      mime_type: shareholder.mime_type || shareholder.file_extension || null,
+      uploaded_at: shareholder.uploaded_at || shareholder.created_at || null,
+    })
+  }
+
+  return rows.sort((a, b) => {
+    const aTs = a.uploaded_at ? Date.parse(a.uploaded_at) : 0
+    const bTs = b.uploaded_at ? Date.parse(b.uploaded_at) : 0
+    return bTs - aTs
+  })
+})
 const activityCounts = computed(() => ({
-  attachments: requestItem.value?.attachments?.length ?? 0,
+  attachments: allAttachmentItems.value.length,
   shareholders: requestItem.value?.shareholders?.length ?? 0,
   answers: requestItem.value?.answers?.length ?? 0,
   comments: requestItem.value?.comments?.length ?? 0,
@@ -176,7 +253,7 @@ const quickViewTitle = computed(() => {
     case 'updateBatch':
       return uiText('Client update batch', 'دفعة تحديث العميل')
     case 'attachments':
-      return t('staffRequestDetails.sections.initialUploadedFilesTitle')
+      return uiText('All attachments', 'كل المرفقات')
     case 'shareholders':
       return t('staffRequestDetails.sections.shareholdersTitle')
     case 'answers':
@@ -661,6 +738,50 @@ async function submitRequiredDocumentChange(stepId: number) {
   }
 }
 
+function requiredDocumentFileName(stepId: number) {
+  return selectedRequiredDocumentFiles.value[stepId]?.name || ''
+}
+
+function onRequiredDocumentFileChange(stepId: number, event: Event) {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  selectedRequiredDocumentFiles.value = {
+    ...selectedRequiredDocumentFiles.value,
+    [stepId]: file,
+  }
+}
+
+async function uploadRequiredDocumentForClient(stepId: number) {
+  if (!requestItem.value) return
+
+  const file = selectedRequiredDocumentFiles.value[stepId]
+  if (!file) return
+
+  uploadingRequiredDocument.value[stepId] = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await uploadStaffRequiredDocument(requestItem.value.id, {
+      document_upload_step_id: stepId,
+      file,
+    })
+
+    requestItem.value = data.request
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    selectedRequiredDocumentFiles.value = {
+      ...selectedRequiredDocumentFiles.value,
+      [stepId]: null,
+    }
+    successMessage.value = data.message || uiText('Required document uploaded successfully.', 'تم رفع المستند المطلوب بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to upload the required document.', 'تعذر رفع المستند المطلوب.')
+  } finally {
+    uploadingRequiredDocument.value[stepId] = false
+  }
+}
+
 
 function requiredDocumentDownloadUrl(uploadId: number | string) {
   return adminRequiredDocumentDownloadUrl(requestId.value, uploadId)
@@ -816,7 +937,7 @@ onMounted(load)
             <span>{{ activeUpdateBatch.items?.length || 0 }} {{ uiText('items', 'عنصر') }}</span>
           </button>
           <button type="button" class="admin-quick-action" @click="quickView = 'attachments'">
-            <strong>{{ t('staffRequestDetails.sections.initialUploadedFilesTitle') }}</strong>
+            <strong>{{ uiText('All attachments', 'كل المرفقات') }}</strong>
             <span>{{ activityCounts.attachments }} {{ uiText('files', 'ملفات') }}</span>
           </button>
           <button type="button" class="admin-quick-action" @click="quickView = 'shareholders'">
@@ -868,6 +989,37 @@ onMounted(load)
               </div>
             </div>
           </details>
+
+          <details class="admin-accordion-card" open>
+            <summary>
+              <div>
+                <h2>{{ uiText('All attachments', 'كل المرفقات') }}</h2>
+                <p>{{ uiText('View every request file in one place for faster review.', 'اعرض جميع ملفات الطلب في مكان واحد لمراجعة أسرع.') }}</p>
+              </div>
+            </summary>
+            <div class="admin-accordion-card__body">
+              <div v-if="allAttachmentItems.length" class="file-list request-inline-stack">
+                <div v-for="file in allAttachmentItems" :key="file.key" class="file-item">
+                  <div>
+                    <strong>{{ file.file_name }}</strong>
+                    <span>{{ file.source_label }}<template v-if="file.uploaded_at"> · {{ readableDateTime(file.uploaded_at) }}</template></span>
+                  </div>
+                  <div class="approve-actions">
+                    <button
+                      type="button"
+                      class="ghost-btn"
+                      @click="openFilePreview(file.file_name, file.download_url, file.mime_type || undefined)"
+                    >
+                      {{ uiText('Preview', 'معاينة') }}
+                    </button>
+                    <a :href="file.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="empty-state">{{ uiText('No attachments are available yet for this request.', 'لا توجد مرفقات متاحة لهذا الطلب بعد.') }}</p>
+            </div>
+          </details>
+
           <details class="admin-accordion-card" open>
             <summary>
               <div>
@@ -922,6 +1074,30 @@ onMounted(load)
                   </div>
                   <p v-if="item.rejection_reason" class="form-help form-help--error">{{ t('staffRequestDetails.states.reasonLabel') }}: {{ item.rejection_reason }}</p>
 
+                  <div class="field-stack">
+                    <label class="client-form-group">
+                      <span class="client-form-label">{{ uiText('Upload on behalf of client', 'رفع نيابةً عن العميل') }}</span>
+                      <input
+                        type="file"
+                        class="admin-input"
+                        @change="onRequiredDocumentFileChange(item.document_upload_step_id, $event)"
+                      />
+                    </label>
+                    <div class="approve-actions">
+                      <button
+                        class="ghost-btn"
+                        type="button"
+                        :disabled="uploadingRequiredDocument[item.document_upload_step_id] || !selectedRequiredDocumentFiles[item.document_upload_step_id]"
+                        @click="uploadRequiredDocumentForClient(item.document_upload_step_id)"
+                      >
+                        {{ uploadingRequiredDocument[item.document_upload_step_id] ? uiText('Uploading...', 'جارٍ الرفع...') : uiText('Upload document', 'رفع المستند') }}
+                      </button>
+                      <span v-if="requiredDocumentFileName(item.document_upload_step_id)" class="client-subtext">
+                        {{ requiredDocumentFileName(item.document_upload_step_id) }}
+                      </span>
+                    </div>
+                  </div>
+
                   <div v-if="item.is_uploaded && !item.is_change_requested" class="field-stack">
                     <textarea
                       v-model="requiredDocumentChangeReason[item.document_upload_step_id]"
@@ -946,7 +1122,7 @@ onMounted(load)
             </div>
           </details>
 
-          <details class="admin-accordion-card" :open="understudySectionOpen" @toggle="syncUnderstudySectionState">
+          <details v-if="understudySectionVisible" class="admin-accordion-card" :open="understudySectionOpen" @toggle="syncUnderstudySectionState">
             <summary>
               <div>
                 <h2>{{ uiText('Understudy package', 'حزمة الدراسة') }}</h2>
@@ -1081,16 +1257,19 @@ onMounted(load)
                   v-model="understudyNote"
                   rows="5"
                   class="admin-textarea"
-                  :disabled="understudyLocked"
-                  placeholder="Add a short study note for the admin"
+                  :disabled="understudyLocked || !understudyQuestionsCompleted"
+                  :placeholder="understudyQuestionsCompleted ? uiText('Add a short study note for the admin', 'أضف ملاحظة دراسة قصيرة للإدارة') : uiText('Answer all study questions above first', 'أجب عن جميع أسئلة الدراسة أعلاه أولاً')"
                 ></textarea>
-                <p class="client-subtext" style="margin-top: 0.5rem;">{{ uiText('This note is internal between staff and admin. The client will only continue seeing Understudy.', 'هذه الملاحظة داخلية بين الموظف والإدارة. وسيستمر العميل في رؤية مرحلة الدراسة فقط.') }}</p>
+                <p class="client-subtext" style="margin-top: 0.5rem;">
+                  <template v-if="!understudyQuestionsCompleted">{{ uiText('You must answer all required study questions before writing your note.', 'يجب الإجابة على جميع أسئلة الدراسة الإلزامية قبل كتابة ملاحظتك.') }}</template>
+                  <template v-else>{{ uiText('This note is internal between staff and admin. The client will only continue seeing Understudy.', 'هذه الملاحظة داخلية بين الموظف والإدارة. وسيستمر العميل في رؤية مرحلة الدراسة فقط.') }}</template>
+                </p>
                 <div class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
-                  <button type="button" class="ghost-btn" :disabled="understudyLocked || savingUnderstudyDraftState" @click="saveStudyDraftNote">
-                    {{ savingUnderstudyDraftState ? 'Saving...' : 'Save draft note' }}
+                  <button type="button" class="ghost-btn" :disabled="understudyLocked || savingUnderstudyDraftState || !understudyQuestionsCompleted" @click="saveStudyDraftNote">
+                    {{ savingUnderstudyDraftState ? 'Saving...' : uiText('Save draft note', 'حفظ المسودة') }}
                   </button>
                   <button type="button" class="primary-btn" :disabled="!canSubmitUnderstudyPackage || submittingUnderstudyState || understudyLocked" @click="submitStudyToAdmin">
-                    {{ submittingUnderstudyState ? 'Submitting...' : 'Submit study to admin' }}
+                    {{ submittingUnderstudyState ? 'Submitting...' : uiText('Submit study to admin', 'إرسال الدراسة إلى الإدارة') }}
                   </button>
                 </div>
               </article>
@@ -1455,30 +1634,30 @@ onMounted(load)
         </div>
 
         <div v-else-if="quickView === 'attachments'" class="file-list">
-          <template v-if="requestItem.attachments?.length">
-            <div v-if="requestItem.attachments.length > 1" class="approve-actions" style="margin-bottom: 0.7rem;">
+          <template v-if="allAttachmentItems.length">
+            <div v-if="false" class="approve-actions" style="margin-bottom: 0.7rem;">
               <a :href="attachmentBundleDownloadUrl()" target="_blank" rel="noopener" class="ghost-btn">
                 {{ uiText('Download all files', 'تنزيل جميع الملفات') }}
               </a>
             </div>
-            <div v-for="file in requestItem.attachments" :key="file.id" class="file-item">
+            <div v-for="file in allAttachmentItems" :key="file.key" class="file-item">
               <div>
                 <strong>{{ file.file_name }}</strong>
-                <span>{{ file.category }}</span>
+                <span>{{ file.source_label }}<template v-if="file.uploaded_at"> · {{ readableDateTime(file.uploaded_at) }}</template></span>
               </div>
               <div class="approve-actions">
                 <button
                   type="button"
                   class="ghost-btn"
-                  @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))"
+                  @click="openFilePreview(file.file_name, file.download_url, file.mime_type || undefined)"
                 >
                   {{ uiText('Preview', 'معاينة') }}
                 </button>
-                <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
+                <a :href="file.download_url" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
               </div>
             </div>
           </template>
-          <p v-else class="empty-state">{{ t('staffRequestDetails.states.noInitialFilesUploaded') }}</p>
+          <p v-else class="empty-state">{{ uiText('No attachments are available yet for this request.', 'لا توجد مرفقات متاحة لهذا الطلب بعد.') }}</p>
         </div>
 
         <div v-else-if="quickView === 'shareholders'" class="file-list">

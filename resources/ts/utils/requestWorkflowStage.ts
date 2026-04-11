@@ -2,6 +2,34 @@ import { i18n } from '@/i18n'
 
 export type RequestWorkflowStageTone = 'slate' | 'blue' | 'amber' | 'purple' | 'green' | 'rose'
 
+/** Values accepted by PATCH /api/admin/requests/{id}/workflow-stage (matches PHP enum). */
+export const FINANCE_REQUEST_WORKFLOW_STAGES: string[] = [
+  'questionnaire',
+  'review',
+  'contract',
+  'document_collection',
+  'awaiting_additional_documents',
+  'ready_for_processing',
+  'assigned_to_staff',
+  'processing',
+  'completed',
+  'submitted_for_review',
+  'admin_contract_preparation',
+  'awaiting_client_signature',
+  'awaiting_client_commercial_registration_upload',
+  'awaiting_admin_commercial_registration_upload',
+  'awaiting_staff_assignment',
+  'awaiting_client_documents',
+  'client_update_requested',
+  'understudy',
+  'awaiting_staff_answers',
+  'awaiting_understudy_review',
+  'awaiting_agent_assignment',
+  'accepted',
+  'rejected',
+  'blocked',
+]
+
 const STAGE_META: Record<string, { en: string; ar: string; tone: RequestWorkflowStageTone }> = {
   questionnaire: { en: 'Questionnaire', ar: '\u0627\u0644\u0627\u0633\u062a\u0628\u064a\u0627\u0646', tone: 'slate' },
   review: { en: 'Review queue', ar: '\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629', tone: 'blue' },

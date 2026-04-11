@@ -33,4 +33,16 @@ export default defineConfig({
             ignored: ['**/storage/framework/views/**'],
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (!id.includes('node_modules')) return;
+                    if (id.includes('apexcharts') || id.includes('vue3-apexcharts')) return 'vendor-apexcharts';
+                    if (id.includes('quill')) return 'vendor-quill';
+                    if (id.includes('vue-router') || id.includes('pinia') || id.includes('vue-i18n')) return 'vendor-vue-runtime';
+                },
+            },
+        },
+    },
 });

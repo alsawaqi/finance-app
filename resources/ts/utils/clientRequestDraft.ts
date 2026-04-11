@@ -11,6 +11,7 @@ export type ClientRequestWizardDetails = {
   company_name: string
   company_cr_number: string
   email: string
+  phone_country_iso: string
   phone_country_code: string
   phone_number: string
   unified_number: string
@@ -21,6 +22,7 @@ export type ClientRequestWizardDetails = {
 
 export type ClientRequestWizardShareholderDraft = {
   name: string
+  phone_country_iso: string
   phone_country_code: string
   phone_number: string
   id_number: string
@@ -111,6 +113,7 @@ function normalizeDetails(value: unknown): ClientRequestWizardDetails {
     company_name: asString(source.company_name),
     company_cr_number: asString(source.company_cr_number),
     email: asString(source.email),
+    phone_country_iso: asString(source.phone_country_iso, 'SA'),
     phone_country_code: asString(source.phone_country_code, '+966'),
     phone_number: asString(source.phone_number),
     unified_number: asString(source.unified_number),
@@ -128,6 +131,7 @@ function normalizeShareholders(value: unknown): ClientRequestWizardShareholderDr
 
     return {
       name: asString(source.name),
+      phone_country_iso: asString(source.phone_country_iso, 'SA'),
       phone_country_code: asString(source.phone_country_code, '+966'),
       phone_number: asString(source.phone_number),
       id_number: asString(source.id_number),

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MailboxMessage;
 use App\Models\MailboxMessageAttachment;
 use App\Services\MailboxSyncService;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -79,9 +80,12 @@ class StaffInboxController extends Controller
     {
         $message = $attachment->mailboxMessage;
         abort_unless($message && (int) $message->user_id === (int) $request->user()->id, 404);
-        abort_unless(Storage::disk($attachment->disk ?: 'local')->exists($attachment->file_path), 404);
+        $disk = Storage::disk($attachment->disk ?: 'local');
+        assert($disk instanceof FilesystemAdapter);
 
-        return Storage::disk($attachment->disk ?: 'local')->download(
+        abort_unless($disk->exists($attachment->file_path), 404);
+
+        return $disk->download(
             $attachment->file_path,
             $attachment->file_name ?: basename($attachment->file_path)
         );

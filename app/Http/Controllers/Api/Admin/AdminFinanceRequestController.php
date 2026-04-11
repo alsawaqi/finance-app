@@ -12,6 +12,7 @@ use App\Http\Requests\Admin\FinalApproveFinanceRequestRequest;
 use App\Http\Requests\Admin\RejectFinanceRequestRequest;
 use App\Http\Requests\Admin\ReviewFinanceRequestUnderstudyRequest;
 use App\Http\Requests\Admin\ReviewFinanceRequestStaffQuestionRequest;
+use App\Http\Requests\Admin\UpdateFinanceRequestWorkflowStageRequest;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestStaffQuestion;
 use App\Services\FinanceRequestDocumentChecklistService;
@@ -368,6 +369,55 @@ class AdminFinanceRequestController extends Controller
             'request' => $advancedRequest,
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($advancedRequest)->values(),
             'staff_question_summary' => $this->staffQuestionService->summary($advancedRequest),
+        ]);
+    }
+
+    public function updateWorkflowStage(
+        UpdateFinanceRequestWorkflowStageRequest $request,
+        FinanceRequest $financeRequest,
+    ): JsonResponse {
+        $admin = $request->user();
+        $newStage = FinanceRequestWorkflowStage::from($request->validated('workflow_stage'));
+        $oldStage = $financeRequest->workflow_stage;
+
+        if ($oldStage === $newStage) {
+            $fresh = $this->loadRequestGraph($financeRequest);
+
+            return response()->json([
+                'message' => 'Workflow stage is already set to this value.',
+                'request' => $fresh,
+                'required_documents' => $this->documentChecklistService->buildRequiredChecklist($fresh)->values(),
+                'staff_question_summary' => $this->staffQuestionService->summary($fresh),
+            ]);
+        }
+
+        DB::transaction(function () use ($financeRequest, $newStage, $admin, $oldStage) {
+            $financeRequest->workflow_stage = $newStage;
+            $financeRequest->latest_activity_at = now();
+            $financeRequest->save();
+
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.workflow_stage_changed',
+                $admin?->id,
+                'Workflow stage updated',
+                'تم تحديث مرحلة سير العمل',
+                sprintf('Changed from %s to %s.', $oldStage?->value ?? 'unknown', $newStage->value),
+                sprintf('تم التغيير من %s إلى %s.', $oldStage?->value ?? 'unknown', $newStage->value),
+                [
+                    'from' => $oldStage?->value,
+                    'to' => $newStage->value,
+                ],
+            );
+        });
+
+        $fresh = $this->loadRequestGraph($financeRequest->fresh());
+
+        return response()->json([
+            'message' => 'Workflow stage updated successfully.',
+            'request' => $fresh,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($fresh)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($fresh),
         ]);
     }
 

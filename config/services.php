@@ -20,7 +20,6 @@ return [
         'token' => env('TWILIO_AUTH_TOKEN'),
         'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
         'template_sid' => env('TWILIO_WHATSAPP_TEMPLATE_SID'),
-        'template_body_variable' => env('TWILIO_WHATSAPP_TEMPLATE_BODY_VARIABLE', '1'),
         'template_fallback_to_body' => (function () {
             $v = env('TWILIO_WHATSAPP_TEMPLATE_FALLBACK_TO_BODY');
             if ($v === null || $v === '') {

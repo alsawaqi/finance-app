@@ -1,10 +1,13 @@
 import api from './api'
 import type { PaginationMeta } from '@/types/pagination'
 
+export type DocumentStepFinanceType = 'all' | 'individual' | 'company'
+
 export interface DocumentUploadStepItem {
   id: number
   code: string | null
   name: string
+  finance_type: DocumentStepFinanceType
   description: string | null
   is_required: boolean
   is_multiple: boolean
@@ -21,6 +24,7 @@ export interface DocumentUploadStepItem {
 export interface DocumentUploadStepPayload {
   code?: string | null
   name: string
+  finance_type: DocumentStepFinanceType
   description?: string | null
   is_required?: boolean
   is_multiple?: boolean

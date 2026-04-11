@@ -1,6 +1,8 @@
+import { getCountryCallingCode, type CountryCode } from 'libphonenumber-js'
+
 export type LocaleLike = string | { value?: string } | null | undefined
 
-const ISO_COUNTRY_CODES = [
+export const ISO_COUNTRY_CODES = [
   'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ',
   'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS',
   'BT', 'BV', 'BW', 'BY', 'BZ', 'CA', 'CC', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN',
@@ -20,6 +22,7 @@ const ISO_COUNTRY_CODES = [
 ] as const
 
 const COUNTRY_OPTION_CACHE = new Map<string, Array<{ code: string; label: string }>>()
+const PHONE_OPTION_CACHE = new Map<string, Array<{ isoCode: string; dialCode: string; label: string }>>()
 
 function normalizeLocale(locale: LocaleLike) {
   if (typeof locale === 'string' && locale.trim() !== '') {
@@ -58,6 +61,16 @@ function displayNamesForLocale(locale: string) {
   }
 }
 
+function dialCodeForCountry(isoCode: string): string | null {
+  try {
+    const country = isoCode as CountryCode
+    return `+${getCountryCallingCode(country)}`
+  } catch {
+    // Some ISO regions don't have a callable dialing code in libphonenumber metadata.
+    return null
+  }
+}
+
 export function countryNameFromCode(code?: string | null, locale: LocaleLike = 'en'): string {
   const normalizedCode = normalizeCountryCode(code)
   if (!normalizedCode) return '—'
@@ -82,5 +95,31 @@ export function allCountryOptions(locale: LocaleLike = 'en') {
     .sort((a, b) => a.label.localeCompare(b.label, localeCode, { sensitivity: 'base' }))
 
   COUNTRY_OPTION_CACHE.set(localeCode, options)
+  return options
+}
+
+export function allCountryPhoneCodeOptions(locale: LocaleLike = 'en') {
+  const localeCode = normalizeLocale(locale).toLowerCase()
+  const cached = PHONE_OPTION_CACHE.get(localeCode)
+  if (cached) return cached
+
+  const displayNames = displayNamesForLocale(localeCode)
+  const options: Array<{ isoCode: string; dialCode: string; label: string }> = []
+
+  ISO_COUNTRY_CODES.forEach((isoCode) => {
+    const dialCode = dialCodeForCountry(isoCode)
+    if (!dialCode) return
+
+    const countryName = displayNames?.of(isoCode) || isoCode
+    options.push({
+      isoCode,
+      dialCode,
+      label: `${countryName} (${dialCode})`,
+    })
+  })
+
+  options.sort((a, b) => a.label.localeCompare(b.label, localeCode, { sensitivity: 'base' }))
+
+  PHONE_OPTION_CACHE.set(localeCode, options)
   return options
 }

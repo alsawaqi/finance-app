@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import * as authApi from '../services/authApi'
+import axios from 'axios'
 
 type AuthRole = {
   id?: number
@@ -30,6 +31,8 @@ export const useAuthStore = defineStore('auth', {
     user: null as AuthUser | null,
     initialized: false,
     loading: false,
+    sessionLoading: false,
+    _fetchUserPromise: null as Promise<void> | null,
   }),
 
   getters: {
@@ -65,13 +68,40 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async fetchUser() {
+      if (this._fetchUserPromise) {
+        return this._fetchUserPromise
+      }
+
+      const currentUser = this.user
+
+      this._fetchUserPromise = (async () => {
+        this.sessionLoading = true
+        try {
+          const { data } = await authApi.me()
+          this.user = data.user
+        } catch (error) {
+          // Avoid logging the user out on transient network/timeouts.
+          // Only clear auth state when the server explicitly says the session is not valid.
+          if (axios.isAxiosError(error)) {
+            const status = error.response?.status
+            if (status === 401 || status === 403 || status === 419) {
+              this.user = null
+            } else {
+              this.user = currentUser
+            }
+          } else {
+            this.user = currentUser
+          }
+        } finally {
+          this.initialized = true
+          this.sessionLoading = false
+        }
+      })()
+
       try {
-        const { data } = await authApi.me()
-        this.user = data.user
-      } catch {
-        this.user = null
+        await this._fetchUserPromise
       } finally {
-        this.initialized = true
+        this._fetchUserPromise = null
       }
     },
 

@@ -470,15 +470,16 @@ html[dir='rtl'] .financer-home .main_header_menu .nav-outer {
 
 html[dir='rtl'] .financer-home .main-menu .navigation {
   justify-content: flex-start;
+  flex-wrap: nowrap;
 }
 
 html[dir='rtl'] .financer-home .main-menu .navigation > li {
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 html[dir='rtl'] .financer-home .main-menu .navigation > li > a {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 html[dir='rtl'] .financer-home .main_header_logo,
@@ -688,7 +689,33 @@ html[dir='rtl'] .financer-home .header_right_content {
    html[dir='rtl'] .financer-home .main-menu .navigation {
      direction: rtl;
    }
-   
+
+   html[dir='rtl'] .financer-home .main-menu .navigation {
+     flex-wrap: nowrap;
+     max-width: none;
+     width: max-content;
+     min-width: 0;
+   }
+
+   html[dir='rtl'] .financer-home .main_header_menu .nav-outer {
+     overflow-x: auto;
+     overflow-y: visible;
+     -webkit-overflow-scrolling: touch;
+     scrollbar-width: none;
+   }
+
+   html[dir='rtl'] .financer-home .main_header_menu .nav-outer::-webkit-scrollbar {
+     display: none;
+   }
+
+   html[dir='rtl'] .financer-home .main-menu .navigation > li {
+     padding: 5px 8px;
+   }
+
+   html[dir='rtl'] .financer-home .main-menu .navigation > li > a {
+     font-size: 13px;
+   }
+
    @media (max-width: 1199px) {
      .financer-home .header_right_content {
        display: none !important;

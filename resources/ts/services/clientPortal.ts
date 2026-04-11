@@ -103,3 +103,12 @@ export async function submitClientUpdateFile(
 export function clientContractDownloadUrl(id: number | string) {
   return `/api/client/requests/${id}/contract/download`
 }
+
+export async function changeClientPassword(payload: {
+  current_password: string
+  password: string
+  password_confirmation: string
+}) {
+  const { data } = await api.post('/api/client/change-password', payload)
+  return data as { message: string }
+}

@@ -65,6 +65,7 @@ final class ClientRequestSubmittedWhatsAppNotifier
             return;
         }
 
+        $firstName = $this->firstNameOrFriendly($user->name);
         $body = $this->buildSubmittedBody($user->name, $referenceNumber, $acceptLanguageHeader);
         $to = 'whatsapp:'.$e164;
 
@@ -74,6 +75,9 @@ final class ClientRequestSubmittedWhatsAppNotifier
                 'user_id' => $user->id,
                 'finance_request_ref' => $referenceNumber,
                 'phone' => $this->maskPhone($e164),
+            ], [
+                '1' => $firstName,
+                '2' => $referenceNumber,
             ]);
         } catch (RestException $e) {
             Log::warning('Twilio WhatsApp request-submitted confirmation failed.', [

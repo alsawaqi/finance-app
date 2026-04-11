@@ -14,7 +14,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\StoreClientFinanceRequestRequest;
 use App\Http\Requests\Client\UploadAdditionalDocumentRequest;
 use App\Http\Requests\Client\UploadRequiredDocumentRequest;
-use App\Models\DocumentUploadStep;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestType;
 use App\Models\RequestDocumentUpload;
@@ -124,6 +123,14 @@ class ClientRequestController extends Controller
     public function store(StoreClientFinanceRequestRequest $request, ClientRequestSubmittedWhatsAppNotifier $requestSubmittedWhatsApp): JsonResponse
     {
     $user = $request->user();
+
+    if (! $user->hasVerifiedEmail()) {
+        return response()->json([
+            'message' => 'You must verify your email address before submitting a request.',
+            'email_not_verified' => true,
+        ], 403);
+    }
+
     $validated = $request->validated();
     $details = Arr::get($validated, 'details', []);
     $answers = collect(Arr::get($validated, 'answers', []));
@@ -354,11 +361,11 @@ class ClientRequestController extends Controller
             FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
         ], true), 422, 'This request is not currently accepting document uploads.');
 
-        $step = DocumentUploadStep::query()
-            ->whereKey((int) $request->integer('document_upload_step_id'))
-            ->where('is_active', true)
-            ->where('is_required', true)
-            ->firstOrFail();
+        $step = $this->documentChecklistService->findRequiredStepForRequest(
+            $financeRequest,
+            (int) $request->integer('document_upload_step_id'),
+        );
+        abort_unless($step, 404);
 
         $latestUpload = RequestDocumentUpload::query()
             ->where('finance_request_id', $financeRequest->id)
@@ -739,6 +746,11 @@ class ClientRequestController extends Controller
                     'status' => $item['status'],
                     'is_required' => $item['is_required'],
                     'is_multiple' => (bool) ($item['is_multiple'] ?? false),
+                    'allowed_file_types' => array_values(array_filter(array_map(
+                        fn ($type) => strtolower(trim((string) $type)),
+                        (array) ($item['allowed_file_types'] ?? [])
+                    ))),
+                    'max_file_size_mb' => isset($item['max_file_size_mb']) ? (int) $item['max_file_size_mb'] : null,
                     'is_uploaded' => $item['is_uploaded'],
                     'can_client_upload' => $item['can_client_upload'],
                     'is_change_requested' => $item['is_change_requested'],

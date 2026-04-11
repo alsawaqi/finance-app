@@ -15,6 +15,7 @@ use App\Http\Requests\Staff\RequestRequiredDocumentChangeRequest;
 use App\Http\Requests\Staff\SendFinanceRequestEmailRequest;
 use App\Http\Requests\Staff\StoreAdditionalDocumentRequest;
 use App\Http\Requests\Staff\StoreStaffRequestCommentRequest;
+use App\Http\Requests\Staff\UploadRequiredDocumentRequest;
 use App\Models\Agent;
 use App\Models\Bank;
 use App\Models\DocumentUploadStep;
@@ -33,6 +34,7 @@ use App\Support\RequestTimelineLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -297,6 +299,7 @@ class StaffRequestWorkspaceController extends Controller
         $this->ensureVisibleToUser($user, $financeRequest);
         abort_unless($user && ($user->hasRole('admin') || $user->can('review documents')), 403);
         abort_unless($documentUploadStep->is_active && $documentUploadStep->is_required, 404);
+        abort_unless($this->documentChecklistService->isStepApplicableForRequest($financeRequest, $documentUploadStep), 404);
 
         $latestUpload = RequestDocumentUpload::query()
             ->where('finance_request_id', $financeRequest->id)
@@ -342,6 +345,86 @@ class StaffRequestWorkspaceController extends Controller
 
         return response()->json([
             'message' => 'The client can now upload a corrected version of this required document.',
+            'request' => $freshRequest,
+            'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
+            'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
+        ]);
+    }
+
+    public function uploadRequiredDocumentOnBehalf(
+        UploadRequiredDocumentRequest $request,
+        FinanceRequest $financeRequest,
+    ): JsonResponse {
+        $user = $request->user();
+        $this->ensureVisibleToUser($user, $financeRequest);
+
+        $stage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+        abort_unless(in_array($stage, [
+            FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+            FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
+            FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+        ], true), 422, 'This request is not currently accepting document uploads.');
+
+        $step = $this->documentChecklistService->findRequiredStepForRequest(
+            $financeRequest,
+            (int) $request->integer('document_upload_step_id'),
+        );
+        abort_unless($step, 404, 'The selected required document is not available for this request type.');
+
+        $latestUpload = RequestDocumentUpload::query()
+            ->where('finance_request_id', $financeRequest->id)
+            ->where('document_upload_step_id', $step->id)
+            ->latest('id')
+            ->first();
+
+        $latestStatus = $latestUpload?->status?->value ?? (string) ($latestUpload?->status ?? 'pending');
+        if (! $step->is_multiple && $latestUpload && $latestStatus !== RequestDocumentUploadStatus::REJECTED->value) {
+            abort(422, 'This required document is already locked after upload. A new version can only be uploaded after a change is requested.');
+        }
+
+        $file = $request->file('file');
+
+        DB::transaction(function () use ($financeRequest, $step, $file, $user, $latestUpload): void {
+            $path = $file->store('request-documents/required', 'public');
+
+            RequestDocumentUpload::create([
+                'finance_request_id' => $financeRequest->id,
+                'document_upload_step_id' => $step->id,
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'disk' => 'public',
+                'mime_type' => $file->getClientMimeType(),
+                'file_extension' => $file->getClientOriginalExtension(),
+                'file_size' => $file->getSize(),
+                'status' => RequestDocumentUploadStatus::UPLOADED,
+                'uploaded_by' => $user?->id,
+                'uploaded_at' => now(),
+            ]);
+
+            RequestTimelineLogger::log(
+                $financeRequest,
+                'request.required_document_uploaded_by_staff',
+                $user?->id,
+                'Required document uploaded by staff',
+                'تم رفع المستند المطلوب بواسطة الموظف',
+                'Staff uploaded a required document on behalf of the client: ' . $step->name . '.',
+                'قام الموظف برفع مستند مطلوب نيابةً عن العميل: ' . $step->name . '.',
+                [
+                    'document_upload_step_id' => $step->id,
+                    'document_name' => $step->name,
+                    'is_multiple_step' => (bool) $step->is_multiple,
+                    'is_resubmission' => $latestUpload !== null,
+                    'previous_upload_id' => $latestUpload?->id,
+                ],
+            );
+
+            $this->workflowService->syncAfterRequiredDocuments($financeRequest->fresh());
+        });
+
+        $freshRequest = $this->loadRequestGraph($financeRequest->fresh(), $user);
+
+        return response()->json([
+            'message' => 'Required document uploaded successfully.',
             'request' => $freshRequest,
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),
             'staff_question_summary' => $this->staffQuestionService->summary($freshRequest),
@@ -477,7 +560,7 @@ class StaffRequestWorkspaceController extends Controller
 
     private function loadRequestGraph(FinanceRequest $financeRequest, ?User $viewer = null): FinanceRequest
     {
-        $viewer ??= auth()->user();
+        $viewer ??= Auth::user();
 
         $financeRequest->load([
             'client:id,name,email,phone',
@@ -504,7 +587,7 @@ class StaffRequestWorkspaceController extends Controller
             'comments' => function ($query) use ($viewer) {
                 $query->with('user:id,name,email')->latest();
 
-                if ($viewer && ! $viewer->hasRole('admin')) {
+                if ($viewer instanceof User && ! $viewer->hasRole('admin')) {
                     $query->where('visibility', '!=', RequestCommentVisibility::ADMIN_ONLY->value);
                 }
             },

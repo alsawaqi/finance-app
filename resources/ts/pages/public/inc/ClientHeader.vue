@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../../stores/auth'
@@ -38,6 +38,26 @@ const userInitials = computed(() => {
     .toUpperCase()
 })
 
+const userDropdownOpen = ref(false)
+const dropdownRef = ref<HTMLElement | null>(null)
+
+function toggleUserDropdown() {
+  userDropdownOpen.value = !userDropdownOpen.value
+}
+
+function closeUserDropdown() {
+  userDropdownOpen.value = false
+}
+
+function handleOutsideClick(e: MouseEvent) {
+  if (dropdownRef.value && !dropdownRef.value.contains(e.target as Node)) {
+    closeUserDropdown()
+  }
+}
+
+onMounted(() => document.addEventListener('click', handleOutsideClick, true))
+onBeforeUnmount(() => document.removeEventListener('click', handleOutsideClick, true))
+
 function isNavActive(names: string[]) {
   return names.includes(String(route.name ?? ''))
 }
@@ -47,8 +67,14 @@ function uiText(en: string, ar: string) {
 }
 
 async function handleLogout() {
+  closeUserDropdown()
   await auth.logout()
   await router.replace({ name: 'login' })
+}
+
+function goToChangePassword() {
+  closeUserDropdown()
+  router.push({ name: 'client-change-password' })
 }
 
 defineProps<{
@@ -111,17 +137,27 @@ defineEmits<{
               <span>{{ t('clientHeader.createRequest') }}</span>
             </RouterLink>
 
-            <button type="button" class="client-header-logout" @click="handleLogout">
-              <i class="fas fa-sign-out-alt"></i>
-              <span>{{ t('clientHeader.logout') }}</span>
-            </button>
+            <div ref="dropdownRef" class="client-user-dropdown-wrap">
+              <button type="button" class="client-user-chip client-user-chip--clickable" @click="toggleUserDropdown">
+                <div class="client-user-chip__avatar">{{ userInitials }}</div>
+                <div class="client-user-chip__text">
+                  <strong>{{ userName }}</strong>
+                </div>
+                <i class="fas fa-chevron-down client-user-chip__caret" :class="{ 'client-user-chip__caret--open': userDropdownOpen }"></i>
+              </button>
 
-            <div class="client-user-chip">
-              <div class="client-user-chip__avatar">{{ userInitials }}</div>
-              <div class="client-user-chip__text">
-                <strong>{{ userName }}</strong>
-                <span>{{ t('clientHeader.clientPortal') }}</span>
-              </div>
+              <Transition name="client-dropdown-fade">
+                <div v-if="userDropdownOpen" class="client-user-dropdown">
+                  <button type="button" class="client-user-dropdown__item" @click="goToChangePassword">
+                    <i class="fas fa-key"></i>
+                    <span>{{ t('clientHeader.changePassword') }}</span>
+                  </button>
+                  <button type="button" class="client-user-dropdown__item client-user-dropdown__item--danger" @click="handleLogout">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>{{ t('clientHeader.logout') }}</span>
+                  </button>
+                </div>
+              </Transition>
             </div>
           </div>
         </div>
@@ -166,17 +202,27 @@ defineEmits<{
               <span>{{ t('clientHeader.createRequest') }}</span>
             </RouterLink>
 
-            <button type="button" class="client-header-logout" @click="handleLogout">
-              <i class="fas fa-sign-out-alt"></i>
-              <span>{{ t('clientHeader.logout') }}</span>
-            </button>
+            <div class="client-user-dropdown-wrap">
+              <button type="button" class="client-user-chip client-user-chip--clickable client-user-chip--compact" @click="toggleUserDropdown">
+                <div class="client-user-chip__avatar">{{ userInitials }}</div>
+                <div class="client-user-chip__text">
+                  <strong>{{ userName }}</strong>
+                </div>
+                <i class="fas fa-chevron-down client-user-chip__caret" :class="{ 'client-user-chip__caret--open': userDropdownOpen }"></i>
+              </button>
 
-            <div class="client-user-chip client-user-chip--compact">
-              <div class="client-user-chip__avatar">{{ userInitials }}</div>
-              <div class="client-user-chip__text">
-                <strong>{{ userName }}</strong>
-                <span>{{ t('clientHeader.clientPortal') }}</span>
-              </div>
+              <Transition name="client-dropdown-fade">
+                <div v-if="userDropdownOpen" class="client-user-dropdown">
+                  <button type="button" class="client-user-dropdown__item" @click="goToChangePassword">
+                    <i class="fas fa-key"></i>
+                    <span>{{ t('clientHeader.changePassword') }}</span>
+                  </button>
+                  <button type="button" class="client-user-dropdown__item client-user-dropdown__item--danger" @click="handleLogout">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>{{ t('clientHeader.logout') }}</span>
+                  </button>
+                </div>
+              </Transition>
             </div>
           </div>
         </div>
@@ -196,55 +242,66 @@ defineEmits<{
           </RouterLink>
         </div>
 
-        <div class="mobile-client-cta-group">
-          <div class="mobile-client-notification">
+        <div class="mobile-client-profile-card">
+          <div class="mobile-client-profile-card__avatar">{{ userInitials }}</div>
+          <div class="mobile-client-profile-card__info">
+            <strong>{{ userName }}</strong>
+            <span>{{ t('clientHeader.clientPortal') }}</span>
+          </div>
+          <div class="mobile-client-profile-card__bell">
             <AppNotificationBell theme="client" />
           </div>
+        </div>
 
+        <div class="mobile-client-nav-group">
           <RouterLink
-            :to="{ name: 'client-new-request' }"
-            class="mobile-client-cta"
+            v-for="item in navItems"
+            :key="`${item.label}-mobile`"
+            :to="item.to"
+            class="mobile-client-nav-item"
+            :class="{ 'mobile-client-nav-item--active': isNavActive(item.matches) }"
             @click="$emit('close-mobile-menu')"
           >
-            {{ t('clientHeader.createRequest') }}
+            {{ item.label }}
+          </RouterLink>
+        </div>
+
+        <div class="mobile-client-actions-group">
+          <RouterLink
+            :to="{ name: 'client-new-request' }"
+            class="mobile-client-action-btn mobile-client-action-btn--primary"
+            @click="$emit('close-mobile-menu')"
+          >
+            <i class="fas fa-plus"></i>
+            <span>{{ t('clientHeader.createRequest') }}</span>
+          </RouterLink>
+
+          <RouterLink
+            :to="{ name: 'client-change-password' }"
+            class="mobile-client-action-btn"
+            @click="$emit('close-mobile-menu')"
+          >
+            <i class="fas fa-key"></i>
+            <span>{{ t('clientHeader.changePassword') }}</span>
           </RouterLink>
 
           <button
             type="button"
-            class="mobile-client-logout"
+            class="mobile-client-action-btn mobile-client-action-btn--danger"
             @click="handleLogout"
           >
-            {{ t('clientHeader.logout') }}
+            <i class="fas fa-sign-out-alt"></i>
+            <span>{{ t('clientHeader.logout') }}</span>
           </button>
-
-          <div class="mobile-client-user">
-            <div class="client-user-chip__avatar">{{ userInitials }}</div>
-            <div>
-              <strong>{{ userName }}</strong>
-              <span>{{ t('clientHeader.clientPortal') }}</span>
-            </div>
-          </div>
         </div>
 
-        <div class="menu-outer">
-          <ul class="navigation clearfix">
-            <li
-              v-for="item in navItems"
-              :key="`${item.label}-mobile`"
-              :class="{ current: isNavActive(item.matches) }"
-            >
-              <RouterLink :to="item.to" @click="$emit('close-mobile-menu')">{{ item.label }}</RouterLink>
-            </li>
-          </ul>
-        </div>
-
-        <div class="contact-info">
+        <div class="mobile-client-footer">
           <h4>{{ t('clientHeader.helpDesk') }}</h4>
-          <ul>
-            <li>{{ t('clientHeader.helpDeskText') }}</li>
-            <li><a href="tel:+96600000000">+966 0000 0000</a></li>
-            <li><a href="mailto:support@example.com">support@example.com</a></li>
-          </ul>
+          <p>{{ t('clientHeader.helpDeskText') }}</p>
+          <div class="mobile-client-footer__links">
+            <a href="tel:+96600000000"><i class="fas fa-phone"></i> +966 0000 0000</a>
+            <a href="mailto:support@example.com"><i class="fas fa-envelope"></i> support@example.com</a>
+          </div>
         </div>
       </nav>
     </div>

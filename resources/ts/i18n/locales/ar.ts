@@ -22,6 +22,18 @@ const ar = {
       loadFailed: 'تعذر تحميل الإشعارات حالياً.',
       fallbackTitle: 'تحديث على الطلب',
     },
+    transactionOverlay: {
+      loading: 'جارٍ تنفيذ العملية…',
+      success: 'تم',
+    },
+    api: {
+      defaultSuccess: 'تم تنفيذ العملية بنجاح.',
+      defaultError: 'تعذر تنفيذ العملية. حاول مرة أخرى.',
+    },
+    session: {
+      loadingTitle: 'جارٍ التحقق من الجلسة…',
+      loadingBody: 'يرجى الانتظار قليلاً. إذا استغرق الأمر وقتاً طويلاً، حدّث الصفحة وحاول مرة أخرى.',
+    },
   },
 
  
@@ -513,6 +525,36 @@ const ar = {
     helpDeskText: 'تابع الطلبات ووقّع العقود وارفع المستندات فقط عند الطلب.',
     defaultUserName: 'مستخدم العميل',
     logoAlt: 'شعار الشركة',
+    changePassword: 'تغيير كلمة المرور',
+  },
+  clientChangePassword: {
+    hero: {
+      eyebrow: 'أمان الحساب',
+      title: 'تغيير كلمة المرور',
+      subtitle: 'حافظ على أمان حسابك من خلال تحديث كلمة المرور بانتظام.',
+    },
+    form: {
+      currentPassword: 'كلمة المرور الحالية',
+      currentPasswordPlaceholder: 'أدخل كلمة المرور الحالية',
+      newPassword: 'كلمة المرور الجديدة',
+      newPasswordPlaceholder: 'أدخل كلمة مرور جديدة',
+      confirmPassword: 'تأكيد كلمة المرور الجديدة',
+      confirmPasswordPlaceholder: 'أعد إدخال كلمة المرور الجديدة',
+      submit: 'تحديث كلمة المرور',
+      submitting: 'جاري التحديث…',
+    },
+    validation: {
+      currentPasswordRequired: 'كلمة المرور الحالية مطلوبة.',
+      newPasswordRequired: 'كلمة المرور الجديدة مطلوبة.',
+      newPasswordMinLength: 'يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.',
+      newPasswordLetters: 'يجب أن تحتوي كلمة المرور على حرف واحد على الأقل.',
+      newPasswordNumbers: 'يجب أن تحتوي كلمة المرور على رقم واحد على الأقل.',
+      confirmPasswordRequired: 'يرجى تأكيد كلمة المرور الجديدة.',
+      confirmPasswordMismatch: 'كلمتا المرور غير متطابقتين.',
+      sameAsCurrent: 'يجب أن تكون كلمة المرور الجديدة مختلفة عن الحالية.',
+    },
+    success: 'تم تحديث كلمة المرور بنجاح.',
+    backToDashboard: 'العودة إلى لوحة التحكم',
   },
   clientQuestionField: {
     chooseOption: 'اختر خياراً',
@@ -589,6 +631,14 @@ const ar = {
       noRecentRequestsYet: 'لا توجد طلبات حديثة بعد',
       unknownStatus: 'غير معروف',
       emptyDate: '—',
+    },
+    verification: {
+      bannerTitle: 'البريد الإلكتروني غير مُوثّق',
+      bannerText: 'يرجى توثيق بريدك الإلكتروني قبل أن تتمكن من إنشاء طلب تمويل. تحقق من صندوق الوارد أو انقر على الزر أدناه لتلقي رابط توثيق جديد.',
+      resendButton: 'إعادة إرسال رابط التوثيق',
+      resending: 'جاري الإرسال…',
+      resent: 'تم إرسال رابط التوثيق! يرجى التحقق من صندوق الوارد.',
+      resendError: 'تعذر إرسال رابط التوثيق. يرجى المحاولة مرة أخرى.',
     },
   },
   clientRequests: {
@@ -798,6 +848,15 @@ const ar = {
   draftDetected: 'تم العثور على مسودة محفوظة.',
   resume: 'استكمال المسودة',
   discardAndStart: 'حذف المسودة وبدء طلب جديد',
+    },
+    verification: {
+      title: 'يتطلب توثيق البريد الإلكتروني',
+      text: 'يجب توثيق بريدك الإلكتروني قبل إنشاء طلب جديد. تحقق من صندوق الوارد أو اطلب رابط توثيق جديد أدناه.',
+      resendButton: 'إعادة إرسال رابط التوثيق',
+      resending: 'جاري الإرسال…',
+      resent: 'تم إرسال رابط التوثيق! تحقق من صندوق الوارد.',
+      resendError: 'تعذر الإرسال. يرجى المحاولة مرة أخرى.',
+      backToDashboard: 'العودة إلى لوحة التحكم',
     },
   },
   clientWizard: {
@@ -1153,6 +1212,7 @@ const ar = {
       additionalRequests: 'طلبات إضافية',
       customFollowUpItems: 'عناصر متابعة مخصصة',
       country: 'الدولة',
+      companyName: 'اسم الشركة',
       requestedAmount: 'المبلغ المطلوب',
       currentContract: 'العقد الحالي',
       assignments: 'الإسنادات',
@@ -1311,6 +1371,7 @@ const ar = {
     eyebrow: { create: 'إنشاء خطوة', edit: 'تعديل خطوة' },
     title: 'خطوة رفع المستند',
     fields: {
+      financeType: '\u0646\u0648\u0639 \u0627\u0644\u062a\u0645\u0648\u064a\u0644',
       code: 'الرمز',
       name: 'الاسم',
       description: 'الوصف',
@@ -1326,6 +1387,7 @@ const ar = {
       maxFileSizeMb: '10',
     },
     help: {
+      financeType: '\u062d\u062f\u062f \u0645\u0627 \u0625\u0630\u0627 \u0643\u0627\u0646\u062a \u0647\u0630\u0647 \u0627\u0644\u062e\u0637\u0648\u0629 \u062a\u062e\u0635 \u0643\u0644 \u0627\u0644\u0637\u0644\u0628\u0627\u062a \u0623\u0648 \u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0623\u0641\u0631\u0627\u062f \u0641\u0642\u0637 \u0623\u0648 \u0637\u0644\u0628\u0627\u062a \u0627\u0644\u0634\u0631\u0643\u0627\u062a \u0641\u0642\u0637.',
       autoCode: 'اتركه فارغاً ليتم توليد الرمز تلقائياً بعد الحفظ.',
       allowedFileTypes: 'تُحفظ هذه القيم في allowed_file_types_json.',
     },
@@ -1352,6 +1414,7 @@ const ar = {
     title: 'خطوات الرفع المحفوظة',
     dragBySortOrder: 'اسحب الصفوف لإعادة الترتيب حسب sort_order.',
     columns: {
+      financeType: '\u0646\u0648\u0639 \u0627\u0644\u062a\u0645\u0648\u064a\u0644',
       order: 'الترتيب',
       name: 'الاسم',
       types: 'الأنواع',
@@ -1634,6 +1697,7 @@ const ar = {
       updateBatchCreateFailed: 'تعذر إنشاء دفعة تحديث العميل.',
       updateBatchCancelFailed: 'تعذر إلغاء دفعة تحديث العميل.',
       updateItemReviewFailed: 'تعذر مراجعة عنصر التحديث.',
+      workflowStageUpdateFailed: 'تعذر تحديث مرحلة سير العمل.',
     },
     hero: {
       eyebrow: 'مراجعة الإدارة',
@@ -1670,6 +1734,11 @@ const ar = {
       finalApproveRequest: 'الاعتماد النهائي',
       finalApproveSubtitle: 'اعتمد الطلب بشكل نهائي في المرحلة الأخيرة وحوله إلى مكتمل مع إشعار العميل.',
       finalApprovePlaceholder: 'ملاحظة اعتماد نهائية (اختياري)',
+      workflowStageTitle: 'مرحلة سير العمل',
+      workflowStageSubtitle: 'صحّح المرحلة التشغيلية عندما لا تطابق الواقع. يُسجَّل ذلك في المخطط الزمني.',
+      workflowStageSelectLabel: 'المرحلة',
+      applyWorkflowStage: 'تحديث المرحلة',
+      applyingWorkflowStage: 'جارٍ التحديث…',
     },
     summary: {
       status: 'الحالة',
@@ -1754,6 +1823,7 @@ const ar = {
       updateBatchCreated: 'تم إنشاء دفعة تحديث العميل بنجاح.',
       updateBatchCancelled: 'تم إلغاء دفعة تحديث العميل بنجاح.',
       updateItemReviewed: 'تمت مراجعة عنصر التحديث بنجاح.',
+      workflowStageUpdated: 'تم تحديث مرحلة سير العمل بنجاح.',
     },
     confirm: {
       rejectRequest: 'هل تريد رفض هذا الطلب الآن؟ سيؤدي هذا الإجراء إلى تحويل حالة الطلب إلى مرفوض.',
@@ -2324,6 +2394,10 @@ const ar = {
     errors: {
       fullNameRequired: 'يرجى إدخال الاسم الأول واسم العائلة.',
       acceptTermsRequired: 'يرجى الموافقة على الشروط قبل إنشاء الحساب.',
+      invalidEmail: 'يرجى إدخال بريد إلكتروني صحيح.',
+      invalidPhone: 'يرجى إدخال رقم جوال صحيح للدولة المحددة.',
+      passwordTooShort: 'يجب أن تكون كلمة المرور 8 أحرف على الأقل.',
+      passwordMismatch: 'كلمتا المرور غير متطابقتين.',
       unableToCreate: 'تعذر إنشاء الحساب حالياً.',
     },
   },
@@ -2588,6 +2662,11 @@ const ar = {
     },
   },
   adminDocumentUploadStepsPage: {
+    financeTypes: {
+      all: '\u0643\u0644 \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0637\u0644\u0628\u0627\u062a',
+      individual: '\u0623\u0641\u0631\u0627\u062f \u0641\u0642\u0637',
+      company: '\u0634\u0631\u0643\u0627\u062a \u0641\u0642\u0637',
+    },
     hero: {
       eyebrow: 'إعداد الإدارة · المستندات',
       title: 'إدارة خطوات رفع مستندات الطلب',

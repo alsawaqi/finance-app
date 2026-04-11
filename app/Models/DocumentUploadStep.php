@@ -13,6 +13,7 @@ class DocumentUploadStep extends Model
     protected $fillable = [
         'code',
         'name',
+        'finance_type',
         'description',
         'is_required',
         'is_multiple',

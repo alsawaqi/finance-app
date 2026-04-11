@@ -145,6 +145,7 @@ class DocumentUploadStepController extends Controller
             'id' => $step->id,
             'code' => $step->code,
             'name' => $step->name,
+            'finance_type' => (string) ($step->finance_type ?: 'all'),
             'description' => $step->description,
             'is_required' => (bool) $step->is_required,
             'is_multiple' => (bool) $step->is_multiple,

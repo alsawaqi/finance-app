@@ -6,7 +6,7 @@ import AppPagination from '@/components/AppPagination.vue'
 import AdminDocumentStepBuilderForm from './inc/AdminDocumentStepBuilderForm.vue'
 import AdminDocumentStepLibraryTable from './inc/AdminDocumentStepLibraryTable.vue'
 import AdminDocumentStepPreviewCard from './inc/AdminDocumentStepPreviewCard.vue'
-import type { DocumentUploadStepItem, DocumentUploadStepPayload } from '@/services/documentUploadSteps'
+import type { DocumentStepFinanceType, DocumentUploadStepItem, DocumentUploadStepPayload } from '@/services/documentUploadSteps'
 import {
   createDocumentUploadStep,
   deleteDocumentUploadStep,
@@ -21,6 +21,7 @@ type StepForm = {
   id: number | null
   code: string
   name: string
+  finance_type: DocumentStepFinanceType
   description: string
   allowed_file_types_text: string
   max_file_size_mb: number | null
@@ -40,6 +41,11 @@ const formError = ref('')
 const successMessage = ref('')
 const fieldErrors = ref<Record<string, string[]>>({})
 const { t } = useI18n()
+const financeTypeOptions = computed<Array<{ value: DocumentStepFinanceType; label: string }>>(() => [
+  { value: 'all', label: t('adminDocumentUploadStepsPage.financeTypes.all') },
+  { value: 'individual', label: t('adminDocumentUploadStepsPage.financeTypes.individual') },
+  { value: 'company', label: t('adminDocumentUploadStepsPage.financeTypes.company') },
+])
 
 const form = ref<StepForm>(createDefaultForm())
 
@@ -74,6 +80,7 @@ function createDefaultForm(): StepForm {
     id: null,
     code: '',
     name: '',
+    finance_type: 'all',
     description: '',
     allowed_file_types_text: 'pdf\njpg\npng',
     max_file_size_mb: 10,
@@ -99,6 +106,7 @@ function buildPayload(): DocumentUploadStepPayload {
   return {
     code: form.value.code.trim() || null,
     name: form.value.name.trim(),
+    finance_type: form.value.finance_type,
     description: form.value.description.trim() || null,
     allowed_file_types_json: parsedAllowedFileTypes.value.length ? parsedAllowedFileTypes.value : null,
     max_file_size_mb: form.value.max_file_size_mb,
@@ -163,6 +171,7 @@ function editStep(row: DocumentUploadStepItem) {
     id: row.id,
     code: row.code ?? '',
     name: row.name,
+    finance_type: row.finance_type || 'all',
     description: row.description ?? '',
     allowed_file_types_text: row.allowed_file_types_json.join('\n'),
     max_file_size_mb: row.max_file_size_mb,
@@ -286,6 +295,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
     <div class="document-step-grid">
       <AdminDocumentStepBuilderForm
         v-model="form"
+        :finance-type-options="financeTypeOptions"
         :is-editing="isEditing"
         :is-saving="isSaving"
         :errors="fieldErrors"
@@ -296,6 +306,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
       <AdminDocumentStepPreviewCard
         :name="form.name"
         :description="form.description"
+        :finance-type="form.finance_type"
         :allowed-file-types="parsedAllowedFileTypes"
         :max-file-size-mb="form.max_file_size_mb"
         :is-required="form.is_required"

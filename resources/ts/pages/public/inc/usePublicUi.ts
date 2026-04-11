@@ -18,6 +18,7 @@ export function usePublicUi() {
   })
 
   let preloaderTimer: number | null = null
+  let scrollRafId: number | null = null
 
   function closePreloader() {
     showPreloader.value = false
@@ -54,8 +55,21 @@ export function usePublicUi() {
 
   function updateHeaderState() {
     const scrollTop = window.scrollY || document.documentElement.scrollTop
-    isSticky.value = scrollTop >= 150
-    showScrollTop.value = scrollTop >= 150
+    const sticky = scrollTop >= 150
+    if (isSticky.value !== sticky) {
+      isSticky.value = sticky
+    }
+    if (showScrollTop.value !== sticky) {
+      showScrollTop.value = sticky
+    }
+  }
+
+  function onScroll() {
+    if (scrollRafId !== null) return
+    scrollRafId = window.requestAnimationFrame(() => {
+      updateHeaderState()
+      scrollRafId = null
+    })
   }
 
   function scrollToTop() {
@@ -75,7 +89,7 @@ export function usePublicUi() {
     document.body.classList.remove('mobile-menu-visible')
     updateHeaderState()
 
-    window.addEventListener('scroll', updateHeaderState)
+    window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('keydown', onKeydown)
 
     preloaderTimer = window.setTimeout(() => {
@@ -87,11 +101,14 @@ export function usePublicUi() {
     document.body.classList.remove('boxed_wrapper')
     document.body.classList.remove('mobile-menu-visible')
 
-    window.removeEventListener('scroll', updateHeaderState)
+    window.removeEventListener('scroll', onScroll)
     window.removeEventListener('keydown', onKeydown)
 
     if (preloaderTimer) {
       window.clearTimeout(preloaderTimer)
+    }
+    if (scrollRafId !== null) {
+      window.cancelAnimationFrame(scrollRafId)
     }
   })
 

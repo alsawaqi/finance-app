@@ -157,6 +157,16 @@ export async function getAdminRequestDetails(id: number | string) {
   return data
 }
 
+export async function patchAdminRequestWorkflowStage(id: number | string, payload: { workflow_stage: string }) {
+  const { data } = await api.patch(`/api/admin/requests/${id}/workflow-stage`, payload)
+  return data as {
+    message: string
+    request: unknown
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
 export async function approveAdminRequest(id: number | string, payload: { approval_notes?: string }) {
   const { data } = await api.post(`/api/admin/requests/${id}/approve`, payload)
   return data

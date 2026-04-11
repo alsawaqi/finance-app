@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -18,6 +18,7 @@ import {
   finalizeAdminRequest,
   getAdminRequestAgentAssignmentOptions,
   getAdminRequestDetails,
+  patchAdminRequestWorkflowStage,
   rejectAdminRequest,
   reviewAdminStaffQuestion,
   reviewAdminUpdateItem,
@@ -37,7 +38,7 @@ import RequestAnswersList from './inc/RequestAnswersList.vue'
 import RequestCoreDetailsCard from './inc/RequestCoreDetailsCard.vue'
 import RequestSummaryStatGrid from './inc/RequestSummaryStatGrid.vue'
 import RequestWorkspaceShell from './inc/RequestWorkspaceShell.vue'
-import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { FINANCE_REQUEST_WORKFLOW_STAGES, getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 import { buildTimelineRows, formatTimelineDate } from '@/utils/requestTimeline'
 import {
   formatAdditionalDocumentStatus,
@@ -96,6 +97,8 @@ const selectedAgentIds = ref<number[]>([])
 const selectedAgentDocumentKeys = ref<Record<number, string[]>>({})
 const savingAgentAssignments = ref(false)
 const agentAssignmentReviewNote = ref('')
+const workflowStageDraft = ref('')
+const savingWorkflowStage = ref(false)
 const { t, locale } = useI18n()
 
 const requestId = computed(() => route.params.id as string)
@@ -123,6 +126,60 @@ function localizedModelValue(entity: any, base: string, fallback = t('adminReque
 
 function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
+}
+
+function rawWorkflowStage(stage: unknown): string {
+  if (stage == null || stage === '') return ''
+  if (typeof stage === 'string') return stage
+  if (typeof stage === 'object' && stage !== null && 'value' in (stage as object)) {
+    return String((stage as { value: string }).value ?? '')
+  }
+  return String(stage)
+}
+
+const workflowStageDirty = computed(() => {
+  const current = rawWorkflowStage(requestItem.value?.workflow_stage)
+  return workflowStageDraft.value !== '' && workflowStageDraft.value !== current
+})
+
+const workflowStageSelectOptions = computed(() => {
+  const keys = new Set(FINANCE_REQUEST_WORKFLOW_STAGES)
+  const current = rawWorkflowStage(requestItem.value?.workflow_stage)
+  if (current && !keys.has(current)) {
+    return [...FINANCE_REQUEST_WORKFLOW_STAGES, current].sort((a, b) => a.localeCompare(b))
+  }
+  return [...FINANCE_REQUEST_WORKFLOW_STAGES]
+})
+
+watch(
+  () => requestItem.value?.workflow_stage,
+  (stage) => {
+    const v = rawWorkflowStage(stage)
+    if (v) workflowStageDraft.value = v
+  },
+  { immediate: true },
+)
+
+async function applyWorkflowStage() {
+  if (!requestItem.value || !workflowStageDirty.value) return
+
+  savingWorkflowStage.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await patchAdminRequestWorkflowStage(requestItem.value.id, {
+      workflow_stage: workflowStageDraft.value,
+    })
+    requestItem.value = data.request ?? requestItem.value
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    successMessage.value = data.message || t('adminRequestDetails.messages.workflowStageUpdated')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || t('adminRequestDetails.errors.workflowStageUpdateFailed')
+  } finally {
+    savingWorkflowStage.value = false
+  }
 }
 
 const summaryStatItems = computed(() => [
@@ -974,6 +1031,37 @@ onMounted(() => {
 
     <template #summary>
       <div class="request-summary-stack">
+        <article v-if="requestItem" class="panel-card slim-card admin-workflow-stage-card">
+          <div class="panel-head">
+            <div>
+              <h2>{{ t('adminRequestDetails.sections.workflowStageTitle') }}</h2>
+              <p class="subtext">{{ t('adminRequestDetails.sections.workflowStageSubtitle') }}</p>
+            </div>
+          </div>
+          <div class="admin-workflow-stage-row">
+            <label class="client-form-group admin-workflow-stage-field">
+              <span class="client-form-label">{{ t('adminRequestDetails.sections.workflowStageSelectLabel') }}</span>
+              <select v-model="workflowStageDraft" class="admin-select">
+                <option
+                  v-for="stage in workflowStageSelectOptions"
+                  :key="stage"
+                  :value="stage"
+                >
+                  {{ stageMeta(stage).label }}
+                </option>
+              </select>
+            </label>
+            <button
+              type="button"
+              class="primary-btn admin-workflow-stage-apply"
+              :disabled="!workflowStageDirty || savingWorkflowStage"
+              @click="applyWorkflowStage"
+            >
+              {{ savingWorkflowStage ? t('adminRequestDetails.sections.applyingWorkflowStage') : t('adminRequestDetails.sections.applyWorkflowStage') }}
+            </button>
+          </div>
+        </article>
+
         <RequestSummaryStatGrid :items="summaryStatItems" />
 
         <div class="request-top-panel-grid">
@@ -1731,3 +1819,21 @@ onMounted(() => {
     />
   </RequestWorkspaceShell>
 </template>
+
+<style scoped>
+.admin-workflow-stage-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.admin-workflow-stage-field {
+  flex: 1 1 240px;
+  margin: 0;
+}
+
+.admin-workflow-stage-apply {
+  flex: 0 0 auto;
+}
+</style>

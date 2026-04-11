@@ -27,6 +27,7 @@ use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\ResetPasswordController;
 use App\Http\Controllers\Api\Auth\VerifyEmailController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\Client\ClientChangePasswordController;
 use App\Http\Controllers\Api\Client\ClientContractController;
 use App\Http\Controllers\Api\Client\ClientRequestController;
 use App\Http\Controllers\Api\Client\ClientRequestUpdateController;
@@ -41,14 +42,15 @@ Route::prefix('auth')->group(function () {
         Route::post('/reset-password', ResetPasswordController::class);
     });
 
-    Route::middleware(['auth:sanctum', 'active_user'])->group(function () {
+    Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('verification.verify');
+
+    Route::middleware('auth:sanctum')->group(function () {
         Route::get('/user', MeController::class);
         Route::post('/logout', LogoutController::class);
         Route::post('/email/verification-notification', EmailVerificationNotificationController::class)
             ->middleware('throttle:6,1');
-        Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
-            ->middleware('signed')
-            ->name('verification.verify');
     });
 });
 
@@ -75,6 +77,7 @@ Route::prefix('client')
         Route::post('/requests/{financeRequest}/contract/sign', [ClientContractController::class, 'sign']);
         Route::post('/requests/{financeRequest}/contract/commercial-registration', [ClientContractController::class, 'uploadCommercialRegistration']);
         Route::get('/requests/{financeRequest}/contract/download', [ClientContractController::class, 'downloadPdf']);
+        Route::post('/change-password', ClientChangePasswordController::class);
     });
 
 Route::prefix('admin')
@@ -141,6 +144,7 @@ Route::prefix('admin')
         Route::delete('/document-upload-steps/{documentUploadStep}', [DocumentUploadStepController::class, 'destroy']);
         Route::patch('/document-upload-steps/{documentUploadStep}/toggle-active', [DocumentUploadStepController::class, 'toggleActive']);
         Route::post('/document-upload-steps/reorder', [DocumentUploadStepController::class, 'reorder']);
+        Route::patch('/requests/{financeRequest}/workflow-stage', [AdminFinanceRequestController::class, 'updateWorkflowStage']);
         Route::patch('/requests/{financeRequest}/staff-questions/{staffQuestion}/review', [AdminFinanceRequestController::class, 'reviewStaffQuestion']);
         Route::post('/requests/{financeRequest}/understudy-review', [AdminFinanceRequestController::class, 'reviewUnderstudy']);
         Route::post('/requests/{financeRequest}/advance-understudy', [AdminFinanceRequestController::class, 'advanceFromUnderstudy']);
@@ -194,6 +198,7 @@ Route::prefix('staff')
         Route::get('/requests', [StaffRequestWorkspaceController::class, 'index']);
         Route::get('/requests/{financeRequest}', [StaffRequestWorkspaceController::class, 'show']);
         Route::post('/requests/{financeRequest}/comments', [StaffRequestWorkspaceController::class, 'storeComment']);
+        Route::post('/requests/{financeRequest}/required-documents/upload', [StaffRequestWorkspaceController::class, 'uploadRequiredDocumentOnBehalf']);
         Route::post('/requests/{financeRequest}/required-documents/{documentUploadStep}/request-change', [StaffRequestWorkspaceController::class, 'requestRequiredDocumentChange']);
         Route::post('/requests/{financeRequest}/additional-documents', [StaffRequestWorkspaceController::class, 'storeAdditionalDocument']);
         Route::get('/agents', [StaffRequestWorkspaceController::class, 'agents']);

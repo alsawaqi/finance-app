@@ -36,6 +36,7 @@ export type RequiredDocumentChecklistItem = {
   document_upload_step_id: number
   code?: string | null
   name: string
+  finance_type?: 'all' | 'individual' | 'company'
   is_required: boolean
   is_multiple?: boolean
   status: string
@@ -383,6 +384,28 @@ export async function requestRequiredDocumentChange(
     message: string
     request: StaffWorkspaceRequestDetails
     required_documents: RequiredDocumentChecklistItem[]
+  }
+}
+
+export async function uploadStaffRequiredDocument(
+  id: string | number,
+  payload: { document_upload_step_id: number; file: File },
+) {
+  const formData = new FormData()
+  formData.append('document_upload_step_id', String(payload.document_upload_step_id))
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/staff/requests/${id}/required-documents/upload`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+    staff_question_summary: StaffQuestionSummary
   }
 }
 

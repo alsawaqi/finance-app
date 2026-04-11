@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use App\Enums\UserAccountType;
+use App\Notifications\Auth\AuthResetPasswordNotification;
+use App\Notifications\Auth\AuthVerifyEmailNotification;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -10,7 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
@@ -19,9 +22,6 @@ class User extends Authenticatable
         'email',
         'phone',
         'password',
-        'smtp_username',
-        'smtp_password',
-        'smtp_sender_name',
         'avatar_path',
         'account_type',
         'is_active',
@@ -30,7 +30,6 @@ class User extends Authenticatable
 
     protected $hidden = [
         'password',
-        'smtp_password',
         'remember_token',
     ];
 
@@ -39,11 +38,9 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
-            'is_active' => 'boolean',
-            'smtp_enabled' => 'boolean',
             'smtp_verified_at' => 'datetime',
-            'smtp_password' => 'encrypted',
-            'inbox_last_synced_at' => 'datetime',
+            'smtp_enabled' => 'boolean',
+            'is_active' => 'boolean',
             'password' => 'hashed',
             'account_type' => UserAccountType::class,
         ];
@@ -64,18 +61,26 @@ class User extends Authenticatable
         return $this->account_type === UserAccountType::CLIENT || $this->hasRole('client');
     }
 
-    public function smtpSenderEmail(): ?string
+    public function mailboxSettingsSummary(): array
     {
-        $candidate = trim((string) ($this->smtp_username ?: $this->email ?: ''));
+        return [
+            'smtp_username' => $this->smtp_username,
+            'smtp_sender_name' => $this->smtp_sender_name,
+            'smtp_enabled' => (bool) $this->smtp_enabled,
+            'smtp_verified_at' => $this->smtp_verified_at?->toISOString(),
+            'smtp_last_error' => $this->smtp_last_error,
+            'has_smtp_password' => $this->hasStoredSmtpPassword(),
+        ];
+    }
 
-        return $candidate !== '' ? $candidate : null;
+    public function smtpSenderEmail(): string
+    {
+        return trim((string) ($this->smtp_username ?: $this->email));
     }
 
     public function smtpSenderName(): string
     {
-        $candidate = trim((string) ($this->smtp_sender_name ?: $this->name ?: ''));
-
-        return $candidate !== '' ? $candidate : (string) ($this->name ?: 'Finance Staff');
+        return trim((string) ($this->smtp_sender_name ?: $this->name));
     }
 
     public function hasStoredSmtpPassword(): bool
@@ -83,25 +88,25 @@ class User extends Authenticatable
         return filled($this->smtp_password);
     }
 
+    /**
+     * Staff mailbox is enabled, verified from Mail Settings, and has a stored SMTP password.
+     * Matches the staff UI "mailbox ready" checks for sending / syncing.
+     */
     public function hasVerifiedMailboxSettings(): bool
     {
-        return $this->smtp_enabled
+        return (bool) $this->smtp_enabled
             && $this->smtp_verified_at !== null
-            && filled($this->smtpSenderEmail())
             && $this->hasStoredSmtpPassword();
     }
 
-    public function mailboxSettingsSummary(): array
+    public function sendPasswordResetNotification($token): void
     {
-        return [
-            'sender_email' => $this->smtpSenderEmail(),
-            'sender_name' => $this->smtpSenderName(),
-            'smtp_username' => $this->smtp_username,
-            'smtp_enabled' => (bool) $this->smtp_enabled,
-            'smtp_verified_at' => optional($this->smtp_verified_at)?->toISOString(),
-            'has_smtp_password' => $this->hasStoredSmtpPassword(),
-            'smtp_last_error' => $this->smtp_last_error,
-        ];
+        $this->notify(new AuthResetPasswordNotification($token));
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new AuthVerifyEmailNotification());
     }
 
     public function financeRequests(): HasMany
@@ -123,7 +128,6 @@ class User extends Authenticatable
     {
         return $this->hasMany(FinanceRequestStaffAssignment::class, 'assigned_by');
     }
-
 
     public function submittedUnderstudyFinanceRequests(): HasMany
     {
@@ -178,11 +182,6 @@ class User extends Authenticatable
     public function sentRequestEmails(): HasMany
     {
         return $this->hasMany(RequestEmail::class, 'sent_by');
-    }
-
-    public function mailboxMessages(): HasMany
-    {
-        return $this->hasMany(MailboxMessage::class, 'user_id');
     }
 
     public function timelineEvents(): HasMany

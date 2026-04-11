@@ -74,6 +74,10 @@ final class ClientStageWhatsAppNotifier
             return;
         }
 
+        $firstName = $this->firstNameOrFriendly($clientUser->name);
+        $requestRef = (string) ($financeRequest->reference_number ?: ('REQ-'.$financeRequest->id));
+        $approvalRef = trim((string) ($financeRequest->approval_reference_number ?: $requestRef));
+
         $body = $this->mergeBilingualBody($payload['en'], $payload['ar'], null);
         $to = 'whatsapp:'.$e164;
 
@@ -83,6 +87,9 @@ final class ClientStageWhatsAppNotifier
                 'request_id' => $financeRequest->id,
                 'event_type' => $eventType,
                 'phone' => $this->maskPhone($e164),
+            ], [
+                '1' => $firstName,
+                '2' => $approvalRef,
             ]);
         } catch (RestException $e) {
             Log::warning('Client-stage WhatsApp send failed.', [

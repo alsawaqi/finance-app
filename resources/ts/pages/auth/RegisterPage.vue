@@ -1,27 +1,35 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import axios from 'axios'
 import AuthPageShell from '../public/inc/AuthPageShell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
+import { allCountryPhoneCodeOptions } from '@/utils/countries'
+import { validateNationalPhoneForCountry } from '@/utils/phoneValidation'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const form = ref({
   firstName: '',
   lastName: '',
   email: '',
-  phoneCountryCode: '+966',
+  phoneCountryIso: 'SA',
   phoneNumber: '',
   password: '',
   confirmPassword: '',
   agree: true,
 })
 
-const countryCodeOptions = ['+966', '+971', '+965', '+973', '+974', '+968', '+20', '+962', '+1', '+44']
+const touched = ref<Record<string, boolean>>({})
+
+const countryCodeOptions = computed(() => allCountryPhoneCodeOptions(locale.value))
+const selectedDialCode = computed(() => {
+  const found = countryCodeOptions.value.find((item) => item.isoCode === form.value.phoneCountryIso)
+  return found?.dialCode || '+966'
+})
 
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
@@ -29,6 +37,49 @@ const formError = ref('')
 const fieldErrors = ref<Record<string, string[]>>({})
 
 const isSubmitting = computed(() => auth.loading)
+
+function markTouched(field: string) {
+  touched.value[field] = true
+}
+
+const liveErrors = computed(() => {
+  const errors: Record<string, string> = {}
+
+  if (touched.value.email && form.value.email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.email)) {
+      errors.email = t('authRegister.errors.invalidEmail')
+    }
+  }
+
+  if (touched.value.phone && form.value.phoneNumber) {
+    if (!validateNationalPhoneForCountry(form.value.phoneNumber, form.value.phoneCountryIso)) {
+      errors.phone = t('authRegister.errors.invalidPhone')
+    }
+  }
+
+  if (touched.value.password && form.value.password) {
+    if (form.value.password.length < 8) {
+      errors.password = t('authRegister.errors.passwordTooShort')
+    }
+  }
+
+  if (touched.value.confirmPassword && form.value.confirmPassword) {
+    if (form.value.password !== form.value.confirmPassword) {
+      errors.confirmPassword = t('authRegister.errors.passwordMismatch')
+    }
+  }
+
+  return errors
+})
+
+watch(
+  () => form.value.phoneCountryIso,
+  () => {
+    if (touched.value.phone && form.value.phoneNumber) {
+      // Force re-evaluation by touching the field again (computed reacts automatically)
+    }
+  },
+)
 
 function resetErrors() {
   formError.value = ''
@@ -39,12 +90,25 @@ function firstFieldError(field: string) {
   return fieldErrors.value[field]?.[0] ?? ''
 }
 
+function displayError(field: string) {
+  return firstFieldError(field) || liveErrors.value[field] || ''
+}
+
+function blockNonDigits(event: KeyboardEvent) {
+  if (event.metaKey || event.ctrlKey || event.altKey) return
+  if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Home', 'End'].includes(event.key)) return
+  if (!/^\d$/.test(event.key)) event.preventDefault()
+}
+
 function digitsOnlyPhone(value: string) {
   return value.replace(/\D/g, '')
 }
 
 async function submitRegister() {
   resetErrors()
+  Object.keys(form.value).forEach((key) => { touched.value[key] = true })
+
+  if (Object.keys(liveErrors.value).length > 0) return
 
   const fullName = [form.value.firstName.trim(), form.value.lastName.trim()].filter(Boolean).join(' ')
 
@@ -58,17 +122,30 @@ async function submitRegister() {
     return
   }
 
+  if (form.value.phoneNumber && !validateNationalPhoneForCountry(form.value.phoneNumber, form.value.phoneCountryIso)) {
+    fieldErrors.value = {
+      ...fieldErrors.value,
+      phone: [t('authRegister.errors.invalidPhone')],
+    }
+    return
+  }
+
   try {
     await auth.register({
       name: fullName,
       email: form.value.email,
-      phone_country_code: form.value.phoneNumber ? form.value.phoneCountryCode : undefined,
+      phone_country_code: form.value.phoneNumber ? selectedDialCode.value : undefined,
       phone: form.value.phoneNumber || undefined,
       password: form.value.password,
       password_confirmation: form.value.confirmPassword,
     })
 
-    await router.push({ name: auth.dashboardRouteName })
+    if (!auth.isVerified) {
+  await router.push({ name: 'verify-email' })
+  return
+}
+
+await router.push({ name: auth.dashboardRouteName })
   } catch (error) {
     if (axios.isAxiosError(error)) {
       formError.value = error.response?.data?.message ?? t('authRegister.errors.unableToCreate')
@@ -154,12 +231,13 @@ async function submitRegister() {
                           v-model="form.email"
                           type="email"
                           class="auth-input"
-                          :class="{ 'auth-input--error': firstFieldError('email') }"
+                          :class="{ 'auth-input--error': displayError('email') }"
                           :placeholder="t('authRegister.form.emailPlaceholder')"
                           autocomplete="email"
+                          @blur="markTouched('email')"
                         />
                       </div>
-                      <small v-if="firstFieldError('email')" class="auth-field-error">{{ firstFieldError('email') }}</small>
+                      <small v-if="displayError('email')" class="auth-field-error">{{ displayError('email') }}</small>
                     </div>
 
                     <div class="auth-field auth-field--phone">
@@ -169,12 +247,12 @@ async function submitRegister() {
                           <i class="fas fa-globe"></i>
                           <select
                             id="register-phone-country"
-                            v-model="form.phoneCountryCode"
+                            v-model="form.phoneCountryIso"
                             class="auth-select"
                             :class="{ 'auth-input--error': firstFieldError('phone_country_code') }"
                           >
-                            <option v-for="code in countryCodeOptions" :key="code" :value="code">
-                              {{ code }}
+                            <option v-for="country in countryCodeOptions" :key="country.isoCode" :value="country.isoCode">
+                              {{ country.label }}
                             </option>
                           </select>
                         </div>
@@ -189,16 +267,18 @@ async function submitRegister() {
                             autocomplete="tel-national"
                             pattern="[0-9]*"
                             class="auth-input"
-                            :class="{ 'auth-input--error': firstFieldError('phone') }"
+                            :class="{ 'auth-input--error': displayError('phone') }"
                             :placeholder="t('authRegister.form.phoneNumberPlaceholder')"
-                            @input="form.phoneNumber = digitsOnlyPhone(($event.target as HTMLInputElement).value)"
+                            @keypress="blockNonDigits"
+                            @input="form.phoneNumber = digitsOnlyPhone(($event.target as HTMLInputElement).value); markTouched('phone')"
+                            @blur="markTouched('phone')"
                           />
                         </div>
                       </div>
                       <small v-if="firstFieldError('phone_country_code')" class="auth-field-error">
                         {{ firstFieldError('phone_country_code') }}
                       </small>
-                      <small v-if="firstFieldError('phone')" class="auth-field-error">{{ firstFieldError('phone') }}</small>
+                      <small v-if="displayError('phone')" class="auth-field-error">{{ displayError('phone') }}</small>
                     </div>
                   </div>
 
@@ -212,9 +292,10 @@ async function submitRegister() {
                           v-model="form.password"
                           :type="showPassword ? 'text' : 'password'"
                           class="auth-input"
-                          :class="{ 'auth-input--error': firstFieldError('password') }"
+                          :class="{ 'auth-input--error': displayError('password') }"
                           :placeholder="t('authRegister.form.passwordPlaceholder')"
                           autocomplete="new-password"
+                          @blur="markTouched('password')"
                         />
                         <button
                           type="button"
@@ -224,7 +305,7 @@ async function submitRegister() {
                           {{ showPassword ? t('authRegister.form.hide') : t('authRegister.form.show') }}
                         </button>
                       </div>
-                      <small v-if="firstFieldError('password')" class="auth-field-error">{{ firstFieldError('password') }}</small>
+                      <small v-if="displayError('password')" class="auth-field-error">{{ displayError('password') }}</small>
                     </div>
 
                     <div class="auth-field">
@@ -236,8 +317,10 @@ async function submitRegister() {
                           v-model="form.confirmPassword"
                           :type="showConfirmPassword ? 'text' : 'password'"
                           class="auth-input"
+                          :class="{ 'auth-input--error': displayError('confirmPassword') }"
                           :placeholder="t('authRegister.form.confirmPasswordPlaceholder')"
                           autocomplete="new-password"
+                          @blur="markTouched('confirmPassword')"
                         />
                         <button
                           type="button"
@@ -247,6 +330,7 @@ async function submitRegister() {
                           {{ showConfirmPassword ? t('authRegister.form.hide') : t('authRegister.form.show') }}
                         </button>
                       </div>
+                      <small v-if="displayError('confirmPassword')" class="auth-field-error">{{ displayError('confirmPassword') }}</small>
                     </div>
                   </div>
 

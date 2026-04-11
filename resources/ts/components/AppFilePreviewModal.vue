@@ -256,17 +256,20 @@ onBeforeUnmount(() => {
 .app-file-preview-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 95;
-  display: grid;
-  place-items: center;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
   padding: clamp(0.8rem, 2.2vw, 1.5rem);
   background: rgba(2, 6, 23, 0.62);
   backdrop-filter: blur(2px);
 }
 
 .app-file-preview-modal {
-  width: min(1200px, 100%);
-  max-height: calc(100vh - clamp(1.6rem, 5vh, 2.8rem));
+  width: min(1200px, calc(100vw - clamp(1.6rem, 5vw, 3rem)));
+  max-height: calc(100dvh - clamp(1.6rem, 5vh, 2.8rem));
+  margin: auto;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   border-radius: 20px;
@@ -401,8 +404,14 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .app-file-preview-backdrop {
+    align-items: center;
+    padding: 0.55rem;
+  }
+
   .app-file-preview-modal {
-    max-height: calc(100vh - 1rem);
+    width: min(1200px, calc(100vw - 1.1rem));
+    max-height: calc(100dvh - 1.1rem);
     border-radius: 16px;
   }
 

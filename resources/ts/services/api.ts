@@ -1,6 +1,8 @@
 import axios from 'axios'
+import { i18n } from '@/i18n'
 import { useAppToast } from '@/composables/useAppToast'
 import { useAppProgress } from '@/composables/useAppProgress'
+import { useTransactionOverlay } from '@/composables/useTransactionOverlay'
 
 /**
  * Vite inlines VITE_* at build time. A local URL in .env (e.g. http://127.0.0.1:8000)
@@ -23,6 +25,7 @@ const baseURL = resolveApiBaseURL()
 const api = axios.create({
   baseURL,
   withCredentials: true,
+  timeout: 25000,
   xsrfCookieName: 'XSRF-TOKEN',
   xsrfHeaderName: 'X-XSRF-TOKEN',
   headers: {
@@ -75,6 +78,28 @@ function shouldTrackProgress(config: { headers?: unknown } | undefined) {
   return true
 }
 
+function shouldShowTransactionOverlay(config: { method?: string; headers?: unknown } | undefined) {
+  if (!config) return false
+
+  const method = typeof config.method === 'string' ? config.method.toLowerCase() : 'get'
+  if (!MUTATING_METHODS.has(method)) return false
+
+  const headers = (config.headers ?? {}) as Record<string, unknown>
+  const rawSkip = headers['X-Skip-Transaction-Overlay']
+
+  if (typeof rawSkip === 'string' && ['1', 'true', 'yes'].includes(rawSkip.toLowerCase())) {
+    return false
+  }
+  if (typeof rawSkip === 'number' && rawSkip === 1) {
+    return false
+  }
+  if (typeof rawSkip === 'boolean' && rawSkip) {
+    return false
+  }
+
+  return true
+}
+
 function extractMessage(payload: unknown) {
   if (!payload || typeof payload !== 'object') return ''
   const raw = (payload as { message?: unknown }).message
@@ -103,24 +128,26 @@ function extractValidationMessage(payload: unknown) {
 }
 
 function defaultSuccessMessage() {
-  return document.documentElement.dir === 'rtl'
-    ? 'تم تنفيذ العملية بنجاح.'
-    : 'Action completed successfully.'
+  return i18n.global.t('common.api.defaultSuccess')
 }
 
 function defaultErrorMessage() {
-  return document.documentElement.dir === 'rtl'
-    ? 'تعذر تنفيذ العملية. حاول مرة أخرى.'
-    : 'Unable to complete this action. Please try again.'
+  return i18n.global.t('common.api.defaultError')
 }
 
 const appProgress = useAppProgress()
+const txOverlay = useTransactionOverlay()
 
 api.interceptors.request.use(
   (config) => {
     if (shouldTrackProgress(config)) {
-      ;(config as Record<string, unknown>).__trackProgress = true
+      ;(config as unknown as Record<string, unknown>).__trackProgress = true
       appProgress.beginRequest()
+    }
+
+    if (shouldShowTransactionOverlay(config)) {
+      ;(config as unknown as Record<string, unknown>).__txOverlay = true
+      txOverlay.beginMutation()
     }
 
     return config
@@ -130,14 +157,22 @@ api.interceptors.request.use(
     if (config?.__trackProgress) {
       appProgress.endRequest()
     }
+    if (config?.__txOverlay) {
+      txOverlay.endMutationError()
+    }
     return Promise.reject(error)
   },
 )
 
 api.interceptors.response.use(
   (response) => {
-    if ((response.config as Record<string, unknown>).__trackProgress) {
+    if ((response.config as unknown as Record<string, unknown>).__trackProgress) {
       appProgress.endRequest()
+    }
+
+    if ((response.config as unknown as Record<string, unknown>).__txOverlay) {
+      const message = extractMessage(response.data) || defaultSuccessMessage()
+      txOverlay.endMutationSuccess(message)
     }
 
     if (shouldToast(response.config)) {
@@ -152,6 +187,9 @@ api.interceptors.response.use(
     const config = (error as { config?: Record<string, unknown> })?.config
     if (config?.__trackProgress) {
       appProgress.endRequest()
+    }
+    if (config?.__txOverlay) {
+      txOverlay.endMutationError()
     }
 
     if (axios.isAxiosError(error) && error.code !== 'ERR_CANCELED' && shouldToast(error.config)) {

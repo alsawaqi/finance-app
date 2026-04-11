@@ -3,7 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppLocaleSelect from '@/pages/public/inc/AppLocaleSelect.vue'
- 
+import { useAuthStore } from '@/stores/auth'
+
 import { listClientRequests } from '@/services/clientPortal'
 import { DEFAULT_PAGINATION, type PaginationMeta } from '@/types/pagination'
 import { intakeFinanceType, intakeRequestedAmount } from '@/utils/requestIntake'
@@ -11,11 +12,29 @@ import { getClientWorkflowStageMeta } from '@/utils/clientRequestStage'
 import { formatDateOnly } from '@/utils/dateTime'
 import { formatRequestStatus } from '@/utils/requestStatus'
 
+const auth = useAuthStore()
 const loading = ref(true)
 const errorMessage = ref('')
 const requests = ref<any[]>([])
 const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 100 })
 const { t, locale } = useI18n()
+
+const isVerified = computed(() => !!auth.user?.email_verified_at)
+const resendingVerification = ref(false)
+const verificationFeedback = ref<{ type: 'success' | 'error'; text: string } | null>(null)
+
+async function resendVerification() {
+  resendingVerification.value = true
+  verificationFeedback.value = null
+  try {
+    await auth.resendVerification()
+    verificationFeedback.value = { type: 'success', text: t('clientDashboard.verification.resent') }
+  } catch {
+    verificationFeedback.value = { type: 'error', text: t('clientDashboard.verification.resendError') }
+  } finally {
+    resendingVerification.value = false
+  }
+}
 
 const documentStages = ['document_collection', 'awaiting_additional_documents', 'awaiting_client_documents']
 const processingStages = ['review', 'submitted_for_review', 'admin_contract_preparation', 'awaiting_staff_assignment', 'ready_for_processing', 'assigned_to_staff', 'awaiting_agent_assignment', 'processing']
@@ -116,9 +135,31 @@ onMounted(load)
         {{ t('clientDashboard.hero.subtitle') }}
       </p>
       <div class="client-hero-actions">
-        <RouterLink :to="{ name: 'client-new-request' }" class="client-btn-primary">{{ t('clientDashboard.hero.createRequest') }}</RouterLink>
+        <RouterLink v-if="isVerified" :to="{ name: 'client-new-request' }" class="client-btn-primary">{{ t('clientDashboard.hero.createRequest') }}</RouterLink>
         <RouterLink :to="{ name: 'client-requests' }" class="client-btn-secondary">{{ t('clientDashboard.hero.viewRequests') }}</RouterLink>
       </div>
+    </section>
+
+    <section v-if="!isVerified" class="client-verification-banner client-reveal-up">
+      <h3 class="client-verification-banner__title">{{ t('clientDashboard.verification.bannerTitle') }}</h3>
+      <p class="client-verification-banner__text">{{ t('clientDashboard.verification.bannerText') }}</p>
+      <div class="client-verification-banner__actions">
+        <button
+          type="button"
+          class="client-verification-banner__btn"
+          :disabled="resendingVerification"
+          @click="resendVerification"
+        >
+          {{ resendingVerification ? t('clientDashboard.verification.resending') : t('clientDashboard.verification.resendButton') }}
+        </button>
+      </div>
+      <p
+        v-if="verificationFeedback"
+        class="client-verification-banner__feedback"
+        :class="verificationFeedback.type === 'success' ? 'client-verification-banner__feedback--success' : 'client-verification-banner__feedback--error'"
+      >
+        {{ verificationFeedback.text }}
+      </p>
     </section>
 
     <div v-if="errorMessage" class="client-alert client-alert--error">{{ errorMessage }}</div>
@@ -127,7 +168,7 @@ onMounted(load)
       <article v-for="kpi in kpis" :key="kpi.label" class="client-kpi-card">
         <div class="client-kpi-value">{{ loading ? '…' : kpi.value }}</div>
         <h3>{{ kpi.label }}</h3>
-        <span class="client-badge" :class="kpi.badgeClass">{{ kpi.badge }}</span>
+      
       </article>
     </section>
 

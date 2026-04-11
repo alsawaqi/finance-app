@@ -19,6 +19,7 @@ class UpdateDocumentUploadStepRequest extends FormRequest
         return [
             'code' => ['nullable', 'string', 'max:255', Rule::unique('document_upload_steps', 'code')->ignore($stepId)],
             'name' => ['required', 'string', 'max:255'],
+            'finance_type' => ['nullable', 'string', Rule::in(['all', 'individual', 'company'])],
             'description' => ['nullable', 'string'],
             'is_required' => ['sometimes', 'boolean'],
             'is_multiple' => ['sometimes', 'boolean'],
@@ -35,6 +36,7 @@ class UpdateDocumentUploadStepRequest extends FormRequest
         $this->merge([
             'code' => $this->filled('code') ? trim((string) $this->input('code')) : null,
             'name' => trim((string) $this->input('name', '')),
+            'finance_type' => $this->normalizeFinanceType($this->input('finance_type')),
             'description' => $this->filled('description') ? trim((string) $this->input('description')) : null,
             'is_required' => $this->boolean('is_required'),
             'is_multiple' => $this->boolean('is_multiple'),
@@ -57,5 +59,14 @@ class UpdateDocumentUploadStepRequest extends FormRequest
         ))));
 
         return $items === [] ? null : $items;
+    }
+
+    private function normalizeFinanceType(mixed $value): string
+    {
+        $normalized = strtolower(trim((string) $value));
+
+        return in_array($normalized, ['individual', 'company'], true)
+            ? $normalized
+            : 'all';
     }
 }

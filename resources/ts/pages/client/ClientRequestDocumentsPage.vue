@@ -23,10 +23,13 @@ const requestItem = ref<any | null>(null)
 const { t, locale } = useI18n()
 const isArabic = computed(() => locale.value === 'ar')
 const emptyValueLabel = computed(() => t('clientDocuments.states.emptyValue'))
+const DEFAULT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']
+const DEFAULT_MAX_FILE_SIZE_MB = 10
 
 const uploadingRequired = ref<Record<number, boolean>>({})
 const uploadingAdditional = ref<Record<number, boolean>>({})
 const uploadingUpdateFiles = ref<Record<number, boolean>>({})
+const uploadingQueued = ref(false)
 
 const requiredFileInputs = ref<Record<number, HTMLInputElement | null>>({})
 const additionalFileInputs = ref<Record<number, HTMLInputElement | null>>({})
@@ -39,6 +42,7 @@ type PendingUpload = {
   title: string
 }
 
+const pendingUploads = ref<PendingUpload[]>([])
 const pendingUpload = ref<PendingUpload | null>(null)
 const uploadPreviewOpen = ref(false)
 
@@ -56,6 +60,60 @@ const pendingFileUpdateCount = computed(() => fileUpdateItems.value.filter((item
 
 function uiText(en: string, ar: string) {
   return isArabic.value ? ar : en
+}
+
+function normalizeAllowedExtensions(raw: unknown): string[] {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_ALLOWED_EXTENSIONS
+
+  const result = raw
+    .map((value) => String(value || '').trim().toLowerCase())
+    .map((value) => value.replace(/^\./, ''))
+    .map((value) => {
+      if (value.includes('/')) {
+        return value.split('/').pop() || ''
+      }
+      return value
+    })
+    .filter((value) => value !== '')
+
+  return result.length ? Array.from(new Set(result)) : DEFAULT_ALLOWED_EXTENSIONS
+}
+
+function fileExtension(file: File): string {
+  const name = String(file.name || '')
+  const idx = name.lastIndexOf('.')
+  if (idx < 0) return ''
+  return name.slice(idx + 1).toLowerCase()
+}
+
+function formatExtensionList(extensions: string[]) {
+  return extensions.map((ext) => ext.toUpperCase()).join(', ')
+}
+
+function acceptFromExtensions(extensions: string[]) {
+  return extensions.map((ext) => `.${ext}`).join(',')
+}
+
+function validateSelectedFile(file: File, options?: { allowedExtensions?: unknown; maxMb?: number | null }): string | null {
+  const allowedExtensions = normalizeAllowedExtensions(options?.allowedExtensions)
+  const ext = fileExtension(file)
+  if (!ext || !allowedExtensions.includes(ext)) {
+    return uiText(
+      `Invalid file format. Allowed: ${formatExtensionList(allowedExtensions)}.`,
+      `صيغة الملف غير مسموحة. الصيغ المسموحة: ${formatExtensionList(allowedExtensions)}.`,
+    )
+  }
+
+  const maxMb = Number(options?.maxMb || DEFAULT_MAX_FILE_SIZE_MB)
+  const maxBytes = maxMb * 1024 * 1024
+  if (Number.isFinite(maxBytes) && maxBytes > 0 && file.size > maxBytes) {
+    return uiText(
+      `File is too large. Maximum size is ${maxMb} MB.`,
+      `حجم الملف كبير جداً. الحد الأقصى هو ${maxMb} ميجابايت.`,
+    )
+  }
+
+  return null
 }
 
 function localizedText(en?: string | null, ar?: string | null, fallback?: string) {
@@ -87,6 +145,7 @@ function updateStatusClass(status: string | null | undefined) {
 
 function updateUploadButtonLabel(item: any) {
   if (uploadingUpdateFiles.value[item.id]) return t('clientDocuments.actions.uploading')
+  if (hasPending('update', item.id)) return uiText('Ready to submit', 'جاهز للإرسال')
   if (item.status === 'rejected') return uiText('Upload replacement again', 'إعادة رفع الملف البديل')
   if (item.status === 'updated') return uiText('Upload revised file', 'رفع ملف معدل')
   return t('clientDocuments.actions.uploadFile')
@@ -190,6 +249,7 @@ function canUploadAdditional(item: any) {
 
 function additionalUploadButtonLabel(item: any) {
   if (uploadingAdditional.value[item.id]) return t('clientDocuments.actions.uploading')
+  if (hasPending('additional', item.id)) return uiText('Ready to submit', 'جاهز للإرسال')
   if (String(item?.status || '').toLowerCase() === 'rejected') return t('clientDocuments.actions.uploadCorrected')
   if (!canUploadAdditional(item)) return t('clientDocuments.states.uploaded')
   return t('clientDocuments.actions.uploadFile')
@@ -197,6 +257,7 @@ function additionalUploadButtonLabel(item: any) {
 
 function requiredUploadButtonLabel(item: any) {
   if (uploadingRequired.value[item.document_upload_step_id]) return t('clientDocuments.actions.uploading')
+  if (hasPending('required', item.document_upload_step_id)) return uiText('Ready to submit', 'جاهز للإرسال')
   if (item.is_multiple && item.is_uploaded) return uiText('Upload another file', 'رفع ملف إضافي')
   if (item.is_change_requested) return t('clientDocuments.actions.uploadCorrected')
   if (!item.can_client_upload && item.is_uploaded) return t('clientDocuments.states.uploaded')
@@ -214,6 +275,91 @@ function clearUploadPreview() {
   pendingUpload.value = null
 }
 
+function sameFile(a: File, b: File) {
+  return a.name === b.name && a.size === b.size && a.lastModified === b.lastModified
+}
+
+function hasPending(kind: PendingUpload['kind'], id: number) {
+  return pendingUploads.value.some((item) => item.kind === kind && item.id === id)
+}
+
+function enqueueUploads(base: Omit<PendingUpload, 'file'>, files: File[], options?: { replaceForKey?: boolean }) {
+  const replaceForKey = options?.replaceForKey ?? false
+
+  const incoming = files.map((file) => ({ ...base, file }))
+
+  pendingUploads.value = pendingUploads.value.filter((item) => {
+    if (!replaceForKey) return true
+    return !(item.kind === base.kind && item.id === base.id)
+  })
+
+  for (const item of incoming) {
+    const exists = pendingUploads.value.some((existing) => existing.kind === item.kind
+      && existing.id === item.id
+      && sameFile(existing.file, item.file))
+    if (!exists) {
+      pendingUploads.value.push(item)
+    }
+  }
+}
+
+function removePendingUpload(upload: PendingUpload) {
+  pendingUploads.value = pendingUploads.value.filter((item) => !(item.kind === upload.kind && item.id === upload.id && sameFile(item.file, upload.file)))
+}
+
+function openPendingPreview(upload: PendingUpload) {
+  pendingUpload.value = upload
+  uploadPreviewOpen.value = true
+}
+
+const pendingUploadCount = computed(() => pendingUploads.value.length)
+
+async function submitQueuedUploads() {
+  if (!pendingUploads.value.length || uploadingQueued.value) return
+
+  uploadingQueued.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  const queue = [...pendingUploads.value]
+  let uploadedCount = 0
+
+  try {
+    for (const item of queue) {
+      if (item.kind === 'required') {
+        uploadingRequired.value = { ...uploadingRequired.value, [item.id]: true }
+        const data = await uploadClientRequiredDocument(requestId.value, {
+          document_upload_step_id: item.id,
+          file: item.file,
+        })
+        applyRequestFromResponse(data)
+        uploadingRequired.value = { ...uploadingRequired.value, [item.id]: false }
+      } else if (item.kind === 'additional') {
+        uploadingAdditional.value = { ...uploadingAdditional.value, [item.id]: true }
+        const data = await uploadClientAdditionalDocument(requestId.value, item.id, { file: item.file })
+        applyRequestFromResponse(data)
+        uploadingAdditional.value = { ...uploadingAdditional.value, [item.id]: false }
+      } else {
+        uploadingUpdateFiles.value = { ...uploadingUpdateFiles.value, [item.id]: true }
+        const data = await submitClientUpdateFile(requestId.value, item.id, { file: item.file })
+        applyRequestFromResponse(data)
+        uploadingUpdateFiles.value = { ...uploadingUpdateFiles.value, [item.id]: false }
+      }
+
+      uploadedCount += 1
+      removePendingUpload(item)
+    }
+
+    successMessage.value = uploadedCount > 1
+      ? uiText(`${uploadedCount} files uploaded successfully.`, `تم رفع ${uploadedCount} ملفات بنجاح.`)
+      : uiText('File uploaded successfully.', 'تم رفع الملف بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to upload one of the files. Please try again.', 'تعذر رفع أحد الملفات. حاول مرة أخرى.')
+  } finally {
+    uploadingQueued.value = false
+  }
+}
+
 async function onRequiredFileChange(item: any, event: Event) {
   const stepId = Number(item?.document_upload_step_id || 0)
   const input = event.target as HTMLInputElement
@@ -221,49 +367,46 @@ async function onRequiredFileChange(item: any, event: Event) {
 
   if (!selectedFiles.length || !stepId) return
   const filesToUpload = item?.is_multiple ? selectedFiles : selectedFiles.slice(0, 1)
+  const validFiles: File[] = []
+  const validationErrors: string[] = []
 
-  pendingUpload.value = { kind: 'required', id: stepId, file: filesToUpload[0], title: t('clientDocuments.sections.requiredTitle') }
-  uploadPreviewOpen.value = true
-
-  uploadingRequired.value = {
-    ...uploadingRequired.value,
-    [stepId]: true,
+  for (const file of filesToUpload) {
+    const fileError = validateSelectedFile(file, {
+      allowedExtensions: item?.allowed_file_types,
+      maxMb: item?.max_file_size_mb,
+    })
+    if (fileError) {
+      validationErrors.push(`${file.name}: ${fileError}`)
+      continue
+    }
+    validFiles.push(file)
   }
 
   errorMessage.value = ''
   successMessage.value = ''
-  let uploadedCount = 0
 
-  try {
-    for (const file of filesToUpload) {
-      const data = await uploadClientRequiredDocument(requestId.value, {
-        document_upload_step_id: stepId,
-        file,
-      })
-
-      applyRequestFromResponse(data)
-      uploadedCount += 1
-    }
-
-    successMessage.value = uploadedCount > 1
-      ? uiText(`${uploadedCount} files uploaded successfully.`, `تم رفع ${uploadedCount} ملفات بنجاح.`)
-      : t('clientDocuments.success.requiredUploaded')
-  } catch (error: any) {
-    if (uploadedCount > 0) {
-      successMessage.value = uiText(
-        `${uploadedCount} files uploaded before an error occurred.`,
-        `تم رفع ${uploadedCount} ملفات قبل حدوث خطأ.`,
-      )
-    }
-    errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.requiredUploadFailed')
-  } finally {
-    uploadingRequired.value = {
-      ...uploadingRequired.value,
-      [stepId]: false,
-    }
-
+  if (!validFiles.length) {
+    errorMessage.value = validationErrors[0] || uiText('No valid files selected.', 'لم يتم اختيار ملفات صالحة.')
     input.value = ''
+    return
   }
+
+  if (validationErrors.length > 0) {
+    errorMessage.value = uiText(
+      `${validationErrors.length} file(s) were skipped because they do not match the required format or size.`,
+      `تم تجاهل ${validationErrors.length} ملف(ات) لأنها لا تطابق الصيغة أو الحجم المطلوب.`,
+    )
+  }
+
+  enqueueUploads(
+    { kind: 'required', id: stepId, title: t('clientDocuments.sections.requiredTitle') },
+    validFiles,
+    { replaceForKey: !item?.is_multiple },
+  )
+
+  pendingUpload.value = { kind: 'required', id: stepId, file: validFiles[0], title: t('clientDocuments.sections.requiredTitle') }
+  uploadPreviewOpen.value = true
+  input.value = ''
 }
 
 async function onAdditionalFileChange(documentId: number, event: Event) {
@@ -272,32 +415,23 @@ async function onAdditionalFileChange(documentId: number, event: Event) {
 
   if (!file) return
 
-  pendingUpload.value = { kind: 'additional', id: documentId, file, title: t('clientDocuments.sections.additionalTitle') }
-  uploadPreviewOpen.value = true
-
-  uploadingAdditional.value = {
-    ...uploadingAdditional.value,
-    [documentId]: true,
-  }
-
   errorMessage.value = ''
   successMessage.value = ''
-
-  try {
-    const data = await uploadClientAdditionalDocument(requestId.value, documentId, { file })
-
-    applyRequestFromResponse(data)
-    successMessage.value = data.message || t('clientDocuments.success.additionalUploaded')
-  } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || t('clientDocuments.errors.additionalUploadFailed')
-  } finally {
-    uploadingAdditional.value = {
-      ...uploadingAdditional.value,
-      [documentId]: false,
-    }
-
+  const fileError = validateSelectedFile(file)
+  if (fileError) {
+    errorMessage.value = `${file.name}: ${fileError}`
     input.value = ''
+    return
   }
+  enqueueUploads(
+    { kind: 'additional', id: documentId, title: t('clientDocuments.sections.additionalTitle') },
+    [file],
+    { replaceForKey: true },
+  )
+
+  pendingUpload.value = { kind: 'additional', id: documentId, file, title: t('clientDocuments.sections.additionalTitle') }
+  uploadPreviewOpen.value = true
+  input.value = ''
 }
 
 async function onUpdateFileChange(itemId: number, event: Event) {
@@ -306,30 +440,23 @@ async function onUpdateFileChange(itemId: number, event: Event) {
 
   if (!file) return
 
-  pendingUpload.value = { kind: 'update', id: itemId, file, title: uiText('Requested file replacement', 'استبدال ملف مطلوب') }
-  uploadPreviewOpen.value = true
-
-  uploadingUpdateFiles.value = {
-    ...uploadingUpdateFiles.value,
-    [itemId]: true,
-  }
-
   errorMessage.value = ''
   successMessage.value = ''
-
-  try {
-    const data = await submitClientUpdateFile(requestId.value, itemId, { file })
-    applyRequestFromResponse(data)
-    successMessage.value = data.message || uiText('Requested file update submitted successfully.', 'تم إرسال تحديث الملف المطلوب بنجاح.')
-  } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || uiText('Unable to submit the requested file update.', 'تعذر إرسال تحديث الملف المطلوب.')
-  } finally {
-    uploadingUpdateFiles.value = {
-      ...uploadingUpdateFiles.value,
-      [itemId]: false,
-    }
+  const fileError = validateSelectedFile(file)
+  if (fileError) {
+    errorMessage.value = `${file.name}: ${fileError}`
     input.value = ''
+    return
   }
+  enqueueUploads(
+    { kind: 'update', id: itemId, title: uiText('Requested file replacement', 'استبدال ملف مطلوب') },
+    [file],
+    { replaceForKey: true },
+  )
+
+  pendingUpload.value = { kind: 'update', id: itemId, file, title: uiText('Requested file replacement', 'استبدال ملف مطلوب') }
+  uploadPreviewOpen.value = true
+  input.value = ''
 }
 
 onMounted(load)
@@ -337,7 +464,7 @@ onMounted(load)
 
 <template>
   <section class="client-shell client-request-detail-shell">
-    <div class="hero-card client-reveal-up">
+    <div class="hero-card client-documents-hero client-reveal-up">
       <div>
         <p class="eyebrow">{{ t('clientDocuments.hero.eyebrow') }}</p>
         <h1>{{ t('clientDocuments.hero.title') }}</h1>
@@ -356,28 +483,28 @@ onMounted(load)
     <p v-if="errorMessage && requestItem" class="error-state">{{ errorMessage }}</p>
 
     <template v-else-if="requestItem">
-      <div class="client-status-chip-grid client-status-chip-grid--summary client-reveal-up">
-        <div class="client-status-chip-card">
+      <div class="client-status-chip-grid client-status-chip-grid--summary client-documents-summary-grid client-reveal-up">
+        <div class="client-status-chip-card client-documents-summary-card">
           <strong>
             <span class="client-stage-badge" :class="stageMeta(requestItem.workflow_stage).className">{{ stageMeta(requestItem.workflow_stage).label }}</span>
           </strong>
           <span>{{ t('clientDocuments.summary.currentStage') }}</span>
         </div>
-        <div class="client-status-chip-card">
+        <div class="client-status-chip-card client-documents-summary-card">
           <strong>{{ requiredPendingCount }}</strong>
           <span>{{ t('clientDocuments.summary.requiredPending') }}</span>
         </div>
-        <div class="client-status-chip-card">
+        <div class="client-status-chip-card client-documents-summary-card">
           <strong>{{ additionalPendingCount }}</strong>
           <span>{{ t('clientDocuments.summary.additionalPending') }}</span>
         </div>
-        <div class="client-status-chip-card">
+        <div class="client-status-chip-card client-documents-summary-card">
           <strong>{{ pendingFileUpdateCount }}</strong>
           <span>{{ uiText('Requested file updates', 'تحديثات الملفات المطلوبة') }}</span>
         </div>
       </div>
 
-      <div class="client-accordion-stack">
+      <div class="client-accordion-stack client-documents-accordion">
         <details v-if="fileUpdateItems.length" class="client-accordion-card client-reveal-left" open>
           <summary>
             <div>
@@ -415,6 +542,7 @@ onMounted(load)
                     :id="`update-file-${item.id}`"
                     :ref="(el) => setUpdateFileRef(item.id, el)"
                     type="file"
+                    :accept="acceptFromExtensions(DEFAULT_ALLOWED_EXTENSIONS)"
                     class="sr-only"
                     @change.stop="onUpdateFileChange(item.id, $event)"
                   />
@@ -422,7 +550,7 @@ onMounted(load)
                   <button
                     type="button"
                     class="client-btn-primary"
-                    :disabled="uploadingUpdateFiles[item.id] || item.status === 'approved' || !requestItem.can_submit_client_updates"
+                    :disabled="uploadingQueued || uploadingUpdateFiles[item.id] || item.status === 'approved' || !requestItem.can_submit_client_updates"
                     @click.stop.prevent="openUpdatePicker(item.id)"
                   >
                     {{ updateUploadButtonLabel(item) }}
@@ -510,6 +638,7 @@ onMounted(load)
                     :id="`required-file-${item.document_upload_step_id}`"
                     :ref="(el) => setRequiredFileRef(item.document_upload_step_id, el)"
                     type="file"
+                    :accept="acceptFromExtensions(normalizeAllowedExtensions(item.allowed_file_types))"
                     :multiple="item.is_multiple"
                     class="sr-only"
                     @change.stop="onRequiredFileChange(item, $event)"
@@ -518,7 +647,7 @@ onMounted(load)
                   <button
                     type="button"
                     class="client-btn-primary"
-                    :disabled="uploadingRequired[item.document_upload_step_id] || !item.can_client_upload"
+                    :disabled="uploadingQueued || uploadingRequired[item.document_upload_step_id] || !item.can_client_upload"
                     @click.stop.prevent="openRequiredPicker(item.document_upload_step_id)"
                   >
                     {{ requiredUploadButtonLabel(item) }}
@@ -572,6 +701,7 @@ onMounted(load)
                     :id="`additional-file-${item.id}`"
                     :ref="(el) => setAdditionalFileRef(item.id, el)"
                     type="file"
+                    :accept="acceptFromExtensions(DEFAULT_ALLOWED_EXTENSIONS)"
                     class="sr-only"
                     @change.stop="onAdditionalFileChange(item.id, $event)"
                   />
@@ -579,7 +709,7 @@ onMounted(load)
                   <button
                     type="button"
                     class="client-btn-primary"
-                    :disabled="uploadingAdditional[item.id] || !canUploadAdditional(item)"
+                    :disabled="uploadingQueued || uploadingAdditional[item.id] || !canUploadAdditional(item)"
                     @click.stop.prevent="openAdditionalPicker(item.id)"
                   >
                     {{ additionalUploadButtonLabel(item) }}
@@ -594,6 +724,48 @@ onMounted(load)
       </div>
     </template>
 
+    <div v-if="pendingUploadCount" class="client-doc-card client-documents-pending-card client-reveal-up" style="margin-top: 1.15rem;">
+      <div class="client-card-head">
+        <div>
+          <h2>{{ uiText('Files ready to upload', 'ملفات جاهزة للرفع') }}</h2>
+          <p class="client-subtext">
+            {{ uiText('Review your selected files, then submit once.', 'راجع ملفاتك المحددة ثم أرسل مرة واحدة.') }}
+          </p>
+        </div>
+        <span class="client-badge client-badge--amber">{{ pendingUploadCount }}</span>
+      </div>
+
+      <div class="client-required-upload-list" style="margin-top: 0.75rem;">
+        <div v-for="(item, idx) in pendingUploads" :key="`${item.kind}-${item.id}-${idx}`" class="client-required-upload-row">
+          <div style="min-width: 0;">
+            <strong style="word-break: break-word;">{{ item.file.name }}</strong>
+            <p class="client-subtext" style="margin-top: 0.15rem;">
+              {{ item.kind === 'required' ? t('clientDocuments.sections.requiredTitle')
+                : item.kind === 'additional' ? t('clientDocuments.sections.additionalTitle')
+                  : uiText('Requested file replacement', 'استبدال ملف مطلوب') }}
+            </p>
+          </div>
+          <div class="client-inline-actions" style="gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
+            <button type="button" class="ghost-btn" @click="openPendingPreview(item)">
+              {{ uiText('Preview', 'معاينة') }}
+            </button>
+            <button type="button" class="ghost-btn" :disabled="uploadingQueued" @click="removePendingUpload(item)">
+              {{ uiText('Remove', 'إزالة') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="client-inline-actions client-inline-actions--stackable" style="margin-top: 0.9rem;">
+        <button type="button" class="client-btn-primary" :disabled="uploadingQueued || !pendingUploadCount" @click="submitQueuedUploads">
+          {{ uploadingQueued ? uiText('Uploading...', 'جارٍ الرفع...') : uiText('Submit uploads', 'إرسال الملفات') }}
+        </button>
+        <button type="button" class="ghost-btn" :disabled="uploadingQueued" @click="pendingUploads = []">
+          {{ uiText('Clear list', 'مسح القائمة') }}
+        </button>
+      </div>
+    </div>
+
     <AppFilePreviewModal
       :model-value="uploadPreviewOpen"
       @update:model-value="(value) => { if (!value) clearUploadPreview() }"
@@ -606,6 +778,66 @@ onMounted(load)
 </template>
 
 <style scoped>
+.client-request-detail-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.client-documents-hero,
+.client-documents-summary-grid,
+.client-documents-accordion,
+.client-documents-pending-card {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.client-documents-accordion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.client-documents-accordion > .client-accordion-card {
+  width: 100%;
+}
+
+.client-documents-summary-grid {
+  align-items: stretch;
+}
+
+.client-documents-summary-card {
+  min-height: 118px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.client-documents-summary-card strong {
+  margin: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+}
+
+.client-documents-summary-card > span {
+  margin-top: 0;
+  line-height: 1.35;
+  min-height: 2.7em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.client-documents-summary-card :deep(.client-stage-badge) {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .client-required-upload-list {
   display: grid;
   gap: 0.55rem;
@@ -633,6 +865,14 @@ onMounted(load)
 }
 
 @media (max-width: 640px) {
+  .client-documents-summary-card {
+    min-height: 100px;
+  }
+
+  .client-documents-summary-card > span {
+    min-height: 0;
+  }
+
   .client-required-upload-row {
     flex-direction: column;
   }

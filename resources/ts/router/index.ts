@@ -2,51 +2,52 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppProgress } from '@/composables/useAppProgress'
 
-import HomePage from '@/pages/public/HomePage.vue'
-import AboutPage from '@/pages/public/AboutPage.vue'
+const HomePage = () => import('@/pages/public/HomePage.vue')
+const AboutPage = () => import('@/pages/public/AboutPage.vue')
 
-import LoginPage from '@/pages/auth/LoginPage.vue'
-import RegisterPage from '@/pages/auth/RegisterPage.vue'
-import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage.vue'
-import ResetPasswordPage from '@/pages/auth/ResetPasswordPage.vue'
-import VerifyEmailPage from '@/pages/auth/VerifyEmailPage.vue'
+const LoginPage = () => import('@/pages/auth/LoginPage.vue')
+const RegisterPage = () => import('@/pages/auth/RegisterPage.vue')
+const ForgotPasswordPage = () => import('@/pages/auth/ForgotPasswordPage.vue')
+const ResetPasswordPage = () => import('@/pages/auth/ResetPasswordPage.vue')
+const VerifyEmailPage = () => import('@/pages/auth/VerifyEmailPage.vue')
 
-import ClientLayoutPage from '@/pages/client/ClientLayoutPage.vue'
-import ClientDashboardOverviewPage from '@/pages/client/ClientDashboardOverviewPage.vue'
-import ClientNewRequestPage from '@/pages/client/ClientNewRequestPage.vue'
-import ClientRequestWizardPage from '@/pages/client/ClientRequestWizardPage.vue'
-import ClientRequestsPage from '@/pages/client/ClientRequestsPage.vue'
-import ClientRequestDetailsPage from '@/pages/client/ClientRequestDetailsPage.vue'
-import ClientRequestSignPage from '@/pages/client/ClientRequestSignPage.vue'
-import ClientRequestDocumentsPage from '@/pages/client/ClientRequestDocumentsPage.vue'
+const ClientLayoutPage = () => import('@/pages/client/ClientLayoutPage.vue')
+const ClientDashboardOverviewPage = () => import('@/pages/client/ClientDashboardOverviewPage.vue')
+const ClientNewRequestPage = () => import('@/pages/client/ClientNewRequestPage.vue')
+const ClientRequestWizardPage = () => import('@/pages/client/ClientRequestWizardPage.vue')
+const ClientRequestsPage = () => import('@/pages/client/ClientRequestsPage.vue')
+const ClientRequestDetailsPage = () => import('@/pages/client/ClientRequestDetailsPage.vue')
+const ClientRequestSignPage = () => import('@/pages/client/ClientRequestSignPage.vue')
+const ClientRequestDocumentsPage = () => import('@/pages/client/ClientRequestDocumentsPage.vue')
+const ClientChangePasswordPage = () => import('@/pages/client/ClientChangePasswordPage.vue')
 
-import AdminLayoutPage from '@/pages/admin/AdminLayoutPage.vue'
-import AdminDashboardPage from '@/pages/admin/AdminDashboardPage.vue'
-import AdminRequestQuestionsPage from '@/pages/admin/AdminRequestQuestionsPage.vue'
-import AdminDocumentUploadStepsPage from '@/pages/admin/AdminDocumentUploadStepsPage.vue'
-import AdminStaffPage from '@/pages/admin/AdminStaffPage.vue'
-import AdminBanksPage from '@/pages/admin/AdminBanksPage.vue'
-import AdminCategorizationPage from '@/pages/admin/AdminCategorizationPage.vue'
-import AdminRequestFilteringPage from '@/pages/admin/AdminRequestFilteringPage.vue'
-import AdminClientsOverviewPage from '@/pages/admin/AdminClientsOverviewPage.vue'
-import AdminAgentsPage from '@/pages/admin/AdminAgentsPage.vue'
-import AdminNewRequestsPage from '@/pages/admin/AdminNewRequestsPage.vue'
-import AdminRequestDetailsPage from '@/pages/admin/AdminRequestDetailsPage.vue'
-import AdminRequestEmailsPage from '@/pages/admin/AdminRequestEmailsPage.vue'
-import AdminContractBuilderPage from '@/pages/admin/AdminContractBuilderPage.vue'
-import AdminAssignmentsPage from '@/pages/admin/AdminAssignmentsPage.vue'
-import AdminAssignmentDetailsPage from '@/pages/admin/AdminAssignmentDetailsPage.vue'
-import StaffRequestsPage from '@/pages/admin/StaffRequestsPage.vue'
-import StaffRequestDetailsPage from '@/pages/admin/StaffRequestDetailsPage.vue'
-import StaffRequestSendEmailPage from '@/pages/admin/StaffRequestSendEmailPage.vue'
-import StaffRequestEmailsPage from '@/pages/admin/StaffRequestEmailsPage.vue'
-import AdminStaffQuestionTemplatesPage from '@/pages/admin/AdminStaffQuestionTemplatesPage.vue'
-import AdminMailSettingsPage from '@/pages/admin/AdminMailSettingsPage.vue'
-import AdminInboxPage from '@/pages/admin/AdminInboxPage.vue'
+const AdminLayoutPage = () => import('@/pages/admin/AdminLayoutPage.vue')
+const AdminDashboardPage = () => import('@/pages/admin/AdminDashboardPage.vue')
+const AdminRequestQuestionsPage = () => import('@/pages/admin/AdminRequestQuestionsPage.vue')
+const AdminDocumentUploadStepsPage = () => import('@/pages/admin/AdminDocumentUploadStepsPage.vue')
+const AdminStaffPage = () => import('@/pages/admin/AdminStaffPage.vue')
+const AdminBanksPage = () => import('@/pages/admin/AdminBanksPage.vue')
+const AdminCategorizationPage = () => import('@/pages/admin/AdminCategorizationPage.vue')
+const AdminRequestFilteringPage = () => import('@/pages/admin/AdminRequestFilteringPage.vue')
+const AdminClientsOverviewPage = () => import('@/pages/admin/AdminClientsOverviewPage.vue')
+const AdminAgentsPage = () => import('@/pages/admin/AdminAgentsPage.vue')
+const AdminNewRequestsPage = () => import('@/pages/admin/AdminNewRequestsPage.vue')
+const AdminRequestDetailsPage = () => import('@/pages/admin/AdminRequestDetailsPage.vue')
+const AdminRequestEmailsPage = () => import('@/pages/admin/AdminRequestEmailsPage.vue')
+const AdminContractBuilderPage = () => import('@/pages/admin/AdminContractBuilderPage.vue')
+const AdminAssignmentsPage = () => import('@/pages/admin/AdminAssignmentsPage.vue')
+const AdminAssignmentDetailsPage = () => import('@/pages/admin/AdminAssignmentDetailsPage.vue')
+const StaffRequestsPage = () => import('@/pages/admin/StaffRequestsPage.vue')
+const StaffRequestDetailsPage = () => import('@/pages/admin/StaffRequestDetailsPage.vue')
+const StaffRequestSendEmailPage = () => import('@/pages/admin/StaffRequestSendEmailPage.vue')
+const StaffRequestEmailsPage = () => import('@/pages/admin/StaffRequestEmailsPage.vue')
+const AdminStaffQuestionTemplatesPage = () => import('@/pages/admin/AdminStaffQuestionTemplatesPage.vue')
+const AdminMailSettingsPage = () => import('@/pages/admin/AdminMailSettingsPage.vue')
+const AdminInboxPage = () => import('@/pages/admin/AdminInboxPage.vue')
 
-import AdminFinanceRequestTypesPage from '@/pages/admin/AdminFinanceRequestTypesPage.vue'
+const AdminFinanceRequestTypesPage = () => import('@/pages/admin/AdminFinanceRequestTypesPage.vue')
 
-import NotFoundPage from '@/pages/NotFoundPage.vue'
+const NotFoundPage = () => import('@/pages/NotFoundPage.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -78,6 +79,7 @@ const router = createRouter({
         { path: 'requests/:id', name: 'client-request-details', component: ClientRequestDetailsPage },
         { path: 'requests/:id/sign', name: 'client-request-sign', component: ClientRequestSignPage },
         { path: 'requests/:id/documents', name: 'client-request-documents', component: ClientRequestDocumentsPage },
+        { path: 'change-password', name: 'client-change-password', component: ClientChangePasswordPage },
       ],
     },
 

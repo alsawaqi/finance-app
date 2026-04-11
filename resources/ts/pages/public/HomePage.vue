@@ -55,6 +55,7 @@ let testimonialTimer: number | null = null
 let countObserver: IntersectionObserver | null = null
 let aosObserver: IntersectionObserver | null = null
 let preloaderTimer: number | null = null
+let scrollRafId: number | null = null
 
 const mobileDropdowns = ref<Record<string, boolean>>({
   home: false,
@@ -138,8 +139,21 @@ function setActiveFaq(index: number) {
 
 function updateHeaderState() {
   const scrollTop = window.scrollY || document.documentElement.scrollTop
-  isSticky.value = scrollTop >= 150
-  showScrollTop.value = scrollTop >= 150
+  const sticky = scrollTop >= 150
+  if (isSticky.value !== sticky) {
+    isSticky.value = sticky
+  }
+  if (showScrollTop.value !== sticky) {
+    showScrollTop.value = sticky
+  }
+}
+
+function onScroll() {
+  if (scrollRafId !== null) return
+  scrollRafId = window.requestAnimationFrame(() => {
+    updateHeaderState()
+    scrollRafId = null
+  })
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -248,7 +262,7 @@ function goToDot(dot: number) {
 onMounted(() => {
   document.body.classList.add('boxed_wrapper')
   updateHeaderState()
-  window.addEventListener('scroll', updateHeaderState)
+  window.addEventListener('scroll', onScroll, { passive: true })
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', onResize)
 
@@ -266,12 +280,15 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.body.classList.remove('boxed_wrapper')
   document.body.classList.remove('mobile-menu-visible')
-  window.removeEventListener('scroll', updateHeaderState)
+  window.removeEventListener('scroll', onScroll)
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('resize', onResize)
 
   if (preloaderTimer) {
     window.clearTimeout(preloaderTimer)
+  }
+  if (scrollRafId !== null) {
+    window.cancelAnimationFrame(scrollRafId)
   }
 
   stopTestimonials()

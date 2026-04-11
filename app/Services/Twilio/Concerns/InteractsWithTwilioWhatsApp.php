@@ -203,9 +203,11 @@ trait InteractsWithTwilioWhatsApp
     }
 
     /**
-     * Send via Twilio WhatsApp using template when configured, with optional fallback to plain body.
+     * Send via Twilio WhatsApp using Content Template when contentVariables are provided
+     * and a template SID is configured. Falls back to plain body otherwise.
      *
-     * @param  array<string, mixed>  $context
+     * @param  array<string, string>  $contentVariables  e.g. ['1' => 'Name', '2' => 'REF-123']
+     * @param  array<string, mixed>   $context           Logging context
      *
      * @throws RestException
      */
@@ -215,19 +217,30 @@ trait InteractsWithTwilioWhatsApp
         string $from,
         string $body,
         array $context = [],
+        array $contentVariables = [],
     ): void {
-        $payload = [
-            'from' => $from,
-            ...$this->buildWhatsAppPayload($body),
-        ];
+        $templateSid = trim((string) config('services.twilio.template_sid', ''));
+        $useTemplate = $templateSid !== '' && $contentVariables !== [];
+
+        if ($useTemplate) {
+            $payload = [
+                'from' => $from,
+                'contentSid' => $templateSid,
+                'contentVariables' => json_encode($contentVariables, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ];
+        } else {
+            $payload = [
+                'from' => $from,
+                'body' => $body,
+            ];
+        }
 
         try {
             $client->messages->create($to, $payload);
 
             return;
         } catch (RestException $exception) {
-            $usedTemplate = isset($payload['contentSid']);
-            if (! $usedTemplate || ! $this->shouldFallbackFromTemplateToBody()) {
+            if (! $useTemplate || ! $this->shouldFallbackFromTemplateToBody()) {
                 throw $exception;
             }
 
@@ -242,36 +255,6 @@ trait InteractsWithTwilioWhatsApp
             'from' => $from,
             'body' => $body,
         ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildWhatsAppPayload(string $body): array
-    {
-        $templateSid = trim((string) config('services.twilio.template_sid', ''));
-        if ($templateSid === '') {
-            return ['body' => $body];
-        }
-
-        $variableKey = trim((string) config('services.twilio.template_body_variable', '1'));
-        if ($variableKey === '') {
-            $variableKey = '1';
-        }
-
-        $variables = json_encode(
-            [$variableKey => $body],
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-        );
-
-        if (! is_string($variables)) {
-            return ['body' => $body];
-        }
-
-        return [
-            'contentSid' => $templateSid,
-            'contentVariables' => $variables,
-        ];
     }
 
     private function shouldFallbackFromTemplateToBody(): bool

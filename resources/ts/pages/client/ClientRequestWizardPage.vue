@@ -18,11 +18,16 @@ import {
   saveClientRequestDraft,
   type ClientRequestWizardDraftPayload,
 } from '@/utils/clientRequestDraft'
-import { allCountryOptions } from '@/utils/countries'
+import { allCountryOptions, allCountryPhoneCodeOptions } from '@/utils/countries'
+import { validateNationalPhoneForCountry } from '@/utils/phoneValidation'
 
 const router = useRouter()
 const auth = useAuthStore()
 const { t, locale } = useI18n()
+
+function uiText(en: string, ar: string) {
+  return locale.value === 'ar' ? ar : en
+}
 
 const loading = ref(true)
 const questionsLoading = ref(false)
@@ -36,7 +41,7 @@ const answers = reactive<Record<number, unknown>>({})
 const attachments = ref<File[]>([])
 const nationalAddressAttachment = ref<File | null>(null)
 const companyCr = ref<File | null>(null)
-const shareholders = ref<Array<{ name: string; phone_country_code: string; phone_number: string; id_number: string; id_file: File | null }>>([])
+const shareholders = ref<Array<{ name: string; phone_country_iso: string; phone_country_code: string; phone_number: string; id_number: string; id_file: File | null }>>([])
 const uploadPreviewOpen = ref(false)
 const uploadPreviewTitle = ref('')
 const uploadPreviewFile = ref<File | null>(null)
@@ -53,23 +58,7 @@ let draftSaveTimeout: number | null = null
 
 const countryOptions = computed(() => allCountryOptions(locale.value))
 
-const phoneCodeOptions = computed(() => [
-  { code: '+966', label: t('clientWizard.phoneCodes.sa') },
-  { code: '+968', label: t('clientWizard.phoneCodes.om') },
-  { code: '+971', label: t('clientWizard.phoneCodes.ae') },
-  { code: '+965', label: t('clientWizard.phoneCodes.kw') },
-  { code: '+974', label: t('clientWizard.phoneCodes.qa') },
-  { code: '+973', label: t('clientWizard.phoneCodes.bh') },
-  { code: '+20', label: t('clientWizard.phoneCodes.eg') },
-  { code: '+962', label: t('clientWizard.phoneCodes.jo') },
-  { code: '+961', label: t('clientWizard.phoneCodes.lb') },
-  { code: '+1', label: t('clientWizard.phoneCodes.usCa') },
-  { code: '+44', label: t('clientWizard.phoneCodes.gb') },
-  { code: '+91', label: t('clientWizard.phoneCodes.in') },
-  { code: '+92', label: t('clientWizard.phoneCodes.pk') },
-  { code: '+880', label: t('clientWizard.phoneCodes.bd') },
-  { code: '+90', label: t('clientWizard.phoneCodes.tr') },
-])
+const phoneCodeOptions = computed(() => allCountryPhoneCodeOptions(locale.value))
 
 const details = reactive({
   finance_type: 'individual' as 'individual' | 'company',
@@ -79,6 +68,7 @@ const details = reactive({
   company_name: '',
   company_cr_number: '',
   email: '',
+  phone_country_iso: 'SA',
   phone_country_code: '+966',
   phone_number: '',
   unified_number: '',
@@ -94,6 +84,7 @@ function normalizeFinanceType(value: unknown): 'individual' | 'company' {
 
 type ShareholderState = {
   name: string
+  phone_country_iso: string
   phone_country_code: string
   phone_number: string
   id_number: string
@@ -107,11 +98,22 @@ function getDraftUserId() {
 function createEmptyShareholder(): ShareholderState {
   return {
     name: '',
+    phone_country_iso: 'SA',
     phone_country_code: '+966',
     phone_number: '',
     id_number: '',
     id_file: null,
   }
+}
+
+function dialCodeFromIso(isoCode: string) {
+  const found = phoneCodeOptions.value.find((item) => item.isoCode === isoCode)
+  return found?.dialCode || '+966'
+}
+
+function isoFromDialCode(dialCode: string) {
+  const found = phoneCodeOptions.value.find((item) => item.dialCode === dialCode)
+  return found?.isoCode || 'SA'
 }
 
 const steps = computed(() => [
@@ -213,11 +215,77 @@ function digitsOnlyPhone(value: string) {
   return value.replace(/\D/g, '')
 }
 
+function blockNonDigits(event: KeyboardEvent) {
+  if (event.metaKey || event.ctrlKey || event.altKey) return
+  if (['Backspace', 'Tab', 'ArrowLeft', 'ArrowRight', 'Delete', 'Home', 'End'].includes(event.key)) return
+  if (!/^\d$/.test(event.key)) event.preventDefault()
+}
+
+function liveValidateDetailsPhone() {
+  const key = 'details.phone_number'
+  if (!details.phone_number) {
+    if (fieldErrors[key] && fieldErrors[key] !== t('clientWizard.errors.phoneRequired')) delete fieldErrors[key]
+    return
+  }
+  if (!validateNationalPhoneForCountry(details.phone_number, details.phone_country_iso)) {
+    fieldErrors[key] = uiText('Please enter a valid phone number for the selected country.', 'يرجى إدخال رقم جوال صحيح للدولة المحددة.')
+  } else {
+    delete fieldErrors[key]
+  }
+}
+
+function liveValidateShareholderPhone(index: number) {
+  const shareholder = shareholders.value[index]
+  if (!shareholder) return
+  const key = `shareholders.${index}.phone_number`
+  if (!shareholder.phone_number) {
+    if (fieldErrors[key] && fieldErrors[key] !== t('clientWizard.errors.shareholderPhoneNumberRequired')) delete fieldErrors[key]
+    return
+  }
+  if (!validateNationalPhoneForCountry(shareholder.phone_number, shareholder.phone_country_iso)) {
+    fieldErrors[key] = uiText('Please enter a valid phone number for the selected country.', 'يرجى إدخال رقم جوال صحيح للدولة المحددة.')
+  } else {
+    delete fieldErrors[key]
+  }
+}
+
+function liveValidateDetailsEmail() {
+  const key = 'details.email'
+  if (!details.email) {
+    if (fieldErrors[key] && fieldErrors[key] !== t('clientWizard.errors.emailRequired')) delete fieldErrors[key]
+    return
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(details.email)) {
+    fieldErrors[key] = uiText('Please enter a valid email address.', 'يرجى إدخال بريد إلكتروني صحيح.')
+  } else {
+    delete fieldErrors[key]
+  }
+}
+
 function sanitizeWizardPhones() {
   details.phone_number = digitsOnlyPhone(details.phone_number)
+  details.phone_country_code = dialCodeFromIso(details.phone_country_iso)
   shareholders.value.forEach((s) => {
     s.phone_number = digitsOnlyPhone(s.phone_number)
+    s.phone_country_code = dialCodeFromIso(s.phone_country_iso)
   })
+}
+
+function syncDetailsPhoneCountryCode() {
+  const dialCode = dialCodeFromIso(details.phone_country_iso)
+  if (details.phone_country_code !== dialCode) {
+    details.phone_country_code = dialCode
+  }
+}
+
+function syncShareholderPhoneCountryCode(index: number) {
+  const shareholder = shareholders.value[index]
+  if (!shareholder) return
+  const dialCode = dialCodeFromIso(shareholder.phone_country_iso)
+  if (shareholder.phone_country_code !== dialCode) {
+    shareholder.phone_country_code = dialCode
+  }
+  if (shareholder.phone_number) liveValidateShareholderPhone(index)
 }
 
 const FILE_INPUT_IDS = {
@@ -225,6 +293,11 @@ const FILE_INPUT_IDS = {
   attachments: 'wizard-file-attachments',
   companyCr: 'wizard-file-company-cr',
 } as const
+
+const WIZARD_DEFAULT_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']
+const WIZARD_IMAGE_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png']
+const WIZARD_MAX_FILE_SIZE_MB = 10
+const WIZARD_MAX_ATTACHMENTS = 5
 
 function resetFileInput(id: string) {
   const el = document.getElementById(id) as HTMLInputElement | null
@@ -239,6 +312,43 @@ function triggerFilePick(id: string) {
   document.getElementById(id)?.click()
 }
 
+function fileExt(file: File): string {
+  const name = String(file.name || '')
+  const idx = name.lastIndexOf('.')
+  if (idx < 0) return ''
+  return name.slice(idx + 1).toLowerCase()
+}
+
+function formatAllowed(extensions: string[]) {
+  return extensions.map((ext) => ext.toUpperCase()).join(', ')
+}
+
+function validateWizardFile(file: File, options?: { allowedExtensions?: string[]; maxMb?: number }): string | null {
+  const allowed = options?.allowedExtensions ?? WIZARD_DEFAULT_EXTENSIONS
+  const ext = fileExt(file)
+  if (!ext || !allowed.includes(ext)) {
+    return uiText(
+      `Invalid file format. Allowed: ${formatAllowed(allowed)}.`,
+      `صيغة الملف غير مسموحة. الصيغ المسموحة: ${formatAllowed(allowed)}.`,
+    )
+  }
+
+  const maxMb = options?.maxMb ?? WIZARD_MAX_FILE_SIZE_MB
+  const maxBytes = maxMb * 1024 * 1024
+  if (file.size > maxBytes) {
+    return uiText(
+      `File is too large. Maximum size is ${maxMb} MB.`,
+      `حجم الملف كبير جداً. الحد الأقصى هو ${maxMb} ميجابايت.`,
+    )
+  }
+
+  return null
+}
+
+function acceptAttr(extensions: string[]) {
+  return extensions.map((ext) => `.${ext}`).join(',')
+}
+
 function hydrateApplicantDefaults() {
   if (!details.email && auth.user?.email) {
     details.email = auth.user.email
@@ -249,6 +359,7 @@ function hydrateApplicantDefaults() {
   }
 
   details.phone_number = digitsOnlyPhone(details.phone_number)
+  syncDetailsPhoneCountryCode()
 }
 
 function addShareholder() {
@@ -270,6 +381,7 @@ function resetWizardState() {
   details.company_name = ''
   details.company_cr_number = ''
   details.email = ''
+  details.phone_country_iso = 'SA'
   details.phone_country_code = '+966'
   details.phone_number = ''
   details.unified_number = ''
@@ -300,11 +412,33 @@ function resetWizardState() {
 }
 
 function mergeAttachmentFiles(newFiles: File[]) {
+  let firstError = ''
   const merged = [...attachments.value]
   for (const f of newFiles) {
+    const fileError = validateWizardFile(f, { allowedExtensions: WIZARD_DEFAULT_EXTENSIONS })
+    if (fileError) {
+      if (!firstError) firstError = `${f.name}: ${fileError}`
+      continue
+    }
+
+    if (merged.length >= WIZARD_MAX_ATTACHMENTS) {
+      if (!firstError) {
+        firstError = uiText(
+          `You can upload up to ${WIZARD_MAX_ATTACHMENTS} files only.`,
+          `يمكنك رفع ${WIZARD_MAX_ATTACHMENTS} ملفات كحد أقصى.`,
+        )
+      }
+      break
+    }
+
     if (!merged.some((x) => x.name === f.name && x.size === f.size)) merged.push(f)
   }
   attachments.value = merged
+  if (firstError) {
+    fieldErrors.attachments = firstError
+  } else {
+    delete fieldErrors.attachments
+  }
 }
 
 function handleAttachments(event: Event) {
@@ -315,19 +449,67 @@ function handleAttachments(event: Event) {
 
 function handleNationalAddressAttachment(event: Event) {
   const input = event.target as HTMLInputElement
-  nationalAddressAttachment.value = input.files?.[0] || null
+  const file = input.files?.[0] || null
+  if (!file) {
+    nationalAddressAttachment.value = null
+    input.value = ''
+    return
+  }
+
+  const fileError = validateWizardFile(file, { allowedExtensions: WIZARD_IMAGE_EXTENSIONS })
+  if (fileError) {
+    fieldErrors.national_address_attachment = `${file.name}: ${fileError}`
+    nationalAddressAttachment.value = null
+    input.value = ''
+    return
+  }
+
+  delete fieldErrors.national_address_attachment
+  nationalAddressAttachment.value = file
   input.value = ''
 }
 
 function handleCompanyCr(event: Event) {
   const input = event.target as HTMLInputElement
-  companyCr.value = input.files?.[0] || null
+  const file = input.files?.[0] || null
+  if (!file) {
+    companyCr.value = null
+    input.value = ''
+    return
+  }
+
+  const fileError = validateWizardFile(file, { allowedExtensions: WIZARD_IMAGE_EXTENSIONS })
+  if (fileError) {
+    fieldErrors.company_cr = `${file.name}: ${fileError}`
+    companyCr.value = null
+    input.value = ''
+    return
+  }
+
+  delete fieldErrors.company_cr
+  companyCr.value = file
   input.value = ''
 }
 
 function handleShareholderFile(index: number, event: Event) {
   const input = event.target as HTMLInputElement
-  shareholders.value[index].id_file = input.files?.[0] || null
+  const file = input.files?.[0] || null
+  if (!file) {
+    shareholders.value[index].id_file = null
+    input.value = ''
+    return
+  }
+
+  const fileError = validateWizardFile(file, { allowedExtensions: WIZARD_IMAGE_EXTENSIONS })
+  if (fileError) {
+    fieldErrors[`shareholders.${index}.id_file`] = `${file.name}: ${fileError}`
+    shareholders.value[index].id_file = null
+    input.value = ''
+    return
+  }
+
+  delete fieldErrors[`shareholders.${index}.id_file`]
+  shareholders.value[index].id_file = file
   input.value = ''
 }
 
@@ -342,6 +524,12 @@ function dropNationalAddressAttachment(event: DragEvent) {
   event.preventDefault()
   const file = event.dataTransfer?.files?.[0]
   if (!file) return
+  const fileError = validateWizardFile(file, { allowedExtensions: WIZARD_IMAGE_EXTENSIONS })
+  if (fileError) {
+    fieldErrors.national_address_attachment = `${file.name}: ${fileError}`
+    return
+  }
+  delete fieldErrors.national_address_attachment
   nationalAddressAttachment.value = file
   resetFileInput(FILE_INPUT_IDS.nationalAddress)
 }
@@ -350,6 +538,12 @@ function dropCompanyCrFile(event: DragEvent) {
   event.preventDefault()
   const file = event.dataTransfer?.files?.[0]
   if (!file) return
+  const fileError = validateWizardFile(file, { allowedExtensions: WIZARD_IMAGE_EXTENSIONS })
+  if (fileError) {
+    fieldErrors.company_cr = `${file.name}: ${fileError}`
+    return
+  }
+  delete fieldErrors.company_cr
   companyCr.value = file
   resetFileInput(FILE_INPUT_IDS.companyCr)
 }
@@ -358,6 +552,12 @@ function dropShareholderIdFile(index: number, event: DragEvent) {
   event.preventDefault()
   const file = event.dataTransfer?.files?.[0]
   if (!file) return
+  const fileError = validateWizardFile(file, { allowedExtensions: WIZARD_IMAGE_EXTENSIONS })
+  if (fileError) {
+    fieldErrors[`shareholders.${index}.id_file`] = `${file.name}: ${fileError}`
+    return
+  }
+  delete fieldErrors[`shareholders.${index}.id_file`]
   shareholders.value[index].id_file = file
   resetFileInput(shareholderFileInputId(index))
 }
@@ -417,6 +617,8 @@ function applyDraftToState(draft: ClientRequestWizardDraftPayload) {
   currentStep.value = draft.currentStep
   Object.assign(details, draft.details)
   details.finance_type = normalizeFinanceType(details.finance_type)
+  details.phone_country_iso = details.phone_country_iso || isoFromDialCode(details.phone_country_code)
+  details.phone_country_code = dialCodeFromIso(details.phone_country_iso)
 
   Object.keys(answers).forEach((key) => {
     delete answers[Number(key)]
@@ -431,6 +633,8 @@ function applyDraftToState(draft: ClientRequestWizardDraftPayload) {
 
   shareholders.value = draft.shareholders.map((shareholder) => ({
     ...shareholder,
+    phone_country_iso: (shareholder as any).phone_country_iso || isoFromDialCode(shareholder.phone_country_code),
+    phone_country_code: dialCodeFromIso((shareholder as any).phone_country_iso || isoFromDialCode(shareholder.phone_country_code)),
     id_file: null,
   }))
 
@@ -537,6 +741,7 @@ function validateStepOne() {
 
 function validateStepTwo() {
   clearErrors()
+  sanitizeWizardPhones()
   let hasError = false
 
   if (!String(details.finance_request_type_id).trim()) {
@@ -561,6 +766,9 @@ function validateStepTwo() {
 
   if (!details.phone_number.trim()) {
     fieldErrors['details.phone_number'] = t('clientWizard.errors.phoneRequired')
+    hasError = true
+  } else if (!validateNationalPhoneForCountry(details.phone_number, details.phone_country_iso)) {
+    fieldErrors['details.phone_number'] = uiText('Please enter a valid phone number for the selected country.', 'يرجى إدخال رقم جوال صحيح للدولة المحددة.')
     hasError = true
   }
 
@@ -618,6 +826,9 @@ function validateStepTwo() {
 
       if (!shareholder.phone_number.trim()) {
         fieldErrors[`shareholders.${index}.phone_number`] = t('clientWizard.errors.shareholderPhoneNumberRequired')
+        hasError = true
+      } else if (!validateNationalPhoneForCountry(shareholder.phone_number, shareholder.phone_country_iso)) {
+        fieldErrors[`shareholders.${index}.phone_number`] = uiText('Please enter a valid phone number for the selected country.', 'يرجى إدخال رقم جوال صحيح للدولة المحددة.')
         hasError = true
       }
 
@@ -717,6 +928,17 @@ watch(
   },
 )
 
+watch(
+  () => details.phone_country_iso,
+  () => {
+    syncDetailsPhoneCountryCode()
+    if (details.phone_number) liveValidateDetailsPhone()
+  },
+)
+
+watch(() => details.phone_number, () => { if (details.phone_number) liveValidateDetailsPhone() })
+watch(() => details.email, () => { if (details.email) liveValidateDetailsEmail() })
+
 async function submitRequest() {
   if (!validateStepTwo() || !nationalAddressAttachment.value) return
 
@@ -783,6 +1005,10 @@ await router.replace({ name: 'client-request-details', params: { id: data.reques
 }
 
 onMounted(() => {
+  if (!auth.user?.email_verified_at) {
+    router.replace({ name: 'client-new-request' })
+    return
+  }
   loadQuestions()
 })
 
@@ -987,7 +1213,9 @@ onBeforeUnmount(() => {
                     v-model="details.email"
                     type="email"
                     class="client-form-control"
+                    :class="{ 'client-form-control--error': fieldErrors['details.email'] }"
                     :placeholder="t('clientWizard.placeholders.contactEmail')"
+                    @blur="liveValidateDetailsEmail"
                   />
                   <p v-if="fieldErrors['details.email']" class="client-form-error">{{ fieldErrors['details.email'] }}</p>
                 </div>
@@ -995,19 +1223,20 @@ onBeforeUnmount(() => {
                 <div class="client-form-group">
                   <label class="client-form-label">{{ t('clientWizard.fields.phoneNumber') }} <span class="client-required-mark">*</span></label>
                   <div class="client-form-split">
-                    <select v-model="details.phone_country_code" class="client-form-control client-form-control--code">
-                      <option v-for="option in phoneCodeOptions" :key="option.code" :value="option.code">
+                    <select v-model="details.phone_country_iso" class="client-form-control client-form-control--code" @change="syncDetailsPhoneCountryCode">
+                      <option v-for="option in phoneCodeOptions" :key="option.isoCode" :value="option.isoCode">
                         {{ option.label }}
                       </option>
                     </select>
                     <input
                       :value="details.phone_number"
-                      type="text"
+                      type="tel"
                       inputmode="numeric"
                       autocomplete="tel-national"
                       pattern="[0-9]*"
                       class="client-form-control"
                       :placeholder="t('clientWizard.placeholders.phoneNumber')"
+                      @keypress="blockNonDigits"
                       @input="details.phone_number = digitsOnlyPhone(($event.target as HTMLInputElement).value)"
                     />
                   </div>
@@ -1080,6 +1309,7 @@ onBeforeUnmount(() => {
                     <input
                       :id="FILE_INPUT_IDS.nationalAddress"
                       type="file"
+                      :accept="acceptAttr(WIZARD_IMAGE_EXTENSIONS)"
                       class="client-file-input-hidden"
                       @change="handleNationalAddressAttachment"
                     />
@@ -1119,6 +1349,7 @@ onBeforeUnmount(() => {
                     <input
                       :id="FILE_INPUT_IDS.attachments"
                       type="file"
+                      :accept="acceptAttr(WIZARD_DEFAULT_EXTENSIONS)"
                       class="client-file-input-hidden"
                       multiple
                       @change="handleAttachments"
@@ -1150,6 +1381,7 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                   <p class="client-form-help">{{ t('clientWizard.help.initialAttachmentsOptional') }}</p>
+                  <p v-if="fieldErrors.attachments" class="client-form-error">{{ fieldErrors.attachments }}</p>
                 </div>
 
                 <div v-if="details.finance_type === 'company'" class="client-form-group client-form-group--full">
@@ -1163,6 +1395,7 @@ onBeforeUnmount(() => {
                     <input
                       :id="FILE_INPUT_IDS.companyCr"
                       type="file"
+                      :accept="acceptAttr(WIZARD_IMAGE_EXTENSIONS)"
                       class="client-file-input-hidden"
                       @change="handleCompanyCr"
                     />
@@ -1240,20 +1473,21 @@ onBeforeUnmount(() => {
                     <div class="client-form-group">
                       <label class="client-form-label">{{ t('clientWizard.fields.phoneNumber') }} <span class="client-required-mark">*</span></label>
                       <div class="client-form-split">
-                        <select v-model="shareholder.phone_country_code" class="client-form-control client-form-control--code">
-                          <option v-for="option in phoneCodeOptions" :key="option.code" :value="option.code">
+                        <select v-model="shareholder.phone_country_iso" class="client-form-control client-form-control--code" @change="syncShareholderPhoneCountryCode(index)">
+                          <option v-for="option in phoneCodeOptions" :key="option.isoCode" :value="option.isoCode">
                             {{ option.label }}
                           </option>
                         </select>
                         <input
                           :value="shareholder.phone_number"
-                          type="text"
+                          type="tel"
                           inputmode="numeric"
                           autocomplete="tel-national"
                           pattern="[0-9]*"
                           class="client-form-control"
                           :placeholder="t('clientWizard.placeholders.shareholderPhoneNumber')"
-                          @input="shareholder.phone_number = digitsOnlyPhone(($event.target as HTMLInputElement).value)"
+                          @keypress="blockNonDigits"
+                          @input="shareholder.phone_number = digitsOnlyPhone(($event.target as HTMLInputElement).value); liveValidateShareholderPhone(index)"
                         />
                       </div>
                       <p v-if="fieldErrors[`shareholders.${index}.phone_country_code`]" class="client-form-error">{{ fieldErrors[`shareholders.${index}.phone_country_code`] }}</p>
@@ -1284,6 +1518,7 @@ onBeforeUnmount(() => {
                         <input
                           :id="shareholderFileInputId(index)"
                           type="file"
+                          :accept="acceptAttr(WIZARD_IMAGE_EXTENSIONS)"
                           class="client-file-input-hidden"
                           @change="handleShareholderFile(index, $event)"
                         />
