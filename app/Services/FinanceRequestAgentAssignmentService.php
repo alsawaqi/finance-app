@@ -4,13 +4,13 @@ namespace App\Services;
 
 use App\Enums\FinanceRequestStatus;
 use App\Enums\FinanceRequestWorkflowStage;
+use App\Enums\RequestDocumentUploadStatus;
 use App\Models\Agent;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestAgentAssignment;
 use App\Models\FinanceRequestAgentAssignmentDocument;
-use App\Models\RequestAdditionalDocument;
-use App\Models\RequestAttachment;
 use App\Models\RequestDocumentUpload;
+use App\Support\ContractAssetResolver;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +24,7 @@ class FinanceRequestAgentAssignmentService
             'attachments',
             'shareholders',
             'currentContract',
-            'documentUploads.documentUploadStep:id,name,code',
+            'documentUploads.documentUploadStep:id,name,code,is_multiple,sort_order',
             'additionalDocuments',
         ]);
 
@@ -57,28 +57,46 @@ class FinanceRequestAgentAssignmentService
             ]);
         }
 
-        $latestRequiredUploads = $financeRequest->documentUploads
+        $requiredUploadsByStep = $financeRequest->documentUploads
             ->filter(fn (RequestDocumentUpload $upload) => filled($upload->file_path))
-            ->sortByDesc('id')
-            ->groupBy('document_upload_step_id')
-            ->map(fn (Collection $group) => $group->first());
+            ->filter(function (RequestDocumentUpload $upload): bool {
+                $status = $upload->status?->value ?? (string) ($upload->status ?? '');
 
-        foreach ($latestRequiredUploads as $upload) {
-            $documents->push([
-                'key' => $this->documentKey('required_document', $upload->id),
-                'document_type' => 'required_document',
-                'document_id' => (int) $upload->id,
-                'group_label' => 'Required documents',
-                'label' => $upload->documentUploadStep?->name ?: ($upload->file_name ?: 'Required document'),
-                'file_name' => $upload->file_name,
-                'file_path' => $upload->file_path,
-                'disk' => $upload->disk ?: 'public',
-                'mime_type' => $upload->mime_type,
-                'file_extension' => $upload->file_extension,
-                'file_size' => $upload->file_size,
-                'sort_order' => ++$sortOrder,
-                'download_url' => "/api/admin/requests/{$financeRequest->id}/required-documents/{$upload->id}/download",
-            ]);
+                return $status !== RequestDocumentUploadStatus::REJECTED->value;
+            })
+            ->groupBy('document_upload_step_id')
+            ->sortBy(fn (Collection $group) => (int) ($group->first()?->documentUploadStep?->sort_order ?? PHP_INT_MAX));
+
+        foreach ($requiredUploadsByStep as $uploadsForStep) {
+            $uploadsForStep = $uploadsForStep instanceof Collection ? $uploadsForStep : collect($uploadsForStep);
+            $step = $uploadsForStep->first()?->documentUploadStep;
+            $selectedUploads = (bool) ($step?->is_multiple)
+                ? $uploadsForStep->sortBy('id')->values()
+                : collect([$uploadsForStep->sortByDesc('id')->first()])->filter();
+
+            foreach ($selectedUploads as $upload) {
+                $label = $upload->documentUploadStep?->name ?: ($upload->file_name ?: 'Required document');
+
+                if ((bool) ($step?->is_multiple) && filled($upload->file_name)) {
+                    $label .= ' - ' . $upload->file_name;
+                }
+
+                $documents->push([
+                    'key' => $this->documentKey('required_document', $upload->id),
+                    'document_type' => 'required_document',
+                    'document_id' => (int) $upload->id,
+                    'group_label' => 'Required documents',
+                    'label' => $label,
+                    'file_name' => $upload->file_name,
+                    'file_path' => $upload->file_path,
+                    'disk' => $upload->disk ?: 'public',
+                    'mime_type' => $upload->mime_type,
+                    'file_extension' => $upload->file_extension,
+                    'file_size' => $upload->file_size,
+                    'sort_order' => ++$sortOrder,
+                    'download_url' => "/api/admin/requests/{$financeRequest->id}/required-documents/{$upload->id}/download",
+                ]);
+            }
         }
 
         foreach ($financeRequest->additionalDocuments as $additionalDocument) {
@@ -113,7 +131,7 @@ class FinanceRequestAgentAssignmentService
                 'document_type' => 'shareholder_id',
                 'document_id' => (int) $shareholder->id,
                 'group_label' => 'Shareholder IDs',
-                'label' => 'Shareholder ID · ' . ($shareholder->shareholder_name ?: 'Shareholder'),
+                'label' => 'Shareholder ID - ' . ($shareholder->shareholder_name ?: 'Shareholder'),
                 'file_name' => $shareholder->id_file_name,
                 'file_path' => $shareholder->id_file_path,
                 'disk' => $shareholder->disk ?: 'public',
@@ -125,24 +143,27 @@ class FinanceRequestAgentAssignmentService
             ]);
         }
 
-        if (filled($financeRequest->currentContract?->contract_pdf_path)) {
+        if ($financeRequest->currentContract) {
             $contract = $financeRequest->currentContract;
+            $asset = ContractAssetResolver::resolvePrimaryAsset($financeRequest, $contract);
 
-            $documents->push([
-                'key' => $this->documentKey('contract_pdf', $contract->id),
-                'document_type' => 'contract_pdf',
-                'document_id' => (int) $contract->id,
-                'group_label' => 'Contracts',
-                'label' => 'Signed contract' . ($contract->version_no ? ' · v' . $contract->version_no : ''),
-                'file_name' => basename((string) $contract->contract_pdf_path),
-                'file_path' => $contract->contract_pdf_path,
-                'disk' => 'public',
-                'mime_type' => 'application/pdf',
-                'file_extension' => 'pdf',
-                'file_size' => null,
-                'sort_order' => ++$sortOrder,
-                'download_url' => "/api/admin/requests/{$financeRequest->id}/contract/download",
-            ]);
+            if ($asset !== null) {
+                $documents->push([
+                    'key' => $this->documentKey('contract_pdf', $contract->id),
+                    'document_type' => 'contract_pdf',
+                    'document_id' => (int) $contract->id,
+                    'group_label' => 'Contracts',
+                    'label' => $this->contractDocumentLabel($asset['source'] ?? 'contract_pdf', $contract->version_no),
+                    'file_name' => $asset['name'],
+                    'file_path' => $asset['path'],
+                    'disk' => 'public',
+                    'mime_type' => $asset['mime_type'] ?: 'application/pdf',
+                    'file_extension' => pathinfo((string) $asset['name'], PATHINFO_EXTENSION) ?: 'pdf',
+                    'file_size' => null,
+                    'sort_order' => ++$sortOrder,
+                    'download_url' => "/api/admin/requests/{$financeRequest->id}/contract/download",
+                ]);
+            }
         }
 
         return $documents
@@ -325,9 +346,9 @@ class FinanceRequestAgentAssignmentService
                 'request.allowed_agents_configured',
                 $actorUserId,
                 'Allowed bank agents configured',
-                'تم إعداد الوكلاء البنكيين المسموح لهم',
+                'ØªÙ… Ø¥Ø¹Ø¯Ø§Ø¯ Ø§Ù„ÙˆÙƒÙ„Ø§Ø¡ Ø§Ù„Ø¨Ù†ÙƒÙŠÙŠÙ† Ø§Ù„Ù…Ø³Ù…ÙˆØ­ Ù„Ù‡Ù…',
                 $reviewNote ?: 'The admin selected the allowed bank agents and linked the request documents available for staff emails.',
-                $reviewNote ?: 'اختار المسؤول الوكلاء البنكيين المسموح لهم وربط مستندات الطلب المتاحة لرسائل البريد الخاصة بالموظف.',
+                $reviewNote ?: 'Ø§Ø®ØªØ§Ø± Ø§Ù„Ù…Ø³Ø¤ÙˆÙ„ Ø§Ù„ÙˆÙƒÙ„Ø§Ø¡ Ø§Ù„Ø¨Ù†ÙƒÙŠÙŠÙ† Ø§Ù„Ù…Ø³Ù…ÙˆØ­ Ù„Ù‡Ù… ÙˆØ±Ø¨Ø· Ù…Ø³ØªÙ†Ø¯Ø§Øª Ø§Ù„Ø·Ù„Ø¨ Ø§Ù„Ù…ØªØ§Ø­Ø© Ù„Ø±Ø³Ø§Ø¦Ù„ Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø®Ø§ØµØ© Ø¨Ø§Ù„Ù…ÙˆØ¸Ù.',
                 [
                     'agents_count' => count($assignedAgentsForTimeline),
                     'documents_count' => $documentCount,
@@ -350,7 +371,6 @@ class FinanceRequestAgentAssignmentService
                 'agent:id,name,email,phone,company_name,agent_type,bank_id',
                 'agent.bank:id,name,short_name,code',
                 'bank:id,name,short_name,code',
-                'allowedDocuments',
             ])
             ->where('is_active', true)
             ->get();
@@ -394,8 +414,26 @@ class FinanceRequestAgentAssignmentService
             ])
             ->all();
 
-        $allowedDocuments = $agentId
-            ? $filteredAssignments
+        $filteredAssignmentIds = $filteredAssignments
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->values();
+
+        $allowedDocuments = [];
+
+        if ($agentId && $filteredAssignmentIds->isNotEmpty()) {
+            $documentAssignments = FinanceRequestAgentAssignment::query()
+                ->with([
+                    'agent:id,name,bank_id',
+                    'allowedDocuments' => fn ($query) => $query
+                        ->orderBy('sort_order')
+                        ->orderBy('id'),
+                ])
+                ->whereIn('id', $filteredAssignmentIds)
+                ->get();
+
+            $allowedDocuments = $documentAssignments
                 ->flatMap(function (FinanceRequestAgentAssignment $assignment) {
                     return $assignment->allowedDocuments->map(function (FinanceRequestAgentAssignmentDocument $document) use ($assignment) {
                         return [
@@ -409,22 +447,32 @@ class FinanceRequestAgentAssignmentService
                             'agent_id' => (int) $assignment->agent_id,
                             'agent_name' => $assignment->agent?->name,
                             'bank_id' => $assignment->bank_id ? (int) $assignment->bank_id : ($assignment->agent?->bank_id ? (int) $assignment->agent->bank_id : null),
+                            'sort_order' => (int) ($document->sort_order ?? 0),
                         ];
                     });
                 })
                 ->groupBy('key')
                 ->map(function (Collection $group) {
                     $first = $group->first();
+
                     return [
                         ...$first,
                         'agent_ids' => $group->pluck('agent_id')->filter()->unique()->values()->all(),
                         'agent_names' => $group->pluck('agent_name')->filter()->unique()->values()->all(),
                     ];
                 })
-                ->sortBy('label')
+                ->sortBy([
+                    ['sort_order', 'asc'],
+                    ['label', 'asc'],
+                ])
                 ->values()
-                ->all()
-            : [];
+                ->map(function (array $document) {
+                    unset($document['sort_order']);
+
+                    return $document;
+                })
+                ->all();
+        }
 
         return [
             'banks' => $banks,
@@ -454,6 +502,22 @@ class FinanceRequestAgentAssignmentService
             ->replace(['-', '_'], ' ')
             ->title()
             ->toString();
+    }
+
+    private function contractDocumentLabel(string $source, ?int $versionNo): string
+    {
+        $label = match ($source) {
+            'admin_commercial_contract' => 'Authenticated commercial contract - admin copy',
+            'client_commercial_contract' => 'Authenticated commercial contract - client copy',
+            'admin_uploaded_contract' => 'Signed contract - admin uploaded copy',
+            default => 'Signed contract',
+        };
+
+        if ($versionNo) {
+            $label .= ' - v' . $versionNo;
+        }
+
+        return $label;
     }
 
     private function downloadUrlForDocument(int $financeRequestId, string $documentType, ?int $documentId): ?string

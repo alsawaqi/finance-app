@@ -493,7 +493,7 @@ class StaffRequestWorkspaceController extends Controller
         $freshRequest = $this->loadRequestGraph($financeRequest->fresh(), $user);
 
         return response()->json([
-            'message' => 'Request email sent successfully.',
+            'message' => 'Request email queued successfully. Delivery will continue in the background.',
             'email' => $requestEmail,
             'request' => $freshRequest,
             'required_documents' => $this->documentChecklistService->buildRequiredChecklist($freshRequest)->values(),

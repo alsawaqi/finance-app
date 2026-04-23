@@ -1865,12 +1865,14 @@ const ar = {
       adminReviewPlaceholder: 'ملاحظة اختيارية لاعتماد الدراسة أو إعادتها للموظف.',
       rejectStudyAnswers: 'رفض إجابات الدراسة',
       approveForNextStep: 'اعتماد للمرحلة التالية',
-      requiredBeforeReview: 'يجب الإجابة على جميع أسئلة الدراسة المطلوبة قبل اعتماد الطلب أو إعادته.',
+      requiredBeforeReview: 'يجب مراجعة جميع أسئلة الدراسة المطلوبة قبل اعتماد الطلب للمرحلة التالية.',
       adminReviewResult: 'نتيجة مراجعة الإدارة',
       stats: {
         studyStatus: 'حالة الدراسة',
         requiredAnswered: 'المطلوب المُجاب',
         allRequiredAnswered: 'تمت إجابة كل المطلوب',
+        requiredReviewed: 'المطلوب المُراجع',
+        allRequiredReviewed: 'تمت مراجعة كل المطلوب',
       },
       status: {
         reviewed: 'تمت المراجعة',

@@ -32,8 +32,8 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
- 
 use Illuminate\Support\Str;
 
 class ClientRequestController extends Controller
@@ -367,22 +367,24 @@ class ClientRequestController extends Controller
         );
         abort_unless($step, 404);
 
-        $latestUpload = RequestDocumentUpload::query()
-            ->where('finance_request_id', $financeRequest->id)
-            ->where('document_upload_step_id', $step->id)
-            ->latest('id')
-            ->first();
-
-        $latestStatus = $latestUpload?->status?->value ?? (string) ($latestUpload?->status ?? 'pending');
-
-        if (! $step->is_multiple && $latestUpload && $latestStatus !== RequestDocumentUploadStatus::REJECTED->value) {
-            abort(422, 'This required document is already locked after upload. A new version can only be uploaded after staff requests a change.');
-        }
-
         $file = $request->file('file');
 
-        DB::transaction(function () use ($request, $financeRequest, $step, $file, $latestUpload) {
-            $path = $file->store('request-documents/required', 'public');
+        Cache::lock("finance-request-required-upload:{$financeRequest->id}:{$step->id}", 15)
+            ->block(10, function () use ($request, $financeRequest, $step, $file): void {
+                DB::transaction(function () use ($request, $financeRequest, $step, $file): void {
+                    $latestUpload = RequestDocumentUpload::query()
+                        ->where('finance_request_id', $financeRequest->id)
+                        ->where('document_upload_step_id', $step->id)
+                        ->latest('id')
+                        ->first();
+
+                    $latestStatus = $latestUpload?->status?->value ?? (string) ($latestUpload?->status ?? 'pending');
+
+                    if (! $step->is_multiple && $latestUpload && $latestStatus !== RequestDocumentUploadStatus::REJECTED->value) {
+                        abort(422, 'This required document is already locked after upload. A new version can only be uploaded after staff requests a change.');
+                    }
+
+                    $path = $file->store('request-documents/required', 'public');
 
             RequestDocumentUpload::create([
                 'finance_request_id' => $financeRequest->id,
@@ -416,6 +418,7 @@ class ClientRequestController extends Controller
             );
 
             $this->workflowService->syncAfterRequiredDocuments($financeRequest->fresh());
+        });
         });
 
         return response()->json([

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\SignClientContractRequest;
 use App\Models\Contract;
 use App\Models\FinanceRequest;
+use App\Support\ContractAssetResolver;
 use App\Support\ContractDocumentBuilder;
 use App\Support\ContractTemplateResolver;
 use App\Support\MpdfContractPdfRenderer;
@@ -162,7 +163,7 @@ class ClientContractController extends Controller
         $contract = $financeRequest->currentContract;
         abort_unless($contract, 404);
 
-        $asset = $this->resolvePrimaryContractAsset($financeRequest, $contract);
+        $asset = ContractAssetResolver::resolvePrimaryAsset($financeRequest, $contract);
         abort_unless($asset !== null, 404);
 
         return $this->downloadStoredFile(
@@ -228,43 +229,6 @@ class ClientContractController extends Controller
             'name' => $file->getClientOriginalName(),
             'mime_type' => $file->getClientMimeType(),
             'size' => $file->getSize(),
-        ];
-    }
-
-    private function resolvePrimaryContractAsset(FinanceRequest $financeRequest, Contract $contract): ?array
-    {
-        if (filled($contract->admin_commercial_contract_path)) {
-            return [
-                'path' => $contract->admin_commercial_contract_path,
-                'name' => $contract->admin_commercial_contract_name ?: ('admin-commercial-' . $financeRequest->reference_number),
-                'mime_type' => $contract->admin_commercial_contract_mime_type,
-            ];
-        }
-
-        if (filled($contract->client_commercial_contract_path)) {
-            return [
-                'path' => $contract->client_commercial_contract_path,
-                'name' => $contract->client_commercial_contract_name ?: ('client-commercial-' . $financeRequest->reference_number),
-                'mime_type' => $contract->client_commercial_contract_mime_type,
-            ];
-        }
-
-        if (filled($contract->admin_uploaded_contract_path)) {
-            return [
-                'path' => $contract->admin_uploaded_contract_path,
-                'name' => $contract->admin_uploaded_contract_name ?: ('contract-' . $financeRequest->reference_number),
-                'mime_type' => $contract->admin_uploaded_contract_mime_type,
-            ];
-        }
-
-        if (! filled($contract->contract_pdf_path)) {
-            return null;
-        }
-
-        return [
-            'path' => $contract->contract_pdf_path,
-            'name' => 'contract-' . $financeRequest->reference_number . '.pdf',
-            'mime_type' => 'application/pdf',
         ];
     }
 

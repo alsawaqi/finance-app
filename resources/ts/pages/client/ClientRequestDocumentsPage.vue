@@ -25,6 +25,8 @@ const isArabic = computed(() => locale.value === 'ar')
 const emptyValueLabel = computed(() => t('clientDocuments.states.emptyValue'))
 const DEFAULT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx']
 const DEFAULT_MAX_FILE_SIZE_MB = 10
+const DEFAULT_UPLOAD_TIMEOUT_MS = 180000
+const DEFAULT_UPLOAD_CONCURRENCY = 3
 
 const uploadingRequired = ref<Record<number, boolean>>({})
 const uploadingAdditional = ref<Record<number, boolean>>({})
@@ -40,6 +42,12 @@ type PendingUpload = {
   id: number
   file: File
   title: string
+}
+
+type UploadExecutionResult = {
+  item: PendingUpload
+  success: boolean
+  errorMessage?: string
 }
 
 const pendingUploads = ref<PendingUpload[]>([])
@@ -264,9 +272,11 @@ function requiredUploadButtonLabel(item: any) {
   return t('clientDocuments.actions.uploadFile')
 }
 
-function applyRequestFromResponse(data: any) {
-  if (data?.request) {
-    requestItem.value = data.request
+function uploadRequestOptions() {
+  return {
+    timeoutMs: DEFAULT_UPLOAD_TIMEOUT_MS,
+    skipProgress: true,
+    skipTransactionOverlay: true,
   }
 }
 
@@ -314,6 +324,173 @@ function openPendingPreview(upload: PendingUpload) {
 
 const pendingUploadCount = computed(() => pendingUploads.value.length)
 
+function samePendingUpload(a: PendingUpload, b: PendingUpload) {
+  return a.kind === b.kind && a.id === b.id && sameFile(a.file, b.file)
+}
+
+function resolveUploadConcurrency(totalUploads: number) {
+  if (totalUploads <= 1) return 1
+
+  const nav = navigator as Navigator & {
+    connection?: {
+      effectiveType?: string
+      saveData?: boolean
+    }
+  }
+  const connection = nav.connection
+
+  if (connection?.saveData) {
+    return 1
+  }
+
+  if (connection?.effectiveType === 'slow-2g' || connection?.effectiveType === '2g') {
+    return 1
+  }
+
+  if (connection?.effectiveType === '3g') {
+    return Math.min(2, totalUploads)
+  }
+
+  return Math.min(DEFAULT_UPLOAD_CONCURRENCY, totalUploads)
+}
+
+function setUploadState(item: PendingUpload, value: boolean) {
+  if (item.kind === 'required') {
+    uploadingRequired.value = {
+      ...uploadingRequired.value,
+      [item.id]: value,
+    }
+    return
+  }
+
+  if (item.kind === 'additional') {
+    uploadingAdditional.value = {
+      ...uploadingAdditional.value,
+      [item.id]: value,
+    }
+    return
+  }
+
+  uploadingUpdateFiles.value = {
+    ...uploadingUpdateFiles.value,
+    [item.id]: value,
+  }
+}
+
+function uploadFailureFallback(item: PendingUpload) {
+  if (item.kind === 'required') {
+    return uiText(`Unable to upload ${item.file.name}.`, `تعذر رفع ${item.file.name}.`)
+  }
+
+  if (item.kind === 'additional') {
+    return uiText(
+      `Unable to upload the additional document ${item.file.name}.`,
+      `تعذر رفع المستند الإضافي ${item.file.name}.`,
+    )
+  }
+
+  return uiText(
+    `Unable to upload the requested replacement file ${item.file.name}.`,
+    `تعذر رفع ملف الاستبدال المطلوب ${item.file.name}.`,
+  )
+}
+
+function extractUploadErrorMessage(item: PendingUpload, error: any) {
+  return error?.response?.data?.message || uploadFailureFallback(item)
+}
+
+async function uploadPendingItem(item: PendingUpload) {
+  const options = uploadRequestOptions()
+
+  if (item.kind === 'required') {
+    await uploadClientRequiredDocument(requestId.value, {
+      document_upload_step_id: item.id,
+      file: item.file,
+    }, options)
+    return
+  }
+
+  if (item.kind === 'additional') {
+    await uploadClientAdditionalDocument(requestId.value, item.id, { file: item.file }, options)
+    return
+  }
+
+  await submitClientUpdateFile(requestId.value, item.id, { file: item.file }, options)
+}
+
+async function runUploadsWithConcurrency(queue: PendingUpload[]) {
+  const results: UploadExecutionResult[] = []
+  let nextIndex = 0
+  const workerCount = resolveUploadConcurrency(queue.length)
+
+  async function worker() {
+    while (true) {
+      const currentIndex = nextIndex
+      nextIndex += 1
+
+      if (currentIndex >= queue.length) {
+        return
+      }
+
+      const item = queue[currentIndex]
+      setUploadState(item, true)
+
+      try {
+        await uploadPendingItem(item)
+        results.push({
+          item,
+          success: true,
+        })
+      } catch (error: any) {
+        results.push({
+          item,
+          success: false,
+          errorMessage: extractUploadErrorMessage(item, error),
+        })
+      } finally {
+        setUploadState(item, false)
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+
+  return results
+}
+
+function uploadSuccessMessage(count: number) {
+  return count > 1
+    ? uiText(`${count} files uploaded successfully.`, `تم رفع ${count} ملفات بنجاح.`)
+    : uiText('File uploaded successfully.', 'تم رفع الملف بنجاح.')
+}
+
+function uploadFailureSummary(results: UploadExecutionResult[]) {
+  if (!results.length) {
+    return uiText(
+      'Unable to upload one or more files. Please try again.',
+      'تعذر رفع ملف أو أكثر. حاول مرة أخرى.',
+    )
+  }
+
+  if (results.length === 1) {
+    return results[0].errorMessage || uiText(
+      'Unable to upload one of the files. Please try again.',
+      'تعذر رفع أحد الملفات. حاول مرة أخرى.',
+    )
+  }
+
+  const names = results
+    .slice(0, 3)
+    .map((result) => result.item.file.name)
+    .join(', ')
+  const suffix = results.length > 3 ? ', ...' : ''
+
+  return uiText(
+    `${results.length} files could not be uploaded: ${names}${suffix}`,
+    `تعذر رفع ${results.length} ملفات: ${names}${suffix}`,
+  )
+}
+
 async function submitQueuedUploads() {
   if (!pendingUploads.value.length || uploadingQueued.value) return
 
@@ -322,39 +499,26 @@ async function submitQueuedUploads() {
   successMessage.value = ''
 
   const queue = [...pendingUploads.value]
-  let uploadedCount = 0
 
   try {
-    for (const item of queue) {
-      if (item.kind === 'required') {
-        uploadingRequired.value = { ...uploadingRequired.value, [item.id]: true }
-        const data = await uploadClientRequiredDocument(requestId.value, {
-          document_upload_step_id: item.id,
-          file: item.file,
-        })
-        applyRequestFromResponse(data)
-        uploadingRequired.value = { ...uploadingRequired.value, [item.id]: false }
-      } else if (item.kind === 'additional') {
-        uploadingAdditional.value = { ...uploadingAdditional.value, [item.id]: true }
-        const data = await uploadClientAdditionalDocument(requestId.value, item.id, { file: item.file })
-        applyRequestFromResponse(data)
-        uploadingAdditional.value = { ...uploadingAdditional.value, [item.id]: false }
-      } else {
-        uploadingUpdateFiles.value = { ...uploadingUpdateFiles.value, [item.id]: true }
-        const data = await submitClientUpdateFile(requestId.value, item.id, { file: item.file })
-        applyRequestFromResponse(data)
-        uploadingUpdateFiles.value = { ...uploadingUpdateFiles.value, [item.id]: false }
-      }
+    const results = await runUploadsWithConcurrency(queue)
+    const successfulUploads = results.filter((result) => result.success)
+    const failedUploads = results.filter((result) => !result.success)
 
-      uploadedCount += 1
-      removePendingUpload(item)
+    if (successfulUploads.length > 0) {
+      pendingUploads.value = pendingUploads.value.filter((pendingItem) =>
+        !successfulUploads.some((result) => samePendingUpload(result.item, pendingItem)))
+
+      await load()
     }
 
-    successMessage.value = uploadedCount > 1
-      ? uiText(`${uploadedCount} files uploaded successfully.`, `تم رفع ${uploadedCount} ملفات بنجاح.`)
-      : uiText('File uploaded successfully.', 'تم رفع الملف بنجاح.')
-  } catch (error: any) {
-    errorMessage.value = error?.response?.data?.message || uiText('Unable to upload one of the files. Please try again.', 'تعذر رفع أحد الملفات. حاول مرة أخرى.')
+    if (successfulUploads.length > 0) {
+      successMessage.value = uploadSuccessMessage(successfulUploads.length)
+    }
+
+    if (failedUploads.length > 0) {
+      errorMessage.value = uploadFailureSummary(failedUploads)
+    }
   } finally {
     uploadingQueued.value = false
   }

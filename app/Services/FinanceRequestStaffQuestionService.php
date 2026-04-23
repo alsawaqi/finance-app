@@ -21,24 +21,44 @@ class FinanceRequestStaffQuestionService
             : $financeRequest->staffQuestions()->get();
 
         $total = $questions->count();
-        $required = $questions->where('is_required', true)->count();
-        $pending = $questions->where('status', FinanceRequestStaffQuestionStatus::PENDING)->count();
-        $answered = $questions->where('status', FinanceRequestStaffQuestionStatus::ANSWERED)->count();
-        $closed = $questions->where('status', FinanceRequestStaffQuestionStatus::CLOSED)->count();
-        $pendingRequired = $questions
-            ->where('is_required', true)
-            ->where('status', FinanceRequestStaffQuestionStatus::PENDING)
+        $requiredQuestions = $questions->filter(fn (FinanceRequestStaffQuestion $question) => (bool) $question->is_required);
+        $required = $requiredQuestions->count();
+        $pending = $questions
+            ->filter(fn (FinanceRequestStaffQuestion $question) => $this->questionStatusValue($question) === FinanceRequestStaffQuestionStatus::PENDING->value)
+            ->count();
+        $answered = $questions
+            ->filter(fn (FinanceRequestStaffQuestion $question) => $this->questionStatusValue($question) === FinanceRequestStaffQuestionStatus::ANSWERED->value)
+            ->count();
+        $closed = $questions
+            ->filter(fn (FinanceRequestStaffQuestion $question) => $this->questionStatusValue($question) === FinanceRequestStaffQuestionStatus::CLOSED->value)
+            ->count();
+        $pendingRequired = $requiredQuestions
+            ->filter(fn (FinanceRequestStaffQuestion $question) => $this->questionStatusValue($question) === FinanceRequestStaffQuestionStatus::PENDING->value)
+            ->count();
+        $pendingRequiredReview = $requiredQuestions
+            ->filter(fn (FinanceRequestStaffQuestion $question) => $this->questionStatusValue($question) !== FinanceRequestStaffQuestionStatus::CLOSED->value)
+            ->count();
+        $requiredAnswered = $requiredQuestions
+            ->filter(fn (FinanceRequestStaffQuestion $question) => $this->questionStatusValue($question) !== FinanceRequestStaffQuestionStatus::PENDING->value)
+            ->count();
+        $requiredReviewed = $requiredQuestions
+            ->filter(fn (FinanceRequestStaffQuestion $question) => $this->questionStatusValue($question) === FinanceRequestStaffQuestionStatus::CLOSED->value)
             ->count();
 
         return [
             'total' => $total,
             'required_total' => $required,
+            'required_count' => $required,
             'pending_total' => $pending,
             'answered_total' => $answered,
             'closed_total' => $closed,
+            'required_answered_count' => $requiredAnswered,
+            'required_reviewed_count' => $requiredReviewed,
             'pending_required_total' => $pendingRequired,
+            'pending_required_review_total' => $pendingRequiredReview,
             'all_required_answered' => $pendingRequired === 0,
-            'can_advance_from_understudy' => $pendingRequired === 0,
+            'all_required_reviewed' => $pendingRequiredReview === 0,
+            'can_advance_from_understudy' => $pendingRequiredReview === 0,
         ];
     }
 
@@ -51,7 +71,15 @@ class FinanceRequestStaffQuestionService
     {
         return $financeRequest->staffQuestions()
             ->where('is_required', true)
-            ->where('status', FinanceRequestStaffQuestionStatus::PENDING)
+            ->where('status', FinanceRequestStaffQuestionStatus::PENDING->value)
+            ->count();
+    }
+
+    public function pendingRequiredReviewCount(FinanceRequest $financeRequest): int
+    {
+        return $financeRequest->staffQuestions()
+            ->where('is_required', true)
+            ->where('status', '!=', FinanceRequestStaffQuestionStatus::CLOSED->value)
             ->count();
     }
 
@@ -276,6 +304,12 @@ class FinanceRequestStaffQuestionService
             ]);
         }
 
+        if ($action === 'approve' && $this->pendingRequiredReviewCount($financeRequest) > 0) {
+            throw ValidationException::withMessages([
+                'staff_questions' => 'All required staff study questions must be reviewed before approving the understudy.',
+            ]);
+        }
+
         $targetStatus = $action === 'approve'
             ? FinanceRequestUnderstudyStatus::APPROVED
             : FinanceRequestUnderstudyStatus::REJECTED;
@@ -388,5 +422,10 @@ class FinanceRequestStaffQuestionService
         }
 
         return [$answerText, null];
+    }
+
+    private function questionStatusValue(FinanceRequestStaffQuestion $staffQuestion): string
+    {
+        return $staffQuestion->status?->value ?? (string) $staffQuestion->status;
     }
 }

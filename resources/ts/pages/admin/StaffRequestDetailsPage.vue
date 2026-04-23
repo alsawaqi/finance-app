@@ -25,6 +25,7 @@ import {
   type AgentOption,
   type AllowedEmailDocument,
   type BankOption,
+  type RequestEmailOptionsPayload,
   type RequiredDocumentChecklistItem,
   type StaffQuestionSummary,
   type StaffStudyQuestion,
@@ -72,6 +73,9 @@ const banks = ref<BankOption[]>([])
 const allowedEmailDocuments = ref<AllowedEmailDocument[]>([])
 const hasEmailAssignments = ref(false)
 const canEmailAssignedAgents = ref(false)
+const loadingEmailOptions = ref(false)
+const emailOptionsCache = new Map<string, RequestEmailOptionsPayload>()
+let emailOptionsRequestToken = 0
 const staffQuestionSummary = ref<StaffQuestionSummary | null>(null)
 type StudyAnswerValue = string | string[]
 
@@ -146,6 +150,7 @@ const canComposeEmail = computed(() => Boolean(mailboxReady.value && canEmailAss
 const selectedEmailAttachments = computed(() =>
   (allowedEmailDocuments.value ?? []).filter((document) => selectedEmailDocumentKeys.value.includes(document.key)),
 )
+const loadingAllowedEmailDocuments = computed(() => loadingEmailOptions.value && Boolean(selectedAgentId.value))
 const emailBodyTextLength = computed(() => stripHtml(emailBody.value).trim().length)
 const canSendEmail = computed(() => Boolean(
   canComposeEmail.value
@@ -598,6 +603,18 @@ function isEmailDocumentChecked(documentKey: string) {
   return selectedEmailDocumentKeys.value.includes(documentKey)
 }
 
+function emailOptionsCacheKey(bankId: number | null, agentId: number | null) {
+  return `${bankId ?? 'all'}:${agentId ?? 'all'}`
+}
+
+function applyEmailOptions(response: RequestEmailOptionsPayload) {
+  banks.value = response.banks ?? []
+  agents.value = response.agents ?? []
+  allowedEmailDocuments.value = response.allowed_documents ?? []
+  hasEmailAssignments.value = Boolean(response.has_assignments)
+  canEmailAssignedAgents.value = Boolean(response.can_email)
+}
+
 async function sendEmailToAssignedAgent() {
   if (!requestItem.value || !selectedAgentId.value || !canSendEmail.value) return
 
@@ -617,11 +634,15 @@ async function sendEmailToAssignedAgent() {
     requestItem.value = data.request
     requiredDocuments.value = data.required_documents ?? requiredDocuments.value
     staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
-    banks.value = data.banks ?? banks.value
-    agents.value = data.agents ?? agents.value
-    allowedEmailDocuments.value = data.allowed_documents ?? allowedEmailDocuments.value
-    hasEmailAssignments.value = Boolean(data.has_assignments)
-    canEmailAssignedAgents.value = Boolean(data.can_email)
+    const responseOptions: RequestEmailOptionsPayload = {
+      banks: data.banks ?? banks.value,
+      agents: data.agents ?? agents.value,
+      allowed_documents: data.allowed_documents ?? allowedEmailDocuments.value,
+      has_assignments: Boolean(data.has_assignments),
+      can_email: Boolean(data.can_email),
+    }
+    emailOptionsCache.set(emailOptionsCacheKey(selectedBankId.value, selectedAgentId.value), responseOptions)
+    applyEmailOptions(responseOptions)
     clearEmailComposer()
     successMessage.value = data.message || uiText('Email sent successfully.', 'تم إرسال البريد بنجاح.')
   } catch (error: any) {
@@ -638,16 +659,38 @@ async function sendEmailToAssignedAgent() {
   }
 }
 
-async function loadEmailOptions() {
-  const response = await getStaffRequestEmailOptions(requestId.value, {
-    bank_id: selectedBankId.value,
-    agent_id: selectedAgentId.value,
-  })
-  banks.value = response.banks ?? []
-  agents.value = response.agents ?? []
-  allowedEmailDocuments.value = response.allowed_documents ?? []
-  hasEmailAssignments.value = Boolean(response.has_assignments)
-  canEmailAssignedAgents.value = Boolean(response.can_email)
+async function loadEmailOptions(force = false) {
+  const cacheKey = emailOptionsCacheKey(selectedBankId.value, selectedAgentId.value)
+
+  if (!force) {
+    const cached = emailOptionsCache.get(cacheKey)
+    if (cached) {
+      applyEmailOptions(cached)
+      return
+    }
+  }
+
+  const requestToken = ++emailOptionsRequestToken
+  loadingEmailOptions.value = true
+
+  try {
+    const response = await getStaffRequestEmailOptions(requestId.value, {
+      bank_id: selectedBankId.value,
+      agent_id: selectedAgentId.value,
+    })
+
+    emailOptionsCache.set(cacheKey, response)
+
+    if (requestToken !== emailOptionsRequestToken) {
+      return
+    }
+
+    applyEmailOptions(response)
+  } finally {
+    if (requestToken === emailOptionsRequestToken) {
+      loadingEmailOptions.value = false
+    }
+  }
 }
 
 async function load() {
@@ -660,6 +703,7 @@ async function load() {
     requiredDocuments.value = requestResponse.required_documents ?? []
     staffQuestionSummary.value = requestResponse.staff_question_summary ?? null
     syncUnderstudyLocalState()
+    await loadEmailOptions(true)
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('staffRequestDetails.errors.loadFailed')
   } finally {
@@ -850,6 +894,15 @@ watch(emailComposerVisible, async (visible) => {
   if (emailEditorRef.value && emailEditorRef.value.innerHTML !== emailBody.value) {
     emailEditorRef.value.innerHTML = emailBody.value
   }
+})
+
+watch(requestId, () => {
+  clearEmailComposer()
+  emailOptionsCache.clear()
+  emailOptionsRequestToken += 1
+  selectedBankId.value = null
+  selectedAgentId.value = null
+  load()
 })
 
 onMounted(load)
@@ -1392,7 +1445,11 @@ onMounted(load)
                     <p v-else>{{ uiText('Select an assigned agent to see the exact files approved by the admin.', 'اختر وكيلاً مُسندًا لرؤية الملفات المعتمدة من الإدارة.') }}</p>
                   </div>
 
-                  <div v-if="allowedEmailDocuments.length" class="timeline-list compact-list" style="margin-top: 0.75rem;">
+                  <div v-if="loadingAllowedEmailDocuments" class="staff-loading-state" style="margin-top: 0.75rem;">
+                    <span class="staff-inline-spinner staff-inline-spinner--large" aria-hidden="true"></span>
+                    <p>{{ uiText('Loading approved attachments. Please wait...', 'جارٍ تحميل المرفقات المعتمدة. يرجى الانتظار...') }}</p>
+                  </div>
+                  <div v-else-if="allowedEmailDocuments.length" class="timeline-list compact-list" style="margin-top: 0.75rem;">
                     <label v-for="document in allowedEmailDocuments" :key="document.key" class="timeline-item" style="cursor: pointer;">
                       <div style="display:flex;gap:0.75rem;align-items:flex-start;">
                         <input
@@ -1412,7 +1469,13 @@ onMounted(load)
                       </div>
                     </label>
                   </div>
-                  <p v-else class="empty-state" style="margin-top: 0.75rem;">{{ uiText('No files have been assigned to the selected agent yet.', 'لم يتم تعيين ملفات للوكيل المحدد حتى الآن.') }}</p>
+                  <p v-else class="empty-state" style="margin-top: 0.75rem;">
+                    {{
+                      selectedAgentId
+                        ? uiText('No files have been assigned to the selected agent yet.', 'لم يتم تعيين ملفات للوكيل المحدد حتى الآن.')
+                        : uiText('Select an assigned agent first to load the approved attachments.', 'اختر الوكيل المُسند أولاً لتحميل المرفقات المعتمدة.')
+                    }}
+                  </p>
 
                   <div class="approve-actions" style="margin-top: 1rem;">
                     <button class="primary-btn" type="button" :disabled="sendingEmail || !canSendEmail" @click="sendEmailToAssignedAgent">
@@ -1433,7 +1496,7 @@ onMounted(load)
                       <i class="fas fa-user-check"></i>
                       {{ t('staffRequestDetails.sections.recipients') }}
                     </button>
-                    <button type="button" class="ghost-btn" :disabled="!canComposeEmail" @click="openAttachmentPicker">
+                    <button type="button" class="ghost-btn" :disabled="!canComposeEmail || loadingAllowedEmailDocuments" @click="openAttachmentPicker">
                       <i class="fas fa-paperclip"></i>
                       Attachments ({{ selectedEmailAttachments.length }})
                     </button>
@@ -1448,6 +1511,11 @@ onMounted(load)
                   </p>
                   <p v-else>{{ uiText('Select a recipient before entering your email content.', 'اختر مستلمًا قبل إدخال محتوى البريد.') }}</p>
                 </div>
+
+                <p v-if="loadingAllowedEmailDocuments" class="staff-loading-note">
+                  <span class="staff-inline-spinner" aria-hidden="true"></span>
+                  {{ uiText('Loading the approved attachments for this agent...', 'جارٍ تحميل المرفقات المعتمدة لهذا الوكيل...') }}
+                </p>
 
                 <div class="staff-email-input-stack">
                   <label class="client-form-group">
@@ -1483,7 +1551,10 @@ onMounted(load)
 
                   <div class="staff-email-attachments-meta">
                     <span class="count-pill">{{ selectedEmailAttachments.length }} selected</span>
-                    <p v-if="selectedEmailAttachments.length" class="client-subtext">
+                    <p v-if="loadingAllowedEmailDocuments" class="client-subtext">
+                      {{ uiText('Fetching approved attachments. Please wait before selecting files.', 'جارٍ جلب المرفقات المعتمدة. يُرجى الانتظار قبل اختيار الملفات.') }}
+                    </p>
+                    <p v-else-if="selectedEmailAttachments.length" class="client-subtext">
                       {{ selectedEmailAttachments.map((document) => document.label).join(', ') }}
                     </p>
                     <p v-else class="client-subtext">{{ uiText('No attachments selected yet.', 'لم يتم اختيار أي مرفقات بعد.') }}</p>
@@ -1560,7 +1631,11 @@ onMounted(load)
             :subtitle="uiText('Select approved files to include with this email.', 'اختر الملفات المعتمدة لإرفاقها مع هذا البريد.')"
             wide
           >
-            <div v-if="allowedEmailDocuments.length" class="timeline-list compact-list">
+            <div v-if="loadingAllowedEmailDocuments" class="staff-loading-state">
+              <span class="staff-inline-spinner staff-inline-spinner--large" aria-hidden="true"></span>
+              <p>{{ uiText('Loading approved attachments. Please wait...', 'جارٍ تحميل المرفقات المعتمدة. يرجى الانتظار...') }}</p>
+            </div>
+            <div v-else-if="allowedEmailDocuments.length" class="timeline-list compact-list">
               <label v-for="document in allowedEmailDocuments" :key="document.key" class="timeline-item staff-picker-item">
                 <input
                   type="checkbox"
@@ -1578,7 +1653,13 @@ onMounted(load)
                 </div>
               </label>
             </div>
-            <p v-else class="empty-state">{{ uiText('No files are currently assigned to this agent.', 'لا توجد ملفات مُسندة لهذا الوكيل حالياً.') }}</p>
+            <p v-else class="empty-state">
+              {{
+                selectedAgentId
+                  ? uiText('No files are currently assigned to this agent.', 'لا توجد ملفات مُسندة لهذا الوكيل حالياً.')
+                  : uiText('Select an assigned agent first to load the approved attachments.', 'اختر الوكيل المُسند أولاً لتحميل المرفقات المعتمدة.')
+              }}
+            </p>
             <div class="approve-actions" style="margin-top: 0.85rem;">
               <button type="button" class="primary-btn" @click="attachmentPickerOpen = false">{{ uiText('Done', 'تم') }}</button>
             </div>
@@ -1790,6 +1871,12 @@ onMounted(load)
   margin: 0;
 }
 
+.staff-loading-note {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
 .staff-email-input-stack {
   display: grid;
   gap: 0.85rem;
@@ -1839,6 +1926,31 @@ onMounted(load)
   gap: 0.45rem;
 }
 
+.staff-loading-state {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  color: var(--admin-text-light);
+}
+
+.staff-inline-spinner {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: var(--admin-primary);
+  animation: staff-spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
+.staff-inline-spinner--large {
+  width: 1.8rem;
+  height: 1.8rem;
+  border-width: 3px;
+}
+
 .staff-email-send-row {
   margin-top: 0.4rem;
 }
@@ -1865,6 +1977,12 @@ onMounted(load)
 
 .staff-picker-preview {
   margin-top: 0.45rem;
+}
+
+@keyframes staff-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 768px) {

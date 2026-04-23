@@ -132,11 +132,16 @@ export type StaffStudyQuestion = {
 export type StaffQuestionSummary = {
   total: number
   required_total: number
+  required_count: number
   pending_total: number
   answered_total: number
   closed_total: number
+  required_answered_count: number
+  required_reviewed_count: number
   pending_required_total: number
+  pending_required_review_total: number
   all_required_answered: boolean
+  all_required_reviewed: boolean
   can_advance_from_understudy: boolean
 }
 
@@ -305,6 +310,14 @@ export type RequestEmailLog = {
   }>
 }
 
+export type RequestEmailOptionsPayload = {
+  banks: BankOption[]
+  agents: AgentOption[]
+  allowed_documents: AllowedEmailDocument[]
+  has_assignments: boolean
+  can_email: boolean
+}
+
 export async function getStaffRequests(params?: { search?: string; workflow_stage?: string; page?: number; per_page?: number }) {
   const { data } = await api.get('/api/staff/requests', { params })
   return data as { requests: StaffWorkspaceRequestSummary[]; pagination: PaginationMeta }
@@ -431,13 +444,7 @@ export async function getStaffRequestEmailOptions(
   params?: { bank_id?: number | null; agent_id?: number | null },
 ) {
   const { data } = await api.get(`/api/staff/requests/${id}/email-options`, { params })
-  return data as {
-    banks: BankOption[]
-    agents: AgentOption[]
-    allowed_documents: AllowedEmailDocument[]
-    has_assignments: boolean
-    can_email: boolean
-  }
+  return data as RequestEmailOptionsPayload
 }
 
 export async function sendStaffRequestEmail(

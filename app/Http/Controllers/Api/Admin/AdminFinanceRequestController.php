@@ -156,6 +156,7 @@ class AdminFinanceRequestController extends Controller
     public function approve(ApproveFinanceRequestRequest $request, FinanceRequest $financeRequest): JsonResponse
     {
         $admin = $request->user();
+        $this->ensureRequestCanBeApproved($financeRequest);
 
         DB::transaction(function () use ($financeRequest, $admin, $request) {
             if (blank($financeRequest->approval_reference_number)) {
@@ -245,10 +246,12 @@ class AdminFinanceRequestController extends Controller
     public function reject(RejectFinanceRequestRequest $request, FinanceRequest $financeRequest): JsonResponse
     {
         $admin = $request->user();
+        $this->ensureRequestCanBeRejected($financeRequest);
 
         DB::transaction(function () use ($financeRequest, $admin, $request) {
             $financeRequest->status = FinanceRequestStatus::REJECTED;
             $financeRequest->workflow_stage = FinanceRequestWorkflowStage::REJECTED;
+            $financeRequest->rejected_at = $financeRequest->rejected_at ?: now();
             $financeRequest->latest_activity_at = now();
             $financeRequest->save();
 
@@ -472,5 +475,38 @@ class AdminFinanceRequestController extends Controller
             'from' => $paginator->firstItem(),
             'to' => $paginator->lastItem(),
         ];
+    }
+
+    private function ensureRequestCanBeApproved(FinanceRequest $financeRequest): void
+    {
+        $status = $financeRequest->status?->value ?? (string) $financeRequest->status;
+        $stage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+
+        abort_unless(
+            $status === FinanceRequestStatus::SUBMITTED->value
+            && in_array($stage, [
+                FinanceRequestWorkflowStage::QUESTIONNAIRE->value,
+                FinanceRequestWorkflowStage::REVIEW->value,
+                FinanceRequestWorkflowStage::SUBMITTED_FOR_REVIEW->value,
+            ], true),
+            422,
+            'Only newly submitted requests that are still awaiting review can be approved.'
+        );
+    }
+
+    private function ensureRequestCanBeRejected(FinanceRequest $financeRequest): void
+    {
+        $status = $financeRequest->status?->value ?? (string) $financeRequest->status;
+
+        abort_unless(
+            ! in_array($status, [
+                FinanceRequestStatus::DRAFT->value,
+                FinanceRequestStatus::REJECTED->value,
+                FinanceRequestStatus::COMPLETED->value,
+                FinanceRequestStatus::CANCELLED->value,
+            ], true),
+            422,
+            'This request cannot be rejected from its current status.'
+        );
     }
 }

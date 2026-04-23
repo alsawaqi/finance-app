@@ -1,5 +1,23 @@
+import type { AxiosRequestConfig } from 'axios'
 import api from './api'
 import type { PaginationMeta } from '@/types/pagination'
+
+type ClientUploadRequestOptions = {
+  timeoutMs?: number
+  skipProgress?: boolean
+  skipTransactionOverlay?: boolean
+}
+
+function multipartRequestConfig(options?: ClientUploadRequestOptions): AxiosRequestConfig {
+  return {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      ...(options?.skipProgress ? { 'X-Skip-Progress': '1' } : {}),
+      ...(options?.skipTransactionOverlay ? { 'X-Skip-Transaction-Overlay': '1' } : {}),
+    },
+    timeout: options?.timeoutMs,
+  }
+}
 
 export async function listClientRequests(params?: { page?: number; per_page?: number }) {
   const { data } = await api.get('/api/client/requests', { params })
@@ -38,25 +56,34 @@ export async function signClientContract(id: number | string, payload: { signatu
 export async function uploadClientCommercialContract(
   id: number | string,
   payload: { file: File },
+  options?: ClientUploadRequestOptions,
 ) {
   const formData = new FormData()
   formData.append('file', payload.file)
 
-  const { data } = await api.post(`/api/client/requests/${id}/contract/commercial-registration`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  const { data } = await api.post(
+    `/api/client/requests/${id}/contract/commercial-registration`,
+    formData,
+    multipartRequestConfig(options),
+  )
 
   return data
 }
 
-export async function uploadClientRequiredDocument(id: number | string, payload: { document_upload_step_id: number; file: File }) {
+export async function uploadClientRequiredDocument(
+  id: number | string,
+  payload: { document_upload_step_id: number; file: File },
+  options?: ClientUploadRequestOptions,
+) {
   const formData = new FormData()
   formData.append('document_upload_step_id', String(payload.document_upload_step_id))
   formData.append('file', payload.file)
 
-  const { data } = await api.post(`/api/client/requests/${id}/documents`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  const { data } = await api.post(
+    `/api/client/requests/${id}/documents`,
+    formData,
+    multipartRequestConfig(options),
+  )
 
   return data
 }
@@ -65,13 +92,16 @@ export async function uploadClientAdditionalDocument(
   id: number | string,
   additionalDocumentId: number | string,
   payload: { file: File },
+  options?: ClientUploadRequestOptions,
 ) {
   const formData = new FormData()
   formData.append('file', payload.file)
 
-  const { data } = await api.post(`/api/client/requests/${id}/additional-documents/${additionalDocumentId}/upload`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  const { data } = await api.post(
+    `/api/client/requests/${id}/additional-documents/${additionalDocumentId}/upload`,
+    formData,
+    multipartRequestConfig(options),
+  )
 
   return data
 }
@@ -89,13 +119,16 @@ export async function submitClientUpdateFile(
   id: number | string,
   updateItemId: number | string,
   payload: { file: File },
+  options?: ClientUploadRequestOptions,
 ) {
   const formData = new FormData()
   formData.append('file', payload.file)
 
-  const { data } = await api.post(`/api/client/requests/${id}/update-items/${updateItemId}/file`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  const { data } = await api.post(
+    `/api/client/requests/${id}/update-items/${updateItemId}/file`,
+    formData,
+    multipartRequestConfig(options),
+  )
 
   return data
 }

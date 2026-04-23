@@ -314,8 +314,8 @@ const understudyReadyForReview = computed(() =>
   || understudyStage.value === 'awaiting_understudy_review',
 )
 
-const understudyActionsVisible = computed(() =>
-  understudyReadyForReview.value && Boolean(staffQuestionSummary.value?.all_required_answered),
+const understudyApproveReady = computed(() =>
+  understudyReadyForReview.value && Boolean(staffQuestionSummary.value?.can_advance_from_understudy),
 )
 
 const activeAgentAssignments = computed(() =>
@@ -1245,6 +1245,8 @@ onMounted(() => {
             <div><span>{{ t('adminRequestDetails.understudy.stats.studyStatus') }}</span><strong>{{ readableUnderstudyStatus(requestItem?.understudy_status || 'draft') }}</strong></div>
             <div><span>{{ t('adminRequestDetails.understudy.stats.requiredAnswered') }}</span><strong>{{ staffQuestionSummary?.required_answered_count ?? 0 }}/{{ staffQuestionSummary?.required_count ?? 0 }}</strong></div>
             <div><span>{{ t('adminRequestDetails.understudy.stats.allRequiredAnswered') }}</span><strong>{{ staffQuestionSummary?.all_required_answered ? t('adminRequestDetails.states.yes') : t('adminRequestDetails.states.no') }}</strong></div>
+            <div><span>{{ t('adminRequestDetails.understudy.stats.requiredReviewed') }}</span><strong>{{ staffQuestionSummary?.required_reviewed_count ?? 0 }}/{{ staffQuestionSummary?.required_count ?? 0 }}</strong></div>
+            <div><span>{{ t('adminRequestDetails.understudy.stats.allRequiredReviewed') }}</span><strong>{{ staffQuestionSummary?.all_required_reviewed ? t('adminRequestDetails.states.yes') : t('adminRequestDetails.states.no') }}</strong></div>
           </div>
 
           <div v-if="requestItem?.understudy_submitted_at" class="notes-box" style="margin-bottom: 1rem;">
@@ -1309,16 +1311,16 @@ onMounted(() => {
             <textarea v-model="understudyReviewNote" rows="4" class="client-form-control client-form-control--textarea" :placeholder="t('adminRequestDetails.understudy.adminReviewPlaceholder')" />
           </div>
 
-          <div v-if="understudyActionsVisible" class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
+          <div v-if="understudyReadyForReview" class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
             <button type="button" class="ghost-btn" :disabled="reviewingUnderstudy" @click="submitUnderstudyReview('reject')">
               {{ reviewingUnderstudy ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.understudy.rejectStudyAnswers') }}
             </button>
-            <button type="button" class="primary-btn" :disabled="reviewingUnderstudy" @click="submitUnderstudyReview('approve')">
+            <button type="button" class="primary-btn" :disabled="reviewingUnderstudy || !understudyApproveReady" @click="submitUnderstudyReview('approve')">
               {{ reviewingUnderstudy ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.understudy.approveForNextStep') }}
             </button>
           </div>
 
-          <p v-else-if="understudyVisible && understudyReadyForReview && !staffQuestionSummary?.all_required_answered" class="form-help form-help--error" style="margin-top: 1rem;">
+          <p v-if="understudyVisible && understudyReadyForReview && !staffQuestionSummary?.can_advance_from_understudy" class="form-help form-help--error" style="margin-top: 1rem;">
             {{ t('adminRequestDetails.understudy.requiredBeforeReview') }}
           </p>
 

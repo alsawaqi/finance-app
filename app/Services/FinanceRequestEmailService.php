@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\FinanceRequestWorkflowStage;
 use App\Enums\RequestEmailDeliveryStatus;
 use App\Enums\RequestEmailDirection;
+use App\Jobs\SendFinanceRequestEmailJob;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestAgentAssignment;
 use App\Models\RequestEmail;
@@ -12,6 +13,7 @@ use App\Models\RequestEmailAttachment;
 use App\Models\User;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -134,95 +136,136 @@ class FinanceRequestEmailService
             return $requestEmail->fresh(['sender:id,name,email', 'agents.bank:id,name,short_name,code', 'attachments']);
         });
 
-        try {
-            $this->mailboxMailer->sendRenderedMessage(
-                $sender,
-                [[
-                    'email' => (string) $assignment->agent->email,
-                    'name' => $assignment->agent->name,
-                ]],
-                (string) $requestEmail->subject,
-                'emails.finance-request-outbound',
-                [
-                    'bodyHtml' => $requestEmail->body,
-                    'senderName' => $sender->smtpSenderName(),
-                    'senderEmail' => (string) $sender->smtpSenderEmail(),
-                    'agentName' => $assignment->agent->name,
-                    'requestReference' => (string) ($financeRequest->approval_reference_number ?: $financeRequest->reference_number ?: ('Request #' . $financeRequest->id)),
-                ],
-                $requestEmail->attachments
-                    ->map(fn (RequestEmailAttachment $attachment) => [
-                        'disk' => $attachment->disk ?: 'public',
-                        'path' => $attachment->file_path,
-                        'file_name' => $attachment->file_name,
-                        'mime_type' => $attachment->mime_type,
-                    ])
-                    ->all(),
-            );
-
-            $requestEmail->forceFill([
-                'delivery_status' => RequestEmailDeliveryStatus::SENT,
-                'sent_at' => now(),
-            ])->save();
-
-            $financeRequest->forceFill([
-                'latest_activity_at' => now(),
-            ])->save();
-
-            RequestTimelineLogger::log(
-                $financeRequest,
-                'request.email_sent',
-                $sender->id,
-                'Request email sent',
-                'تم إرسال رسالة بريد للطلب',
-                'An outbound request email was sent to ' . $assignment->agent->name . ' with ' . $requestEmail->attachments->count() . ' linked file(s).',
-                'تم إرسال رسالة بريد للطلب إلى ' . $assignment->agent->name . ' مع ' . $requestEmail->attachments->count() . ' ملف(ات) مرتبطة.',
-                [
-                    'request_email_id' => $requestEmail->id,
-                    'agent_id' => $assignment->agent_id,
-                    'agent_name' => $assignment->agent->name,
-                    'bank_id' => $assignment->bank_id,
-                    'bank_name' => $assignment->bank?->name,
-                    'subject' => $requestEmail->subject,
-                    'delivery_status' => RequestEmailDeliveryStatus::SENT->value,
-                    'attachments' => $requestEmail->attachments->map(fn (RequestEmailAttachment $attachment) => [
-                        'id' => $attachment->id,
-                        'file_name' => $attachment->file_name,
-                    ])->values()->all(),
-                ],
-            );
-        } catch (Throwable $exception) {
-            $requestEmail->forceFill([
-                'delivery_status' => RequestEmailDeliveryStatus::FAILED,
-            ])->save();
-
-            $financeRequest->forceFill([
-                'latest_activity_at' => now(),
-            ])->save();
-
-            RequestTimelineLogger::log(
-                $financeRequest,
-                'request.email_failed',
-                $sender->id,
-                'Request email failed',
-                'فشل إرسال رسالة البريد للطلب',
-                'The outbound request email to ' . $assignment->agent->name . ' failed: ' . str($exception->getMessage())->limit(240)->toString(),
-                'فشل إرسال رسالة البريد إلى ' . $assignment->agent->name . ': ' . str($exception->getMessage())->limit(240)->toString(),
-                [
-                    'request_email_id' => $requestEmail->id,
-                    'agent_id' => $assignment->agent_id,
-                    'agent_name' => $assignment->agent->name,
-                    'subject' => $requestEmail->subject,
-                    'delivery_status' => RequestEmailDeliveryStatus::FAILED->value,
-                ],
-            );
-
-            throw ValidationException::withMessages([
-                'email' => 'The email could not be sent with the current mail configuration. ' . $exception->getMessage(),
-            ]);
-        }
+        SendFinanceRequestEmailJob::dispatchAfterResponse($requestEmail->id);
 
         return $requestEmail->fresh(['sender:id,name,email', 'agents.bank:id,name,short_name,code', 'attachments']);
+    }
+
+    public function deliverQueuedEmail(int $requestEmailId): void
+    {
+        Cache::lock("finance-request-email-send:{$requestEmailId}", 120)->get(function () use ($requestEmailId) {
+            $requestEmail = RequestEmail::query()
+                ->with([
+                    'financeRequest',
+                    'sender',
+                    'agents:id,name,email,bank_id',
+                    'agents.bank:id,name,short_name,code',
+                    'attachments',
+                ])
+                ->find($requestEmailId);
+
+            if (! $requestEmail || $requestEmail->delivery_status !== RequestEmailDeliveryStatus::QUEUED) {
+                return;
+            }
+
+            $financeRequest = $requestEmail->financeRequest;
+            $sender = $requestEmail->sender;
+            $agent = $requestEmail->agents->first();
+
+            if (! $financeRequest || ! $sender || ! $agent) {
+                $requestEmail?->forceFill([
+                    'delivery_status' => RequestEmailDeliveryStatus::FAILED,
+                ])->save();
+
+                return;
+            }
+
+            $assignment = FinanceRequestAgentAssignment::query()
+                ->with([
+                    'agent:id,name,email,bank_id',
+                    'bank:id,name,short_name,code',
+                ])
+                ->where('finance_request_id', $financeRequest->id)
+                ->where('agent_id', $agent->id)
+                ->where('is_active', true)
+                ->first();
+
+            try {
+                $this->mailboxMailer->assertReady($sender);
+
+                $this->mailboxMailer->sendRenderedMessage(
+                    $sender,
+                    [[
+                        'email' => (string) $agent->email,
+                        'name' => $agent->name,
+                    ]],
+                    (string) $requestEmail->subject,
+                    'emails.finance-request-outbound',
+                    [
+                        'bodyHtml' => $requestEmail->body,
+                        'senderName' => $sender->smtpSenderName(),
+                        'senderEmail' => (string) $sender->smtpSenderEmail(),
+                        'agentName' => $agent->name,
+                        'requestReference' => (string) ($financeRequest->approval_reference_number ?: $financeRequest->reference_number ?: ('Request #' . $financeRequest->id)),
+                    ],
+                    $requestEmail->attachments
+                        ->map(fn (RequestEmailAttachment $attachment) => [
+                            'disk' => $attachment->disk ?: 'public',
+                            'path' => $attachment->file_path,
+                            'file_name' => $attachment->file_name,
+                            'mime_type' => $attachment->mime_type,
+                        ])
+                        ->all(),
+                );
+
+                $requestEmail->forceFill([
+                    'delivery_status' => RequestEmailDeliveryStatus::SENT,
+                    'sent_at' => now(),
+                ])->save();
+
+                $financeRequest->forceFill([
+                    'latest_activity_at' => now(),
+                ])->save();
+
+                RequestTimelineLogger::log(
+                    $financeRequest,
+                    'request.email_sent',
+                    $sender->id,
+                    'Request email sent',
+                    'ØªÙ… Ø¥Ø±Ø³Ø§Ù„ Ø±Ø³Ø§Ù„Ø© Ø¨Ø±ÙŠØ¯ Ù„Ù„Ø·Ù„Ø¨',
+                    'An outbound request email was sent to ' . $agent->name . ' with ' . $requestEmail->attachments->count() . ' linked file(s).',
+                    'ØªÙ… Ø¥Ø±Ø³Ø§Ù„ Ø±Ø³Ø§Ù„Ø© Ø¨Ø±ÙŠØ¯ Ù„Ù„Ø·Ù„Ø¨ Ø¥Ù„Ù‰ ' . $agent->name . ' Ù…Ø¹ ' . $requestEmail->attachments->count() . ' Ù…Ù„Ù(Ø§Øª) Ù…Ø±ØªØ¨Ø·Ø©.',
+                    [
+                        'request_email_id' => $requestEmail->id,
+                        'agent_id' => $agent->id,
+                        'agent_name' => $agent->name,
+                        'bank_id' => $assignment?->bank_id,
+                        'bank_name' => $assignment?->bank?->name,
+                        'subject' => $requestEmail->subject,
+                        'delivery_status' => RequestEmailDeliveryStatus::SENT->value,
+                        'attachments' => $requestEmail->attachments->map(fn (RequestEmailAttachment $attachment) => [
+                            'id' => $attachment->id,
+                            'file_name' => $attachment->file_name,
+                        ])->values()->all(),
+                    ],
+                );
+            } catch (Throwable $exception) {
+                $requestEmail->forceFill([
+                    'delivery_status' => RequestEmailDeliveryStatus::FAILED,
+                ])->save();
+
+                $financeRequest->forceFill([
+                    'latest_activity_at' => now(),
+                ])->save();
+
+                RequestTimelineLogger::log(
+                    $financeRequest,
+                    'request.email_failed',
+                    $sender->id,
+                    'Request email failed',
+                    'ÙØ´Ù„ Ø¥Ø±Ø³Ø§Ù„ Ø±Ø³Ø§Ù„Ø© Ø§Ù„Ø¨Ø±ÙŠØ¯ Ù„Ù„Ø·Ù„Ø¨',
+                    'The outbound request email to ' . $agent->name . ' failed: ' . str($exception->getMessage())->limit(240)->toString(),
+                    'ÙØ´Ù„ Ø¥Ø±Ø³Ø§Ù„ Ø±Ø³Ø§Ù„Ø© Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø¥Ù„Ù‰ ' . $agent->name . ': ' . str($exception->getMessage())->limit(240)->toString(),
+                    [
+                        'request_email_id' => $requestEmail->id,
+                        'agent_id' => $agent->id,
+                        'agent_name' => $agent->name,
+                        'subject' => $requestEmail->subject,
+                        'delivery_status' => RequestEmailDeliveryStatus::FAILED->value,
+                    ],
+                );
+            }
+        });
     }
 
     private function sanitizeEditorHtmlBody(?string $html): string
@@ -258,6 +301,7 @@ class FinanceRequestEmailService
         ];
 
         $internalErrors = libxml_use_internal_errors(true);
+
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $wrapper = '<!DOCTYPE html><html><body>' . $raw . '</body></html>';
         $dom->loadHTML(mb_convert_encoding($wrapper, 'HTML-ENTITIES', 'UTF-8'));

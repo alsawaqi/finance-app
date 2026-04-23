@@ -142,15 +142,23 @@ class FinanceRequestWorkflowService
     ): FinanceRequest {
         $financeRequest = $this->syncStaffQuestionStage($financeRequest, $actorUserId);
 
-        $pendingRequired = $this->staffQuestionService->pendingRequiredCount($financeRequest);
+        $pendingRequiredReview = $this->staffQuestionService->pendingRequiredReviewCount($financeRequest);
 
-        if ($pendingRequired > 0) {
+        if ($pendingRequiredReview > 0) {
             throw ValidationException::withMessages([
-                'staff_questions' => 'All required staff study questions must be answered before moving this request forward.',
+                'staff_questions' => 'All required staff study questions must be reviewed before moving this request forward.',
             ]);
         }
 
+        $resolvedReviewNote = $reviewNote !== null
+            ? trim($reviewNote)
+            : ($financeRequest->understudy_review_note ?: null);
+
         $financeRequest->status = FinanceRequestStatus::ACTIVE;
+        $financeRequest->understudy_status = FinanceRequestUnderstudyStatus::APPROVED;
+        $financeRequest->understudy_reviewed_by = $actorUserId;
+        $financeRequest->understudy_reviewed_at = now();
+        $financeRequest->understudy_review_note = $resolvedReviewNote !== '' ? $resolvedReviewNote : null;
         $financeRequest->workflow_stage = FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT;
         $financeRequest->latest_activity_at = now();
         $financeRequest->save();
