@@ -275,8 +275,6 @@ function requiredUploadButtonLabel(item: any) {
 function uploadRequestOptions() {
   return {
     timeoutMs: DEFAULT_UPLOAD_TIMEOUT_MS,
-    skipProgress: true,
-    skipTransactionOverlay: true,
   }
 }
 
