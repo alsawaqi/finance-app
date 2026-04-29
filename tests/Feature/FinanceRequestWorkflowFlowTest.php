@@ -7,8 +7,8 @@ use App\Enums\FinanceRequestStaffQuestionStatus;
 use App\Enums\FinanceRequestStatus;
 use App\Enums\FinanceRequestUnderstudyStatus;
 use App\Enums\FinanceRequestWorkflowStage;
-use App\Enums\RequestEmailDeliveryStatus;
 use App\Enums\RequestDocumentUploadStatus;
+use App\Enums\RequestEmailDeliveryStatus;
 use App\Jobs\SendFinanceRequestEmailJob;
 use App\Models\Agent;
 use App\Models\Bank;
@@ -18,8 +18,8 @@ use App\Models\FinanceRequest;
 use App\Models\FinanceRequestAgentAssignment;
 use App\Models\FinanceRequestAgentAssignmentDocument;
 use App\Models\FinanceRequestStaffQuestion;
-use App\Models\RequestEmail;
 use App\Models\RequestDocumentUpload;
+use App\Models\RequestEmail;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -363,6 +363,48 @@ class FinanceRequestWorkflowFlowTest extends TestCase
         ]);
     }
 
+    public function test_client_required_document_upload_uses_step_allowed_file_types(): void
+    {
+        $client = $this->createUser('client');
+        $financeRequest = $this->createFinanceRequest($client, [
+            'status' => FinanceRequestStatus::ACTIVE,
+            'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS,
+        ]);
+
+        $step = DocumentUploadStep::create([
+            'code' => 'bank_statement_excel',
+            'name' => 'Bank statement Excel',
+            'finance_type' => 'all',
+            'is_required' => true,
+            'is_multiple' => false,
+            'allowed_file_types_json' => ['xlsx'],
+            'max_file_size_mb' => 10,
+            'sort_order' => 1,
+            'is_active' => true,
+        ]);
+
+        $response = $this
+            ->actingAs($client)
+            ->post("/api/client/requests/{$financeRequest->id}/documents", [
+                'document_upload_step_id' => $step->id,
+                'file' => UploadedFile::fake()->create(
+                    'bank-statement.xlsx',
+                    64,
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                ),
+            ], ['Accept' => 'application/json']);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('request_document_uploads', [
+            'finance_request_id' => $financeRequest->id,
+            'document_upload_step_id' => $step->id,
+            'file_name' => 'bank-statement.xlsx',
+            'file_extension' => 'xlsx',
+            'uploaded_by' => $client->id,
+        ]);
+    }
+
     public function test_send_request_email_is_queued_after_response_with_selected_attachments(): void
     {
         Bus::fake();
@@ -475,7 +517,7 @@ class FinanceRequestWorkflowFlowTest extends TestCase
     private function createFinanceRequest(User $client, array $overrides = []): FinanceRequest
     {
         return FinanceRequest::create(array_merge([
-            'reference_number' => 'REQ-TEST-' . Str::upper(Str::random(10)),
+            'reference_number' => 'REQ-TEST-'.Str::upper(Str::random(10)),
             'user_id' => $client->id,
             'applicant_type' => 'individual',
             'country_code' => 'OM',
