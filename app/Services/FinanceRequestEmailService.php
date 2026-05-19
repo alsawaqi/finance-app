@@ -136,6 +136,33 @@ class FinanceRequestEmailService
             return $requestEmail->fresh(['sender:id,name,email', 'agents.bank:id,name,short_name,code', 'attachments']);
         });
 
+        $financeRequest->forceFill([
+            'latest_activity_at' => now(),
+        ])->save();
+
+        RequestTimelineLogger::log(
+            $financeRequest,
+            'request.email_queued',
+            $sender->id,
+            'Request email queued',
+            'Request email queued',
+            'An outbound request email was queued for ' . $assignment->agent->name . ' with ' . $requestEmail->attachments->count() . ' linked file(s).',
+            'An outbound request email was queued for ' . $assignment->agent->name . ' with ' . $requestEmail->attachments->count() . ' linked file(s).',
+            [
+                'request_email_id' => $requestEmail->id,
+                'agent_id' => $assignment->agent->id,
+                'agent_name' => $assignment->agent->name,
+                'bank_id' => $assignment->bank_id,
+                'bank_name' => $assignment->bank?->name,
+                'subject' => $requestEmail->subject,
+                'delivery_status' => RequestEmailDeliveryStatus::QUEUED->value,
+                'attachments' => $requestEmail->attachments->map(fn (RequestEmailAttachment $attachment) => [
+                    'id' => $attachment->id,
+                    'file_name' => $attachment->file_name,
+                ])->values()->all(),
+            ],
+        );
+
         SendFinanceRequestEmailJob::dispatchAfterResponse($requestEmail->id);
 
         return $requestEmail->fresh(['sender:id,name,email', 'agents.bank:id,name,short_name,code', 'attachments']);

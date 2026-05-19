@@ -30,6 +30,11 @@ export const FINANCE_REQUEST_WORKFLOW_STAGES: string[] = [
   'blocked',
 ]
 
+const MANUAL_WORKFLOW_STAGE_TRANSITIONS: Record<string, string[]> = {
+  processing: ['ready_for_processing'],
+  ready_for_processing: ['processing'],
+}
+
 const STAGE_META: Record<string, { en: string; ar: string; tone: RequestWorkflowStageTone }> = {
   questionnaire: { en: 'Questionnaire', ar: '\u0627\u0644\u0627\u0633\u062a\u0628\u064a\u0627\u0646', tone: 'slate' },
   review: { en: 'Review queue', ar: '\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0645\u0631\u0627\u062c\u0639\u0629', tone: 'blue' },
@@ -88,4 +93,19 @@ export function getRequestWorkflowStageMeta(stage: string | null | undefined) {
     label: key ? titleCase(key) : (isArabicLocale() ? '\u063a\u064a\u0631 \u0645\u0628\u062f\u0648\u0621' : 'Not started'),
     tone: 'slate' as const,
   }
+}
+
+export function getManualWorkflowStageOptions(stage: string | null | undefined) {
+  const key = String(stage || '').trim().toLowerCase()
+  const values = new Set<string>()
+
+  if (key) {
+    values.add(key)
+  }
+
+  for (const nextStage of MANUAL_WORKFLOW_STAGE_TRANSITIONS[key] ?? []) {
+    values.add(nextStage)
+  }
+
+  return [...values]
 }

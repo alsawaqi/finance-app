@@ -99,6 +99,7 @@ export type StaffStudyQuestion = {
   help_text_ar?: string | null
   is_required: boolean
   status: string
+  answered_by?: number | null
   answered_at?: string | null
   closed_at?: string | null
   asked_by?: number | null
@@ -123,6 +124,11 @@ export type StaffStudyQuestion = {
     email?: string | null
   } | null
   assigned_staff?: {
+    id: number
+    name: string
+    email?: string | null
+  } | null
+  answerer?: {
     id: number
     name: string
     email?: string | null

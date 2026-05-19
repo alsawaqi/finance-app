@@ -15,7 +15,7 @@ class StoreFinanceRequestAgentAssignmentsRequest extends FormRequest
     {
         return [
             'review_note' => ['nullable', 'string', 'max:4000'],
-            'assignments' => ['required', 'array', 'min:1'],
+            'assignments' => ['present', 'array'],
             'assignments.*.agent_id' => ['required', 'integer', 'distinct', 'exists:agents,id'],
             'assignments.*.document_keys' => ['required', 'array', 'min:1'],
             'assignments.*.document_keys.*' => ['required', 'string', 'max:255'],

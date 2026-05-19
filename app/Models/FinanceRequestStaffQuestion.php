@@ -27,6 +27,7 @@ class FinanceRequestStaffQuestion extends Model
         'help_text_ar',
         'validation_rules',
         'answer_text',
+        'answered_by',
         'answer_json',
         'status',
         'is_required',
@@ -69,5 +70,10 @@ class FinanceRequestStaffQuestion extends Model
     public function assignedStaff(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function answerer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'answered_by');
     }
 }

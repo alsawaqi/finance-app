@@ -33,12 +33,13 @@ import {
 } from '@/utils/requestIntake'
 import AppFilePreviewModal from '@/components/AppFilePreviewModal.vue'
 import { buildPreviewUrl } from '@/utils/filePreview'
+import AdminAgentAccessPanel from './inc/AdminAgentAccessPanel.vue'
 import AdminQuickViewModal from './inc/AdminQuickViewModal.vue'
 import RequestAnswersList from './inc/RequestAnswersList.vue'
 import RequestCoreDetailsCard from './inc/RequestCoreDetailsCard.vue'
 import RequestSummaryStatGrid from './inc/RequestSummaryStatGrid.vue'
 import RequestWorkspaceShell from './inc/RequestWorkspaceShell.vue'
-import { FINANCE_REQUEST_WORKFLOW_STAGES, getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
+import { getManualWorkflowStageOptions, getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
 import { buildTimelineRows, formatTimelineDate } from '@/utils/requestTimeline'
 import {
   formatAdditionalDocumentStatus,
@@ -143,12 +144,8 @@ const workflowStageDirty = computed(() => {
 })
 
 const workflowStageSelectOptions = computed(() => {
-  const keys = new Set(FINANCE_REQUEST_WORKFLOW_STAGES)
   const current = rawWorkflowStage(requestItem.value?.workflow_stage)
-  if (current && !keys.has(current)) {
-    return [...FINANCE_REQUEST_WORKFLOW_STAGES, current].sort((a, b) => a.localeCompare(b))
-  }
-  return [...FINANCE_REQUEST_WORKFLOW_STAGES]
+  return getManualWorkflowStageOptions(current)
 })
 
 watch(
@@ -223,6 +220,7 @@ const activityCounts = computed(() => ({
 }))
 
 const timelineRows = computed(() => buildTimelineRows(requestItem.value?.timeline, locale.value))
+const recentTimelineRows = computed(() => timelineRows.value.slice(-3).reverse())
 
 function timelineDateLabel(value: unknown) {
   return formatTimelineDate(value, locale.value)
@@ -339,11 +337,46 @@ const selectedAssignableAgents = computed(() =>
   (emailAgentOptions.value ?? []).filter((agent: any) => selectedAgentIds.value.includes(Number(agent.id))),
 )
 
+function assignmentDocumentKeysFromAssignment(assignment: any) {
+  return Array.isArray(assignment?.allowed_documents)
+    ? assignment.allowed_documents.map((document: any) => String(document.document_key || document.key)).filter(Boolean)
+    : []
+}
+
+function agentAssignmentSignature(rows: Array<{ agent_id: number; document_keys: string[] }>) {
+  return JSON.stringify(
+    rows
+      .map((row) => ({
+        agent_id: Number(row.agent_id),
+        document_keys: [...new Set((row.document_keys ?? []).map((key) => String(key)).filter(Boolean))].sort(),
+      }))
+      .filter((row) => row.agent_id > 0)
+      .sort((a, b) => a.agent_id - b.agent_id),
+  )
+}
+
+const activeAgentAssignmentSignature = computed(() =>
+  agentAssignmentSignature(activeAgentAssignments.value.map((assignment: any) => ({
+    agent_id: Number(assignment?.agent_id ?? assignment?.agent?.id ?? 0),
+    document_keys: assignmentDocumentKeysFromAssignment(assignment),
+  }))),
+)
+
+const draftAgentAssignmentSignature = computed(() =>
+  agentAssignmentSignature(selectedAgentIds.value.map((agentId) => ({
+    agent_id: Number(agentId),
+    document_keys: selectedAgentDocumentKeys.value[Number(agentId)] ?? [],
+  }))),
+)
+
+const agentAssignmentDraftDirty = computed(() => activeAgentAssignmentSignature.value !== draftAgentAssignmentSignature.value)
+
 const canSaveAgentAssignments = computed(() => {
   if (savingAgentAssignments.value) return false
-  if (!selectedAssignableAgents.value.length) return false
+  if (!agentAssignmentDraftDirty.value) return false
+  if (!selectedAgentIds.value.length) return activeAgentAssignments.value.length > 0
 
-  return selectedAssignableAgents.value.every((agent: any) => (selectedAgentDocumentKeys.value[Number(agent.id)] ?? []).length > 0)
+  return selectedAgentIds.value.every((agentId) => (selectedAgentDocumentKeys.value[Number(agentId)] ?? []).length > 0)
 })
 
 const canRejectRequest = computed(() => {
@@ -364,10 +397,150 @@ const canFinalizeApproval = computed(() => {
 
 const canOpenStaffAssignment = computed(() => {
   const workflowStage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+  const status = String(requestItem.value?.status || '').toLowerCase()
   const contractStatus = String(requestItem.value?.current_contract?.status || '').toLowerCase()
   const hasSignedContractState = ['fully_signed', 'client_signed'].includes(contractStatus)
+  const requiresCommercialRegistration = Boolean(requestItem.value?.current_contract?.requires_commercial_registration)
+  const hasCommercialRegistrationFiles = !requiresCommercialRegistration
+    || (Boolean(requestItem.value?.current_contract?.client_commercial_contract_path)
+      && Boolean(requestItem.value?.current_contract?.admin_commercial_contract_path))
 
-  return Boolean(requestItem.value?.current_contract) && hasSignedContractState && workflowStage === 'awaiting_staff_assignment'
+  return Boolean(requestItem.value?.current_contract)
+    && hasSignedContractState
+    && hasCommercialRegistrationFiles
+    && !['completed', 'rejected', 'blocked'].includes(workflowStage)
+    && !['completed', 'rejected', 'cancelled'].includes(status)
+})
+
+const commandWorkflowSteps = computed(() => {
+  const stage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+  const groups = [
+    {
+      key: 'submitted',
+      label: uiText('Submitted', 'تم الإرسال'),
+      stages: ['questionnaire', 'submitted_for_review'],
+    },
+    {
+      key: 'review',
+      label: uiText('Admin Review', 'مراجعة الإدارة'),
+      stages: ['review'],
+    },
+    {
+      key: 'contract',
+      label: uiText('Contract', 'العقد'),
+      stages: [
+        'contract',
+        'admin_contract_preparation',
+        'awaiting_client_signature',
+        'awaiting_client_commercial_registration_upload',
+        'awaiting_admin_commercial_registration_upload',
+      ],
+    },
+    {
+      key: 'staff',
+      label: uiText('Staff Assignment', 'إسناد الموظفين'),
+      stages: ['awaiting_staff_assignment', 'assigned_to_staff'],
+    },
+    {
+      key: 'documents',
+      label: uiText('Documents', 'المستندات'),
+      stages: ['document_collection', 'awaiting_client_documents', 'awaiting_additional_documents', 'client_update_requested'],
+    },
+    {
+      key: 'understudy',
+      label: uiText('Understudy', 'الدراسة'),
+      stages: ['understudy', 'awaiting_staff_answers', 'awaiting_understudy_review'],
+    },
+    {
+      key: 'bank',
+      label: uiText('Bank Agent', 'وكيل البنك'),
+      stages: ['awaiting_agent_assignment', 'processing', 'ready_for_processing'],
+    },
+    {
+      key: 'final',
+      label: uiText('Final Approval', 'الاعتماد النهائي'),
+      stages: ['accepted', 'completed'],
+    },
+  ]
+
+  let currentIndex = groups.findIndex((group) => group.stages.includes(stage))
+  if (currentIndex === -1 && ['rejected', 'blocked', 'cancelled'].includes(stage)) currentIndex = groups.length - 1
+  if (currentIndex === -1) currentIndex = 0
+
+  return groups.map((group, index) => ({
+    ...group,
+    state: index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'waiting',
+  }))
+})
+
+const commandProgressPercent = computed(() => {
+  const currentIndex = commandWorkflowSteps.value.findIndex((step) => step.state === 'current')
+  if (currentIndex < 0) return 0
+  return Math.round((currentIndex / Math.max(commandWorkflowSteps.value.length - 1, 1)) * 100)
+})
+
+const adminNextAction = computed(() => {
+  const stage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+
+  if (!requestItem.value?.approval_reference_number) {
+    return {
+      title: uiText('Review the new request', 'مراجعة الطلب الجديد'),
+      body: uiText('Approve the request to generate the approval reference and move it into the contract stage.', 'اعتمد الطلب لإنشاء مرجع الموافقة ونقله إلى مرحلة العقد.'),
+      tone: 'warning',
+    }
+  }
+
+  if (stage === 'awaiting_staff_assignment' || (canOpenStaffAssignment.value && !requestItem.value?.primary_staff_id)) {
+    return {
+      title: uiText('Assign the lead staff member', 'إسناد الموظف الرئيسي'),
+      body: uiText('Choose or change the staff owner before document collection and study work continue.', 'اختر أو غيّر الموظف المسؤول قبل استمرار جمع المستندات والدراسة.'),
+      tone: 'info',
+    }
+  }
+
+  if (understudyVisible.value) {
+    return understudyReadyForReview.value
+      ? {
+          title: uiText('Review staff study answers', 'مراجعة إجابات الدراسة'),
+          body: uiText('Approve the study package or return specific answers before bank-agent assignment opens.', 'اعتمد حزمة الدراسة أو أعد إجابات محددة قبل فتح مرحلة وكيل البنك.'),
+          tone: 'warning',
+        }
+      : {
+          title: uiText('Waiting for staff study', 'بانتظار دراسة الموظف'),
+          body: uiText('Staff must complete the required study answers before admin can approve this stage.', 'يجب على الموظف إكمال إجابات الدراسة الإلزامية قبل اعتماد هذه المرحلة.'),
+          tone: 'muted',
+        }
+  }
+
+  if (stage === 'awaiting_agent_assignment') {
+    return {
+      title: uiText('Assign bank agents', 'إسناد وكلاء البنك'),
+      body: uiText('Select the allowed bank agents and attach the approved request files for each agent.', 'حدد وكلاء البنك المسموحين واربط ملفات الطلب المعتمدة لكل وكيل.'),
+      tone: 'info',
+    }
+  }
+
+  if (activeOpenBatch.value) {
+    return {
+      title: uiText('Review client updates', 'مراجعة تحديثات العميل'),
+      body: uiText('A client update batch is open. Review submitted corrections before continuing the workflow.', 'توجد دفعة تحديث مفتوحة من العميل. راجع التصحيحات المرسلة قبل متابعة سير العمل.'),
+      tone: 'warning',
+    }
+  }
+
+  if (canFinalizeApproval.value) {
+    return {
+      title: uiText('Prepare final approval', 'تجهيز الاعتماد النهائي'),
+      body: uiText('The request is in processing. Finalize once the bank communication result is ready.', 'الطلب قيد المعالجة. قم بالاعتماد النهائي عند جاهزية نتيجة التواصل مع البنك.'),
+      tone: 'success',
+    }
+  }
+
+  return {
+    title: uiText('Monitor request progress', 'متابعة تقدم الطلب'),
+    body: uiText('No urgent admin action is required right now. Use quick views for files, timeline, comments, and emails.', 'لا يوجد إجراء إداري عاجل حالياً. استخدم العروض السريعة للملفات والمخطط والتعليقات والبريد.'),
+    tone: 'muted',
+  }
 })
 
 const draftItemTypeOptions = computed(() => [
@@ -502,6 +675,27 @@ function studyQuestionAnswer(question: any) {
   return t('adminRequestDetails.states.noAnswerSavedYet')
 }
 
+function studyQuestionAnswerAudit(question: any) {
+  const answererName = String(question?.answerer?.name || '').trim()
+  const answeredAt = question?.answered_at
+    ? formatDateTime(question.answered_at, locale, t('adminRequestDetails.states.emptyValue'))
+    : ''
+
+  if (answererName && answeredAt) {
+    return uiText(`Answered by ${answererName} · ${answeredAt}`, `تمت الإجابة بواسطة ${answererName} · ${answeredAt}`)
+  }
+
+  if (answererName) {
+    return uiText(`Answered by ${answererName}`, `تمت الإجابة بواسطة ${answererName}`)
+  }
+
+  if (answeredAt) {
+    return uiText(`Answered on ${answeredAt}`, `تمت الإجابة بتاريخ ${answeredAt}`)
+  }
+
+  return ''
+}
+
 function studyQuestionStatusLabel(question: any) {
   const key = String(question?.status || '').toLowerCase()
   if (key === 'closed') return t('adminRequestDetails.understudy.status.reviewed')
@@ -606,6 +800,8 @@ async function loadAgentAssignmentOptions() {
 }
 
 function toggleAgentSelection(agentId: number, checked: boolean) {
+  agentId = Number(agentId)
+
   if (checked) {
     if (!selectedAgentIds.value.includes(agentId)) {
       selectedAgentIds.value = [...selectedAgentIds.value, agentId]
@@ -632,6 +828,7 @@ function isAgentSelected(agentId: number) {
 }
 
 function toggleAgentDocument(agentId: number, documentKey: string, checked: boolean) {
+  agentId = Number(agentId)
   const current = Array.isArray(selectedAgentDocumentKeys.value[agentId])
     ? [...selectedAgentDocumentKeys.value[agentId]]
     : []
@@ -655,6 +852,33 @@ function isAgentDocumentSelected(agentId: number, documentKey: string) {
   return (selectedAgentDocumentKeys.value[agentId] ?? []).includes(documentKey)
 }
 
+function selectAllAgentDocuments(agentId: number) {
+  const documentKeys = (availableEmailDocuments.value ?? [])
+    .map((document: any) => String(document.key || ''))
+    .filter(Boolean)
+
+  selectedAgentDocumentKeys.value = {
+    ...selectedAgentDocumentKeys.value,
+    [Number(agentId)]: documentKeys,
+  }
+}
+
+function clearAgentDocuments(agentId: number) {
+  selectedAgentDocumentKeys.value = {
+    ...selectedAgentDocumentKeys.value,
+    [Number(agentId)]: [],
+  }
+}
+
+function removeAgentFromDraft(agentId: number) {
+  toggleAgentSelection(Number(agentId), false)
+}
+
+function previewAgentAssignmentDocument(document: any) {
+  if (!document?.download_url) return
+  openFilePreview(document.file_name, document.download_url, document.mime_type)
+}
+
 async function submitAgentAssignments() {
   if (!requestItem.value || !canSaveAgentAssignments.value || savingAgentAssignments.value) return
 
@@ -665,9 +889,9 @@ async function submitAgentAssignments() {
   try {
     const payload = {
       review_note: agentAssignmentReviewNote.value || undefined,
-      assignments: selectedAssignableAgents.value.map((agent: any) => ({
-        agent_id: Number(agent.id),
-        document_keys: (selectedAgentDocumentKeys.value[Number(agent.id)] ?? []).filter(Boolean),
+      assignments: selectedAgentIds.value.map((agentId) => ({
+        agent_id: Number(agentId),
+        document_keys: (selectedAgentDocumentKeys.value[Number(agentId)] ?? []).filter(Boolean),
       })),
     }
 
@@ -1029,6 +1253,29 @@ onMounted(() => {
 
     <template #loading>{{ t('adminRequestDetails.states.loading') }}</template>
 
+    <template #workflow>
+      <section class="request-command-workflow" aria-label="Request workflow">
+        <div class="request-command-workflow__bar">
+          <div>
+            <span>{{ uiText('Workflow progress', 'تقدم سير العمل') }}</span>
+            <strong>{{ commandProgressPercent }}%</strong>
+          </div>
+          <p>{{ uiText('The active request stage stays visible so admin can see exactly what has happened and what comes next.', 'تبقى مرحلة الطلب النشطة ظاهرة حتى تعرف الإدارة ما تم وما هو التالي بوضوح.') }}</p>
+        </div>
+        <ol class="request-command-stepper">
+          <li
+            v-for="step in commandWorkflowSteps"
+            :key="step.key"
+            class="request-command-step"
+            :class="`is-${step.state}`"
+          >
+            <span>{{ step.state === 'done' ? uiText('Done', 'تم') : step.state === 'current' ? uiText('Current', 'الحالي') : uiText('Next', 'التالي') }}</span>
+            <strong>{{ step.label }}</strong>
+          </li>
+        </ol>
+      </section>
+    </template>
+
     <template #summary>
       <div class="request-summary-stack">
         <article v-if="requestItem" class="panel-card slim-card admin-workflow-stage-card">
@@ -1116,6 +1363,26 @@ onMounted(() => {
 
     <template #main>
       <div class="request-workspace-stack">
+      <article class="request-command-active-stage">
+        <div>
+          <span>{{ stageMeta(requestItem?.workflow_stage).label }}</span>
+          <h2>{{ adminNextAction.title }}</h2>
+          <p>{{ adminNextAction.body }}</p>
+        </div>
+        <div class="request-command-active-actions">
+          <RouterLink v-if="canOpenStaffAssignment" :to="{ name: 'admin-assignment-details', params: { id: requestId }, query: { return_to: String(route.fullPath || `/admin/requests/${requestId}`) } }" class="ghost-btn">{{ t('adminRequestDetails.hero.assignStaff') }}</RouterLink>
+          <button v-if="understudyReadyForReview" type="button" class="primary-btn" :disabled="reviewingUnderstudy || !understudyApproveReady" @click="submitUnderstudyReview('approve')">
+            {{ reviewingUnderstudy ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.understudy.approveForNextStep') }}
+          </button>
+          <button v-else-if="canFinalizeApproval" class="primary-btn" type="button" :disabled="finalizingApproval" @click="finalizeRequest">
+            {{ finalizingApproval ? t('adminRequestDetails.actions.finalizingApproval') : t('adminRequestDetails.actions.finalApproveNow') }}
+          </button>
+          <button v-else-if="!requestItem?.approval_reference_number" class="primary-btn" type="button" :disabled="approving" @click="approveRequest">
+            {{ approving ? t('adminRequestDetails.actions.approving') : t('adminRequestDetails.actions.approveAndContinue') }}
+          </button>
+        </div>
+      </article>
+
       <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
 
       <article class="panel-card request-quick-panel">
@@ -1273,6 +1540,7 @@ onMounted(() => {
                 <span :class="studyQuestionStatusClass(question)">{{ studyQuestionStatusLabel(question) }}</span>
               </div>
               <p>{{ studyQuestionAnswer(question) }}</p>
+              <p v-if="studyQuestionAnswerAudit(question)" class="client-subtext" style="margin-top: 0.35rem;">{{ studyQuestionAnswerAudit(question) }}</p>
               <template v-if="understudyReadyForReview">
                 <div class="client-form-group" style="margin-top: 0.75rem;">
                   <label class="client-form-label">{{ uiText('Question review note (optional)', 'ملاحظة مراجعة السؤال (اختياري)') }}</label>
@@ -1336,7 +1604,33 @@ onMounted(() => {
         </div>
       </details>
 
-      <details v-if="agentAssignmentVisible" class="admin-accordion-card" :open="understudyStage === 'awaiting_agent_assignment' || activeAgentAssignments.length > 0">
+      <AdminAgentAccessPanel
+        v-if="agentAssignmentVisible"
+        :active-assignments="activeAgentAssignments"
+        :bank-options="emailBankOptions"
+        :agent-options="emailAgentOptions"
+        :available-documents="availableEmailDocuments"
+        :selected-bank-id="selectedAssignmentBankId"
+        :selected-agent-ids="selectedAgentIds"
+        :selected-agent-document-keys="selectedAgentDocumentKeys"
+        :review-note="agentAssignmentReviewNote"
+        :saving="savingAgentAssignments"
+        :can-save="canSaveAgentAssignments"
+        :dirty="agentAssignmentDraftDirty"
+        :stage-after-save-label="selectedAgentIds.length ? stageMeta('processing').label : stageMeta('awaiting_agent_assignment').label"
+        @update:selected-bank-id="selectedAssignmentBankId = $event"
+        @update:review-note="agentAssignmentReviewNote = $event"
+        @toggle-agent="toggleAgentSelection"
+        @toggle-document="toggleAgentDocument"
+        @select-all-documents="selectAllAgentDocuments"
+        @clear-documents="clearAgentDocuments"
+        @remove-agent="removeAgentFromDraft"
+        @reset-draft="syncAgentAssignmentDraftFromRequest"
+        @submit="submitAgentAssignments"
+        @preview-file="previewAgentAssignmentDocument"
+      />
+
+      <details v-if="false && agentAssignmentVisible" class="admin-accordion-card" :open="understudyStage === 'awaiting_agent_assignment' || activeAgentAssignments.length > 0">
         <summary>
           <div>
             <h2>{{ t('adminRequestDetails.agentAssignments.title') }}</h2>
@@ -1610,6 +1904,66 @@ onMounted(() => {
           </article>
         </div>
       </div>
+      </div>
+    </template>
+
+    <template #side>
+      <div class="request-command-rail-stack">
+        <article class="request-command-next" :class="`is-${adminNextAction.tone}`">
+          <span>{{ uiText('Next required action', 'الإجراء المطلوب التالي') }}</span>
+          <h2>{{ adminNextAction.title }}</h2>
+          <p>{{ adminNextAction.body }}</p>
+          <div class="request-command-pulse">
+            {{ uiText('Stage-aware guidance', 'إرشاد حسب المرحلة') }}
+          </div>
+        </article>
+
+        <article class="request-command-rail-card">
+          <div class="request-command-rail-head">
+            <h2>{{ uiText('Quick views', 'عروض سريعة') }}</h2>
+            <p>{{ uiText('Open supporting information without stretching the page.', 'افتح المعلومات الداعمة بدون إطالة الصفحة.') }}</p>
+          </div>
+          <div class="request-command-quick-grid">
+            <button type="button" @click="quickView = 'requiredDocuments'">
+              <strong>{{ t('adminRequestDetails.requiredDocuments.title') }}</strong>
+              <span>{{ activityCounts.requiredDocuments }}</span>
+            </button>
+            <button type="button" @click="quickView = 'answers'">
+              <strong>{{ t('adminRequestDetails.quick.questionnaire') }}</strong>
+              <span>{{ activityCounts.answers }}</span>
+            </button>
+            <button type="button" @click="quickView = 'comments'">
+              <strong>{{ t('adminRequestDetails.quick.comments') }}</strong>
+              <span>{{ activityCounts.comments }}</span>
+            </button>
+            <button type="button" @click="quickView = 'timeline'">
+              <strong>{{ t('adminRequestDetails.quick.timeline') }}</strong>
+              <span>{{ activityCounts.timeline }}</span>
+            </button>
+            <button type="button" @click="quickView = 'emails'">
+              <strong>{{ t('adminRequestDetails.emailActivity.title') }}</strong>
+              <span>{{ activityCounts.emails }}</span>
+            </button>
+            <button type="button" @click="quickView = 'assignments'">
+              <strong>{{ t('adminRequestDetails.quick.assignedStaff') }}</strong>
+              <span>{{ activityCounts.assignments }}</span>
+            </button>
+          </div>
+        </article>
+
+        <article class="request-command-rail-card">
+          <div class="request-command-rail-head">
+            <h2>{{ uiText('Recent activity', 'آخر النشاط') }}</h2>
+            <p>{{ uiText('Latest timeline events for this request.', 'أحدث أحداث المخطط الزمني لهذا الطلب.') }}</p>
+          </div>
+          <div v-if="recentTimelineRows.length" class="request-command-activity-list">
+            <div v-for="(row, index) in recentTimelineRows" :key="row.entry.id ?? `rail-timeline-${index}`" class="request-command-activity">
+              <strong>{{ row.entry.title || row.entry.event_type || t('adminRequestDetails.states.system') }}</strong>
+              <span>{{ timelineDateLabel(row.entry.created_at) }}</span>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ t('adminRequestDetails.states.noTimelineEvents') }}</p>
+        </article>
       </div>
     </template>
 

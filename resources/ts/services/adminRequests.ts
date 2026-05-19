@@ -50,6 +50,42 @@ export type RequestEmailLog = {
   }>
 }
 
+export type RequestAgentAssignment = {
+  id: number
+  agent_id: number
+  bank_id?: number | null
+  assigned_by?: number | { id: number; name: string; email?: string | null } | null
+  is_active: boolean
+  assigned_at?: string | null
+  unassigned_at?: string | null
+  agent?: {
+    id: number
+    name: string
+    email?: string | null
+    phone?: string | null
+    company_name?: string | null
+    bank_id?: number | null
+  } | null
+  bank?: {
+    id: number
+    name: string
+    short_name?: string | null
+    code?: string | null
+  } | null
+  assignedBy?: { id: number; name: string; email?: string | null } | null
+  allowed_documents?: Array<{
+    id: number
+    document_key: string
+    document_type: string
+    document_id?: number | null
+    group_label?: string | null
+    document_label?: string | null
+    file_name?: string | null
+    file_path?: string | null
+    mime_type?: string | null
+  }>
+}
+
 export type FinanceRequestDetail = AdminRequestListItem & {
   assignments?: Array<{
     id: number
@@ -115,6 +151,7 @@ export type FinanceRequestDetail = AdminRequestListItem & {
     admin_commercial_contract_path?: string | null
   } | null
   emails?: RequestEmailLog[]
+  agent_assignments?: RequestAgentAssignment[]
 }
 
 export type AdminRequestStaffQuestion = {
@@ -126,6 +163,8 @@ export type AdminRequestStaffQuestion = {
   status?: string | null
   answer_text?: string | null
   answer_json?: string[] | null
+  answered_by?: number | null
+  answered_at?: string | null
   template?: {
     id: number
     question_text_en?: string | null
@@ -136,6 +175,7 @@ export type AdminRequestStaffQuestion = {
   } | null
   assigned_staff?: { id: number; name: string; email?: string | null } | null
   asker?: { id: number; name: string; email?: string | null } | null
+  answerer?: { id: number; name: string; email?: string | null } | null
 }
 
 export async function listNewRequests(params?: { queue?: 'all' | 'pending' | 'contract'; page?: number; per_page?: number }) {

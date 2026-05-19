@@ -310,6 +310,139 @@ const summaryStatItems = computed(() => [
   },
 ])
 
+const commandWorkflowSteps = computed(() => {
+  const stage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+  const groups = [
+    {
+      key: 'submitted',
+      label: uiText('Submitted', 'تم الإرسال'),
+      stages: ['questionnaire', 'submitted_for_review'],
+    },
+    {
+      key: 'review',
+      label: uiText('Admin Review', 'مراجعة الإدارة'),
+      stages: ['review'],
+    },
+    {
+      key: 'contract',
+      label: uiText('Contract', 'العقد'),
+      stages: [
+        'contract',
+        'admin_contract_preparation',
+        'awaiting_client_signature',
+        'awaiting_client_commercial_registration_upload',
+        'awaiting_admin_commercial_registration_upload',
+      ],
+    },
+    {
+      key: 'staff',
+      label: uiText('Staff Assignment', 'إسناد الموظفين'),
+      stages: ['awaiting_staff_assignment', 'assigned_to_staff'],
+    },
+    {
+      key: 'documents',
+      label: uiText('Documents', 'المستندات'),
+      stages: ['document_collection', 'awaiting_client_documents', 'awaiting_additional_documents', 'client_update_requested'],
+    },
+    {
+      key: 'understudy',
+      label: uiText('Understudy', 'الدراسة'),
+      stages: ['understudy', 'awaiting_staff_answers', 'awaiting_understudy_review'],
+    },
+    {
+      key: 'bank',
+      label: uiText('Bank Agent', 'وكيل البنك'),
+      stages: ['awaiting_agent_assignment', 'processing', 'ready_for_processing'],
+    },
+    {
+      key: 'final',
+      label: uiText('Final Approval', 'الاعتماد النهائي'),
+      stages: ['accepted', 'completed'],
+    },
+  ]
+
+  let currentIndex = groups.findIndex((group) => group.stages.includes(stage))
+  if (currentIndex === -1 && ['rejected', 'blocked', 'cancelled'].includes(stage)) currentIndex = groups.length - 1
+  if (currentIndex === -1) currentIndex = 0
+
+  return groups.map((group, index) => ({
+    ...group,
+    state: index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'waiting',
+  }))
+})
+
+const commandProgressPercent = computed(() => {
+  const currentIndex = commandWorkflowSteps.value.findIndex((step) => step.state === 'current')
+  if (currentIndex < 0) return 0
+  return Math.round((currentIndex / Math.max(commandWorkflowSteps.value.length - 1, 1)) * 100)
+})
+
+const staffNextAction = computed(() => {
+  const stage = String(requestItem.value?.workflow_stage || '').toLowerCase()
+
+  if (activeUpdateBatch.value) {
+    return {
+      title: uiText('Handle client update request', 'معالجة طلب تحديث العميل'),
+      body: uiText('Review the open correction request and follow up on any files or answers still pending from the client.', 'راجع طلب التصحيح المفتوح وتابع أي ملفات أو إجابات ما زالت بانتظار العميل.'),
+      tone: 'warning',
+    }
+  }
+
+  if (pendingRequiredCount.value > 0 && ['document_collection', 'awaiting_client_documents', 'awaiting_additional_documents'].includes(stage)) {
+    return {
+      title: uiText('Complete required documents', 'إكمال المستندات المطلوبة'),
+      body: uiText('Upload files on behalf of the client or request changes where uploaded documents are not usable.', 'ارفع الملفات نيابة عن العميل أو اطلب تعديلات عندما تكون المستندات المرفوعة غير صالحة.'),
+      tone: 'warning',
+    }
+  }
+
+  if (understudySectionVisible.value) {
+    return understudyQuestionsCompleted.value
+      ? {
+          title: uiText('Submit the study package', 'إرسال حزمة الدراسة'),
+          body: uiText('All required study answers are ready. Add the study note and submit the package to admin.', 'جميع إجابات الدراسة الإلزامية جاهزة. أضف ملاحظة الدراسة وأرسل الحزمة إلى الإدارة.'),
+          tone: 'success',
+        }
+      : {
+          title: uiText('Answer study questions', 'الإجابة على أسئلة الدراسة'),
+          body: uiText('Complete every required study answer before the request can move to admin review.', 'أكمل كل إجابة إلزامية في الدراسة قبل انتقال الطلب إلى مراجعة الإدارة.'),
+          tone: 'info',
+        }
+  }
+
+  if (emailComposerVisible.value) {
+    return {
+      title: uiText('Communicate with bank agent', 'التواصل مع وكيل البنك'),
+      body: uiText('Use the approved bank-agent route and include only the files allowed by admin.', 'استخدم مسار وكيل البنك المعتمد وأرفق فقط الملفات التي سمحت بها الإدارة.'),
+      tone: 'info',
+    }
+  }
+
+  return {
+    title: uiText('Monitor assigned work', 'متابعة العمل المسند'),
+    body: uiText('No urgent staff action is required right now. Keep an eye on comments, files, and email history.', 'لا يوجد إجراء عاجل للموظف حالياً. تابع التعليقات والملفات وسجل البريد.'),
+    tone: 'muted',
+  }
+})
+
+const recentStaffActivity = computed(() => {
+  const comments = (requestItem.value?.comments ?? []).slice(0, 2).map((comment: any) => ({
+    title: comment.user?.name || uiText('Internal comment', 'تعليق داخلي'),
+    body: comment.comment_text || uiText('Comment added', 'تمت إضافة تعليق'),
+    date: comment.created_at,
+  }))
+
+  const emails = (requestItem.value?.emails ?? []).slice(0, 2).map((email: any) => ({
+    title: email.subject || uiText('Email sent', 'تم إرسال بريد'),
+    body: readableEmailDeliveryStatus(email.delivery_status),
+    date: email.sent_at || email.created_at,
+  }))
+
+  return [...comments, ...emails]
+    .sort((a, b) => Date.parse(b.date || '') - Date.parse(a.date || ''))
+    .slice(0, 3)
+})
+
 function stageMeta(stage: string | null | undefined) {
   return getRequestWorkflowStageMeta(stage)
 }
@@ -443,6 +576,25 @@ function studyQuestionStatusClass(question: StaffStudyQuestion) {
   if (key === 'closed') return 'client-badge client-badge--green'
   if (key === 'answered') return 'client-badge client-badge--blue'
   return 'client-badge client-badge--amber'
+}
+
+function studyQuestionAnswerAudit(question: StaffStudyQuestion) {
+  const answererName = String(question.answerer?.name || '').trim()
+  const answeredAt = question.answered_at ? readableDateTime(question.answered_at) : ''
+
+  if (answererName && answeredAt) {
+    return uiText(`Answered by ${answererName} · ${answeredAt}`, `تمت الإجابة بواسطة ${answererName} · ${answeredAt}`)
+  }
+
+  if (answererName) {
+    return uiText(`Answered by ${answererName}`, `تمت الإجابة بواسطة ${answererName}`)
+  }
+
+  if (answeredAt) {
+    return uiText(`Answered on ${answeredAt}`, `تمت الإجابة بتاريخ ${answeredAt}`)
+  }
+
+  return ''
 }
 
 async function saveStudyQuestionAnswer(question: StaffStudyQuestion) {
@@ -925,6 +1077,29 @@ onMounted(load)
 
     <template #loading>{{ t('staffRequestDetails.states.loading') }}</template>
 
+    <template #workflow>
+      <section class="request-command-workflow" aria-label="Request workflow">
+        <div class="request-command-workflow__bar">
+          <div>
+            <span>{{ uiText('Workflow progress', 'تقدم سير العمل') }}</span>
+            <strong>{{ commandProgressPercent }}%</strong>
+          </div>
+          <p>{{ uiText('The assigned staff can see the current operational stage and the exact next task without scanning the full page.', 'يمكن للموظف المسند رؤية المرحلة الحالية والمهمة التالية بدون البحث في الصفحة بالكامل.') }}</p>
+        </div>
+        <ol class="request-command-stepper">
+          <li
+            v-for="step in commandWorkflowSteps"
+            :key="step.key"
+            class="request-command-step"
+            :class="`is-${step.state}`"
+          >
+            <span>{{ step.state === 'done' ? uiText('Done', 'تم') : step.state === 'current' ? uiText('Current', 'الحالي') : uiText('Next', 'التالي') }}</span>
+            <strong>{{ step.label }}</strong>
+          </li>
+        </ol>
+      </section>
+    </template>
+
     <template #summary>
       <div class="request-summary-stack">
         <RequestSummaryStatGrid :items="summaryStatItems" />
@@ -955,6 +1130,23 @@ onMounted(load)
 
     <template #main>
       <div class="request-workspace-stack">
+      <article class="request-command-active-stage">
+        <div>
+          <span>{{ stageMeta(requestItem?.workflow_stage).label }}</span>
+          <h2>{{ staffNextAction.title }}</h2>
+          <p>{{ staffNextAction.body }}</p>
+        </div>
+        <div class="request-command-active-actions">
+          <button v-if="canSubmitUnderstudyPackage && understudySectionVisible" type="button" class="primary-btn" :disabled="submittingUnderstudyState || understudyLocked" @click="submitStudyToAdmin">
+            {{ submittingUnderstudyState ? uiText('Submitting...', 'جارٍ الإرسال...') : uiText('Submit to admin', 'إرسال إلى الإدارة') }}
+          </button>
+          <RouterLink v-else-if="emailComposerVisible" :to="{ name: 'staff-request-send-email', params: { id: requestId } }" class="primary-btn">{{ uiText('Send email', 'إرسال بريد') }}</RouterLink>
+          <button v-else-if="pendingRequiredCount > 0" type="button" class="ghost-btn" @click="quickView = 'attachments'">
+            {{ uiText('Review files', 'مراجعة الملفات') }}
+          </button>
+        </div>
+      </article>
+
       <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
 
       <article class="panel-card request-quick-panel">
@@ -1213,6 +1405,9 @@ onMounted(load)
                         <template v-if="question.is_required">{{ uiText('Required question', 'سؤال إلزامي') }}</template>
                         <template v-else>{{ uiText('Optional question', 'سؤال اختياري') }}</template>
                         <template v-if="question.assigned_staff?.name"> · Assigned to {{ question.assigned_staff.name }}</template>
+                      </p>
+                      <p v-if="studyQuestionAnswerAudit(question)" class="client-subtext">
+                        {{ studyQuestionAnswerAudit(question) }}
                       </p>
                     </div>
                     <span :class="studyQuestionStatusClass(question)">{{ studyQuestionStatusLabel(question) }}</span>
@@ -1664,6 +1859,66 @@ onMounted(load)
               <button type="button" class="primary-btn" @click="attachmentPickerOpen = false">{{ uiText('Done', 'تم') }}</button>
             </div>
           </AdminQuickViewModal>
+      </div>
+    </template>
+
+    <template #side>
+      <div class="request-command-rail-stack">
+        <article class="request-command-next" :class="`is-${staffNextAction.tone}`">
+          <span>{{ uiText('Next required action', 'الإجراء المطلوب التالي') }}</span>
+          <h2>{{ staffNextAction.title }}</h2>
+          <p>{{ staffNextAction.body }}</p>
+          <div class="request-command-pulse">
+            {{ uiText('Work-focused guidance', 'إرشاد عملي') }}
+          </div>
+        </article>
+
+        <article class="request-command-rail-card">
+          <div class="request-command-rail-head">
+            <h2>{{ uiText('Quick views', 'عروض سريعة') }}</h2>
+            <p>{{ uiText('Open read-only request details without losing your place.', 'افتح تفاصيل الطلب للقراءة فقط بدون فقدان مكانك.') }}</p>
+          </div>
+          <div class="request-command-quick-grid">
+            <button v-if="activeUpdateBatch" type="button" @click="quickView = 'updateBatch'">
+              <strong>{{ uiText('Updates', 'التحديثات') }}</strong>
+              <span>{{ activeUpdateBatch.items?.length || 0 }}</span>
+            </button>
+            <button type="button" @click="quickView = 'attachments'">
+              <strong>{{ uiText('Files', 'الملفات') }}</strong>
+              <span>{{ activityCounts.attachments }}</span>
+            </button>
+            <button type="button" @click="quickView = 'answers'">
+              <strong>{{ t('staffRequestDetails.sections.questionnaireAnswers') }}</strong>
+              <span>{{ activityCounts.answers }}</span>
+            </button>
+            <button type="button" @click="quickView = 'comments'">
+              <strong>{{ t('staffRequestDetails.sections.recentInternalHistory') }}</strong>
+              <span>{{ activityCounts.comments }}</span>
+            </button>
+            <button type="button" @click="quickView = 'additionalDocuments'">
+              <strong>{{ t('staffRequestDetails.sections.requestedAdditionalDocuments') }}</strong>
+              <span>{{ activityCounts.additionalDocuments }}</span>
+            </button>
+            <RouterLink :to="{ name: 'staff-request-emails', params: { id: requestId } }">
+              <strong>{{ uiText('Emails', 'البريد') }}</strong>
+              <span>{{ activityCounts.emails }}</span>
+            </RouterLink>
+          </div>
+        </article>
+
+        <article class="request-command-rail-card">
+          <div class="request-command-rail-head">
+            <h2>{{ uiText('Recent activity', 'آخر النشاط') }}</h2>
+            <p>{{ uiText('Latest notes and email events for this request.', 'أحدث الملاحظات وأحداث البريد لهذا الطلب.') }}</p>
+          </div>
+          <div v-if="recentStaffActivity.length" class="request-command-activity-list">
+            <div v-for="(item, index) in recentStaffActivity" :key="`${item.date || 'activity'}-${index}`" class="request-command-activity">
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.body }}<template v-if="item.date"> · {{ readableDateTime(item.date) }}</template></span>
+            </div>
+          </div>
+          <p v-else class="empty-state">{{ uiText('No recent activity yet.', 'لا يوجد نشاط حديث بعد.') }}</p>
+        </article>
       </div>
     </template>
 

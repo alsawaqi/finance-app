@@ -227,10 +227,64 @@ class FinanceRequestAgentAssignmentService
         if (! in_array($financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage, [
             FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
             FinanceRequestWorkflowStage::PROCESSING->value,
+            FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
         ], true)) {
             throw ValidationException::withMessages([
                 'workflow_stage' => 'Allowed bank agents can only be configured after the understudy has been approved.',
             ]);
+        }
+
+        $normalizedAssignments = collect($assignments)
+            ->map(function (array $assignment) {
+                $documentKeys = collect($assignment['document_keys'] ?? [])
+                    ->map(fn ($value) => trim((string) $value))
+                    ->filter(fn ($value) => $value !== '')
+                    ->unique()
+                    ->values();
+
+                return [
+                    'agent_id' => (int) $assignment['agent_id'],
+                    'document_keys' => $documentKeys->all(),
+                ];
+            })
+            ->values();
+
+        if ($normalizedAssignments->isEmpty()) {
+            DB::transaction(function () use ($financeRequest, $actorUserId, $reviewNote) {
+                $existingAssignments = $financeRequest->agentAssignments()
+                    ->where('is_active', true)
+                    ->get();
+
+                foreach ($existingAssignments as $existingAssignment) {
+                    $existingAssignment->update([
+                        'is_active' => false,
+                        'unassigned_at' => now(),
+                    ]);
+                }
+
+                $financeRequest->status = FinanceRequestStatus::ACTIVE;
+                $financeRequest->workflow_stage = FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT;
+                $financeRequest->latest_activity_at = now();
+                $financeRequest->save();
+
+                RequestTimelineLogger::log(
+                    $financeRequest,
+                    'request.allowed_agents_configured',
+                    $actorUserId,
+                    'Allowed bank agents cleared',
+                    'Allowed bank agents cleared',
+                    $reviewNote ?: 'The admin removed every active bank-agent assignment for this request.',
+                    $reviewNote ?: 'The admin removed every active bank-agent assignment for this request.',
+                    [
+                        'agents_count' => 0,
+                        'documents_count' => 0,
+                        'assignments' => [],
+                        'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
+                    ],
+                );
+            });
+
+            return $financeRequest->fresh();
         }
 
         $availableDocuments = $this->buildAvailableDocuments($financeRequest)->keyBy('key');
@@ -241,25 +295,24 @@ class FinanceRequestAgentAssignmentService
             ]);
         }
 
-        $normalizedAssignments = collect($assignments)
+        $normalizedAssignments = $normalizedAssignments
             ->map(function (array $assignment) use ($availableDocuments) {
-                $documentKeys = collect($assignment['document_keys'] ?? [])
-                    ->map(fn ($value) => trim((string) $value))
-                    ->filter(fn ($value) => $value !== '')
-                    ->unique()
-                    ->values();
+                $missingDocumentKey = collect($assignment['document_keys'])
+                    ->first(fn (string $key) => ! $availableDocuments->has($key));
 
-                $missingDocumentKey = $documentKeys->first(fn (string $key) => ! $availableDocuments->has($key));
                 if ($missingDocumentKey !== null) {
                     throw ValidationException::withMessages([
                         'assignments' => "The selected document [{$missingDocumentKey}] is not available on this request.",
                     ]);
                 }
 
-                return [
-                    'agent_id' => (int) $assignment['agent_id'],
-                    'document_keys' => $documentKeys->all(),
-                ];
+                if (empty($assignment['document_keys'])) {
+                    throw ValidationException::withMessages([
+                        'assignments' => 'Each selected agent must have at least one linked request file.',
+                    ]);
+                }
+
+                return $assignment;
             })
             ->values();
 

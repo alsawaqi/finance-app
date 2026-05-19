@@ -6,6 +6,7 @@ use App\Enums\FinanceRequestPriority;
 use App\Enums\FinanceRequestStatus;
 use App\Enums\FinanceRequestUnderstudyStatus;
 use App\Enums\FinanceRequestWorkflowStage;
+use App\Support\FinanceRequestWorkflowTransitionGuard;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class FinanceRequest extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::saving(function (FinanceRequest $financeRequest): void {
+            if (! $financeRequest->exists || ! $financeRequest->isDirty('workflow_stage')) {
+                return;
+            }
+
+            FinanceRequestWorkflowTransitionGuard::assertCanTransition(
+                $financeRequest->getRawOriginal('workflow_stage'),
+                $financeRequest->workflow_stage,
+            );
+        });
+    }
 
     protected $fillable = [
         'reference_number',

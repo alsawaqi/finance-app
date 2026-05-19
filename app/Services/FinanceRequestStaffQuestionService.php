@@ -96,6 +96,7 @@ class FinanceRequestStaffQuestionService
         $staffQuestion->forceFill([
             'answer_text' => $answerText,
             'answer_json' => $answerJson,
+            'answered_by' => $actor->id,
             'status' => FinanceRequestStaffQuestionStatus::ANSWERED,
             'answered_at' => now(),
             'closed_at' => null,
@@ -117,6 +118,8 @@ class FinanceRequestStaffQuestionService
                 'staff_question_id' => $staffQuestion->id,
                 'template_id' => $staffQuestion->finance_staff_question_template_id,
                 'assigned_to' => $staffQuestion->assigned_to,
+                'answered_by' => $actor->id,
+                'answered_by_name' => $actor->name,
                 'question_type' => $staffQuestion->question_type,
             ],
         );
@@ -124,6 +127,7 @@ class FinanceRequestStaffQuestionService
         return $staffQuestion->fresh([
             'asker:id,name,email',
             'assignedStaff:id,name,email',
+            'answerer:id,name,email',
             'template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
         ]);
     }
@@ -202,6 +206,7 @@ class FinanceRequestStaffQuestionService
         return $staffQuestion->fresh([
             'asker:id,name,email',
             'assignedStaff:id,name,email',
+            'answerer:id,name,email',
             'template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
         ]);
     }

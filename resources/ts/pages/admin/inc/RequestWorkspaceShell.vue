@@ -23,6 +23,8 @@ const props = withDefaults(defineProps<{
 const showBlockingError = computed(() => !props.loading && !props.hasRecord && Boolean(props.errorMessage))
 const showInlineError = computed(() => Boolean(props.errorMessage) && props.hasRecord)
 const slots = useSlots()
+const hasSummarySlot = computed(() => Boolean(slots.summary))
+const hasWorkflowSlot = computed(() => Boolean(slots.workflow))
 const hasSideSlot = computed(() => Boolean(slots.side))
 const { locale } = useI18n()
 const loadingFallback = computed(() => (locale.value === 'ar' ? 'جارٍ التحميل...' : 'Loading...'))
@@ -47,14 +49,27 @@ const loadingFallback = computed(() => (locale.value === 'ar' ? 'جارٍ الت
     <p v-if="showInlineError" class="error-state">{{ errorMessage }}</p>
 
     <template v-if="!loading && hasRecord">
-      <slot name="summary" />
+      <slot v-if="hasWorkflowSlot" name="workflow" />
 
-      <div class="admin-workspace-layout" :class="[layoutClass, { 'admin-workspace-layout--single': !hasSideSlot }]">
-        <div class="admin-workspace-main">
+      <div
+        class="request-command-center-grid"
+        :class="[
+          layoutClass,
+          {
+            'request-command-center-grid--single': !hasSideSlot,
+            'request-command-center-grid--no-summary': !hasSummarySlot,
+          },
+        ]"
+      >
+        <aside v-if="hasSummarySlot" class="request-command-snapshot">
+          <slot name="summary" />
+        </aside>
+
+        <div class="admin-workspace-main request-command-main">
           <slot name="main" />
         </div>
 
-        <aside v-if="hasSideSlot" class="admin-workspace-side">
+        <aside v-if="hasSideSlot" class="admin-workspace-side request-command-rail">
           <slot name="side" />
         </aside>
       </div>

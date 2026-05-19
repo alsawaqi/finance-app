@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request Details Command Center Mockup</title>
+  <style>
+    :root {
+      --page: #f6f7f4;
+      --surface: #ffffff;
+      --surface-soft: #f1f4ef;
+      --ink: #17201c;
+      --muted: #68756e;
+      --line: #dbe2dc;
+      --teal: #14756f;
+      --teal-soft: #e1f1ee;
+      --green: #2f7d4a;
+      --amber: #a76612;
+      --amber-soft: #fff3da;
+      --coral: #bf4e3d;
+      --coral-soft: #fde9e5;
+      --blue: #315f86;
+      --blue-soft: #e5eef5;
+      --shadow: 0 18px 50px rgba(23, 32, 28, 0.09);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(90deg, rgba(20, 117, 111, 0.04), transparent 38%),
+        var(--page);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    .mockup-frame {
+      width: min(1480px, calc(100vw - 32px));
+      margin: 20px auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .preview-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      background: #111915;
+      color: white;
+    }
+
+    .preview-toolbar h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .preview-toolbar p {
+      margin: 3px 0 0;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 12px;
+    }
+
+    .role-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .role-toggle button {
+      border: 0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.72);
+      cursor: pointer;
+      transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+    }
+
+    .role-toggle button.is-active {
+      background: white;
+      color: #111915;
+      transform: translateY(-1px);
+    }
+
+    .workspace {
+      min-height: 840px;
+      background: var(--page);
+    }
+
+    .case-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: center;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(246, 247, 244, 0.94);
+      backdrop-filter: blur(16px);
+    }
+
+    .case-title-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .case-title-row h2 {
+      margin: 0;
+      font-size: clamp(20px, 2vw, 30px);
+      line-height: 1.1;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+
+    .case-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 30px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .pill::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--teal);
+    }
+
+    .pill.stage::before {
+      background: var(--amber);
+    }
+
+    .pill.owner::before {
+      background: var(--blue);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 170ms ease, box-shadow 170ms ease, border-color 170ms ease, background 170ms ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(20, 117, 111, 0.35);
+      box-shadow: 0 10px 24px rgba(23, 32, 28, 0.08);
+    }
+
+    .btn.primary {
+      border-color: #0f625d;
+      background: var(--teal);
+      color: white;
+    }
+
+    .btn.warn {
+      border-color: rgba(167, 102, 18, 0.36);
+      background: var(--amber-soft);
+      color: #6f410a;
+    }
+
+    .workflow-band {
+      padding: 14px 22px 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .stepper {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(94px, 1fr));
+      gap: 6px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .step {
+      position: relative;
+      min-height: 74px;
+      padding: 10px 10px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-soft);
+      overflow: hidden;
+    }
+
+    .step::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 4px;
+      background: transparent;
+    }
+
+    .step.done::after {
+      background: var(--green);
+    }
+
+    .step.current {
+      border-color: rgba(20, 117, 111, 0.5);
+      background: var(--teal-soft);
+      animation: currentStepIn 420ms ease both;
+    }
+
+    .step.current::after {
+      background: var(--teal);
+    }
+
+    .step.waiting {
+      color: var(--muted);
+    }
+
+    .step small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .step strong {
+      display: block;
+      margin-top: 5px;
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 330px;
+      gap: 16px;
+      padding: 18px 22px 24px;
+      align-items: start;
+    }
+
+    .snapshot,
+    .work-area,
+    .action-rail {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 10px 30px rgba(23, 32, 28, 0.04);
+    }
+
+    .snapshot,
+    .action-rail {
+      position: sticky;
+      top: 128px;
+      max-height: calc(100vh - 150px);
+      overflow: auto;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-head h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 850;
+    }
+
+    .section-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .snapshot-list {
+      display: grid;
+      gap: 1px;
+      background: var(--line);
+    }
+
+    .snapshot-row {
+      display: grid;
+      gap: 4px;
+      padding: 12px 16px;
+      background: var(--surface);
+    }
+
+    .snapshot-row span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .snapshot-row strong {
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .progress-block {
+      padding: 16px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .progress-track {
+      height: 9px;
+      margin-top: 8px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      width: 72%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--teal);
+      animation: fillIn 900ms ease both;
+    }
+
+    .work-area {
+      min-height: 690px;
+      overflow: hidden;
+    }
+
+    .workspace-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+
+    .workspace-tabs button {
+      flex: 1;
+      min-height: 42px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 850;
+      cursor: pointer;
+      transition: background 180ms ease, color 180ms ease;
+    }
+
+    .workspace-tabs button.is-active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 6px 16px rgba(23, 32, 28, 0.05);
+    }
+
+    .role-panel {
+      display: none;
+      animation: fadeSlide 320ms ease both;
+    }
+
+    .role-panel.is-active {
+      display: block;
+    }
+
+    .active-stage {
+      padding: 20px;
+    }
+
+    .stage-banner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 18px;
+      border: 1px solid rgba(20, 117, 111, 0.18);
+      border-radius: 8px;
+      background: var(--teal-soft);
+    }
+
+    .stage-banner h3 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .stage-banner p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 720px;
+    }
+
+    .stage-action-stack {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .split-workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .task-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .task-panel h4 {
+      margin: 0;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .task-list {
+      display: grid;
+      gap: 0;
+    }
+
+    .task-row {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px 16px;
+      border-top: 1px solid var(--line);
+      transition: background 160ms ease;
+    }
+
+    .task-row:first-child {
+      border-top: 0;
+    }
+
+    .task-row:hover {
+      background: var(--surface-soft);
+    }
+
+    .task-marker {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--green);
+      color: white;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .task-marker.pending {
+      background: var(--amber);
+    }
+
+    .task-marker.blocked {
+      background: var(--coral);
+    }
+
+    .task-row strong {
+      display: block;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .task-row span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .micro-button {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--ink);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .document-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 16px;
+    }
+
+    .doc-tile {
+      min-height: 92px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-soft);
+    }
+
+    .doc-tile strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .doc-tile span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .composer {
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+    }
+
+    .composer input,
+    .composer textarea,
+    .composer select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      padding: 11px 12px;
+      outline: 0;
+      transition: border-color 170ms ease, box-shadow 170ms ease;
+    }
+
+    .composer textarea {
+      min-height: 130px;
+      resize: vertical;
+    }
+
+    .composer input:focus,
+    .composer textarea:focus,
+    .composer select:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(20, 117, 111, 0.12);
+    }
+
+    .rail-card {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .rail-card h3,
+    .rail-card h4 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .rail-card p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .next-action {
+      background: var(--amber-soft);
+    }
+
+    .action-pulse {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      color: #6f410a;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .action-pulse::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--amber);
+      animation: pulse 1400ms ease-in-out infinite;
+    }
+
+    .quick-rail {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .quick-rail button {
+      min-height: 58px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      text-align: left;
+      padding: 10px;
+      cursor: pointer;
+      transition: transform 170ms ease, border-color 170ms ease, background 170ms ease;
+    }
+
+    .quick-rail button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(20, 117, 111, 0.35);
+      background: var(--teal-soft);
+    }
+
+    .quick-rail strong {
+      display: block;
+      font-size: 12px;
+      line-height: 1.25;
+    }
+
+    .quick-rail span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .activity-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .activity {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+
+    .activity::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      margin-top: 4px;
+      border-radius: 999px;
+      background: var(--teal);
+    }
+
+    .activity strong {
+      display: block;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .activity span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: none;
+      background: rgba(17, 25, 21, 0.28);
+      backdrop-filter: blur(2px);
+    }
+
+    .drawer-backdrop.is-open {
+      display: block;
+      animation: fadeIn 170ms ease both;
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      z-index: 90;
+      width: min(520px, 100vw);
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      background: var(--surface);
+      border-left: 1px solid var(--line);
+      box-shadow: -18px 0 55px rgba(23, 32, 28, 0.18);
+      transform: translateX(104%);
+      transition: transform 240ms ease;
+    }
+
+    .drawer.is-open {
+      transform: translateX(0);
+    }
+
+    .drawer-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .drawer-head h3 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .drawer-head p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .drawer-content {
+      overflow: auto;
+      padding: 16px;
+      background: var(--page);
+    }
+
+    .drawer-item {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      margin-bottom: 10px;
+    }
+
+    .drawer-item strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .drawer-item span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.42); opacity: 0.54; }
+    }
+
+    @keyframes fillIn {
+      from { width: 8%; }
+      to { width: 72%; }
+    }
+
+    @keyframes currentStepIn {
+      from { transform: translateY(5px); }
+      to { transform: translateY(0); }
+    }
+
+    @media (max-width: 1180px) {
+      .workspace-grid {
+        grid-template-columns: 240px minmax(0, 1fr);
+      }
+
+      .action-rail {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: none;
+      }
+
+      .stepper {
+        grid-template-columns: repeat(4, minmax(120px, 1fr));
+      }
+    }
+
+    @media (max-width: 800px) {
+      .mockup-frame {
+        width: 100vw;
+        margin: 0;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+      }
+
+      .preview-toolbar,
+      .case-header,
+      .stage-banner,
+      .split-workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace-grid {
+        grid-template-columns: 1fr;
+        padding: 14px;
+      }
+
+      .snapshot {
+        position: static;
+        max-height: none;
+      }
+
+      .stepper {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 6px;
+      }
+
+      .step {
+        min-width: 155px;
+      }
+
+      .document-strip {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="mockup-frame">
+    <header class="preview-toolbar">
+      <div>
+        <h1>Request Details Command Center - sample redesign</h1>
+        <p>Standalone mockup for admin and staff request-detail pages. This is not wired to production data.</p>
+      </div>
+      <div class="role-toggle" aria-label="Preview role">
+        <button class="is-active" type="button" data-role="admin">Admin view</button>
+        <button type="button" data-role="staff">Staff view</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <header class="case-header">
+        <div>
+          <div class="case-title-row">
+            <h2>REQ-2026-0148</h2>
+            <span class="pill stage" id="header-stage">Understudy Review</span>
+            <span class="pill owner">Lead: Fatima Al-Harthi</span>
+          </div>
+          <div class="case-meta">
+            <span>Al Noor Trading LLC</span>
+            <span>Commercial finance</span>
+            <span>OMR 185,000</span>
+            <span>Client: Yousuf Ahmed</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn" type="button" data-drawer="timeline">Timeline</button>
+          <button class="btn primary" id="primary-action" type="button">Approve study</button>
+        </div>
+      </header>
+
+      <section class="workflow-band" aria-label="Request workflow">
+        <ol class="stepper">
+          <li class="step done"><small>Done</small><strong>Submitted</strong></li>
+          <li class="step done"><small>Done</small><strong>Admin Review</strong></li>
+          <li class="step done"><small>Done</small><strong>Contract</strong></li>
+          <li class="step done"><small>Done</small><strong>Staff Assignment</strong></li>
+          <li class="step done"><small>Done</small><strong>Documents</strong></li>
+          <li class="step current"><small>Current</small><strong id="current-step-label">Understudy</strong></li>
+          <li class="step waiting"><small>Next</small><strong>Bank Agent</strong></li>
+          <li class="step waiting"><small>Later</small><strong>Final Approval</strong></li>
+        </ol>
+      </section>
+
+      <section class="workspace-grid">
+        <aside class="snapshot" aria-label="Request snapshot">
+          <div class="section-head">
+            <div>
+              <h3>Request snapshot</h3>
+              <p>Permanent case facts, always visible.</p>
+            </div>
+          </div>
+          <div class="snapshot-list">
+            <div class="snapshot-row"><span>Client</span><strong>Yousuf Ahmed</strong></div>
+            <div class="snapshot-row"><span>Company</span><strong>Al Noor Trading LLC</strong></div>
+            <div class="snapshot-row"><span>Finance type</span><strong>Working capital facility</strong></div>
+            <div class="snapshot-row"><span>Phone / email</span><strong>+968 9000 1200<br>client@example.com</strong></div>
+            <div class="snapshot-row"><span>Contract</span><strong>Signed by both parties</strong></div>
+            <div class="snapshot-row"><span>Commercial file</span><strong>Client and admin files uploaded</strong></div>
+          </div>
+          <div class="progress-block">
+            <div class="progress-label">
+              <span>Request completion</span>
+              <span>72%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill"></div></div>
+          </div>
+        </aside>
+
+        <section class="work-area" aria-label="Active request work area">
+          <div class="workspace-tabs">
+            <button class="is-active" type="button">Active work</button>
+            <button type="button" data-drawer="files">Files</button>
+            <button type="button" data-drawer="answers">Answers</button>
+            <button type="button" data-drawer="comments">Comments</button>
+          </div>
+
+          <div class="role-panel is-active" data-panel="admin">
+            <div class="active-stage">
+              <div class="stage-banner">
+                <div>
+                  <h3>Admin: Review staff understudy</h3>
+                  <p>The page focuses on the current decision. Supporting files, timeline, comments, and answers are one click away in drawers.</p>
+                </div>
+                <div class="stage-action-stack">
+                  <button class="btn warn" type="button">Return for edits</button>
+                  <button class="btn primary" type="button">Approve for bank agent</button>
+                </div>
+              </div>
+
+              <div class="split-workspace">
+                <div class="task-panel">
+                  <h4>Study answers needing review</h4>
+                  <div class="task-list">
+                    <div class="task-row">
+                      <span class="task-marker">OK</span>
+                      <div><strong>Business activity and financing purpose</strong><span>Answered by Fatima. Includes trade cycle, supplier terms, and repayment source.</span></div>
+                      <button class="micro-button" type="button">Open</button>
+                    </div>
+                    <div class="task-row">
+                      <span class="task-marker pending">2</span>
+                      <div><strong>Risk notes and missing documents</strong><span>One note requires admin confirmation before moving forward.</span></div>
+                      <button class="micro-button" type="button">Review</button>
+                    </div>
+                    <div class="task-row">
+                      <span class="task-marker">OK</span>
+                      <div><strong>Recommended bank route</strong><span>Staff selected two possible banks and added reason for priority.</span></div>
+                      <button class="micro-button" type="button">Open</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="task-panel">
+                  <h4>Decision note</h4>
+                  <div class="composer">
+                    <textarea placeholder="Add the admin review note before approving or returning the study.">Answers are complete. Proceed with bank-agent assignment after confirming the risk note.</textarea>
+                    <button class="btn primary" type="button">Save review decision</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="split-workspace">
+                <div class="task-panel">
+                  <h4>Key request files</h4>
+                  <div class="document-strip">
+                    <div class="doc-tile"><strong>Signed contract</strong><span>PDF, both signatures</span></div>
+                    <div class="doc-tile"><strong>Commercial registration</strong><span>Client and admin versions</span></div>
+                    <div class="doc-tile"><strong>Bank statements</strong><span>Uploaded and verified</span></div>
+                  </div>
+                </div>
+                <div class="task-panel">
+                  <h4>Workflow protection</h4>
+                  <div class="task-list">
+                    <div class="task-row">
+                      <span class="task-marker">OK</span>
+                      <div><strong>Step order is valid</strong><span>No manual jump detected. Current stage matches completed actions.</span></div>
+                      <button class="micro-button" type="button">Audit</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="role-panel" data-panel="staff">
+            <div class="active-stage">
+              <div class="stage-banner">
+                <div>
+                  <h3>Staff: Complete the active work package</h3>
+                  <p>The staff page shows only what the staff member can do now: required documents, study answers, and controlled bank communication.</p>
+                </div>
+                <div class="stage-action-stack">
+                  <button class="btn" type="button">Save draft</button>
+                  <button class="btn primary" type="button">Submit to admin</button>
+                </div>
+              </div>
+
+              <div class="split-workspace">
+                <div class="task-panel">
+                  <h4>Required document checklist</h4>
+                  <div class="task-list">
+                    <div class="task-row">
+                      <span class="task-marker">OK</span>
+                      <div><strong>Commercial registration</strong><span>Uploaded by client and verified by admin.</span></div>
+                      <button class="micro-button" type="button">View</button>
+                    </div>
+                    <div class="task-row">
+                      <span class="task-marker">OK</span>
+                      <div><strong>Bank statement</strong><span>Latest file uploaded and ready for bank package.</span></div>
+                      <button class="micro-button" type="button">View</button>
+                    </div>
+                    <div class="task-row">
+                      <span class="task-marker pending">1</span>
+                      <div><strong>Supplier contract</strong><span>Optional follow-up can be requested from the client.</span></div>
+                      <button class="micro-button" type="button">Request</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="task-panel">
+                  <h4>Study package</h4>
+                  <div class="composer">
+                    <select>
+                      <option>Question 1: Financing purpose</option>
+                      <option>Question 2: Repayment source</option>
+                      <option>Question 3: Bank recommendation</option>
+                    </select>
+                    <textarea placeholder="Write the staff answer.">Client needs working capital to support purchase orders. Repayment source is receivables from confirmed customers.</textarea>
+                    <button class="btn primary" type="button">Save answer</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="split-workspace">
+                <div class="task-panel">
+                  <h4>Bank communication preview</h4>
+                  <div class="composer">
+                    <input value="Financing request package - Al Noor Trading LLC">
+                    <textarea>Dear agent, please find the request package and supporting documents for your initial review.</textarea>
+                    <button class="btn" type="button">Prepare after admin approval</button>
+                  </div>
+                </div>
+                <div class="task-panel">
+                  <h4>Follow-up tools</h4>
+                  <div class="task-list">
+                    <div class="task-row">
+                      <span class="task-marker pending">A</span>
+                      <div><strong>Ask client for more files</strong><span>Create a controlled additional-document request.</span></div>
+                      <button class="micro-button" type="button">Create</button>
+                    </div>
+                    <div class="task-row">
+                      <span class="task-marker">N</span>
+                      <div><strong>Add internal note</strong><span>Notes stay attached to the request timeline.</span></div>
+                      <button class="micro-button" type="button">Note</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="action-rail" aria-label="Action rail">
+          <div class="rail-card next-action">
+            <h3>Next required action</h3>
+            <p id="next-action-text">Admin must approve or return the staff understudy before bank-agent assignment opens.</p>
+            <span class="action-pulse">Needs attention today</span>
+          </div>
+
+          <div class="rail-card">
+            <h4>Quick views</h4>
+            <p>Support data opens in a drawer, so the main workspace stays focused.</p>
+            <div class="quick-rail">
+              <button type="button" data-drawer="files"><strong>Files</strong><span>14 items</span></button>
+              <button type="button" data-drawer="answers"><strong>Answers</strong><span>9 answers</span></button>
+              <button type="button" data-drawer="comments"><strong>Comments</strong><span>6 notes</span></button>
+              <button type="button" data-drawer="timeline"><strong>Timeline</strong><span>22 events</span></button>
+            </div>
+          </div>
+
+          <div class="rail-card">
+            <h4>Recent activity</h4>
+            <div class="activity-list">
+              <div class="activity"><div><strong>Study package submitted</strong><span>Fatima - 18 minutes ago</span></div></div>
+              <div class="activity"><div><strong>Commercial file approved</strong><span>Admin - yesterday</span></div></div>
+              <div class="activity"><div><strong>Client uploaded bank statement</strong><span>Client portal - 2 days ago</span></div></div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <h3 id="drawerTitle">Files</h3>
+        <p id="drawerSubtitle">Supporting information opens here without pushing the main work down the page.</p>
+      </div>
+      <button class="btn" type="button" id="closeDrawer">Close</button>
+    </div>
+    <div class="drawer-content" id="drawerContent"></div>
+  </aside>
+
+  <script>
+    const roleButtons = Array.from(document.querySelectorAll("[data-role]"));
+    const panels = Array.from(document.querySelectorAll("[data-panel]"));
+    const headerStage = document.getElementById("header-stage");
+    const currentStepLabel = document.getElementById("current-step-label");
+    const primaryAction = document.getElementById("primary-action");
+    const nextActionText = document.getElementById("next-action-text");
+
+    roleButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const role = button.dataset.role;
+        roleButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+        panels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.panel === role));
+
+        if (role === "staff") {
+          headerStage.textContent = "Staff Workspace";
+          currentStepLabel.textContent = "Documents + Study";
+          primaryAction.textContent = "Submit to admin";
+          nextActionText.textContent = "Staff should finish required answers and submit the study package to admin.";
+        } else {
+          headerStage.textContent = "Understudy Review";
+          currentStepLabel.textContent = "Understudy";
+          primaryAction.textContent = "Approve study";
+          nextActionText.textContent = "Admin must approve or return the staff understudy before bank-agent assignment opens.";
+        }
+      });
+    });
+
+    const drawer = document.getElementById("drawer");
+    const backdrop = document.getElementById("drawerBackdrop");
+    const closeDrawer = document.getElementById("closeDrawer");
+    const drawerTitle = document.getElementById("drawerTitle");
+    const drawerSubtitle = document.getElementById("drawerSubtitle");
+    const drawerContent = document.getElementById("drawerContent");
+
+    const drawerData = {
+      files: {
+        title: "Files",
+        subtitle: "Documents are grouped by purpose and status.",
+        items: [
+          ["Signed contract", "PDF - both parties signed - ready for bank package"],
+          ["Commercial registration", "Client file and admin-verified file are available"],
+          ["Bank statements", "Three months uploaded and reviewed"],
+          ["Shareholder ID", "Two shareholder files attached"]
+        ]
+      },
+      answers: {
+        title: "Questionnaire and study answers",
+        subtitle: "Read answers without leaving the current decision.",
+        items: [
+          ["Client financing purpose", "Working capital for confirmed purchase orders"],
+          ["Staff repayment assessment", "Repayment expected from customer receivables"],
+          ["Bank recommendation", "Start with Bank Muscat and Sohar International"]
+        ]
+      },
+      comments: {
+        title: "Internal comments",
+        subtitle: "Newest notes first, with visibility clearly separated.",
+        items: [
+          ["Admin note", "Confirm risk note before moving to bank-agent assignment"],
+          ["Staff note", "Client responded quickly and all core files are clean"],
+          ["System note", "Workflow guard allowed this transition"]
+        ]
+      },
+      timeline: {
+        title: "Timeline",
+        subtitle: "A clean audit trail of the request from submission to today.",
+        items: [
+          ["18 minutes ago", "Study package submitted by Fatima"],
+          ["Yesterday", "Commercial registration uploaded by admin"],
+          ["2 days ago", "Client uploaded required bank statement"],
+          ["4 days ago", "Contract fully signed"]
+        ]
+      }
+    };
+
+    function openDrawer(key) {
+      const data = drawerData[key] || drawerData.files;
+      drawerTitle.textContent = data.title;
+      drawerSubtitle.textContent = data.subtitle;
+      drawerContent.innerHTML = data.items.map((item) => (
+        `<div class="drawer-item"><strong>${item[0]}</strong><span>${item[1]}</span></div>`
+      )).join("");
+      drawer.classList.add("is-open");
+      backdrop.classList.add("is-open");
+      drawer.setAttribute("aria-hidden", "false");
+    }
+
+    function hideDrawer() {
+      drawer.classList.remove("is-open");
+      backdrop.classList.remove("is-open");
+      drawer.setAttribute("aria-hidden", "true");
+    }
+
+    document.querySelectorAll("[data-drawer]").forEach((button) => {
+      button.addEventListener("click", () => openDrawer(button.dataset.drawer));
+    });
+
+    closeDrawer.addEventListener("click", hideDrawer);
+    backdrop.addEventListener("click", hideDrawer);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") hideDrawer();
+    });
+  </script>
+</body>
+</html>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\ContractStatus;
+use App\Enums\FinanceRequestStatus;
 use App\Enums\FinanceRequestWorkflowStage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\AssignStaffToFinanceRequestRequest;
@@ -31,6 +32,7 @@ class AdminAssignmentController extends Controller
         ]);
 
         $perPage = (int) ($validated['per_page'] ?? 12);
+        $manageableStages = $this->assignmentManageableStages();
 
         $requestsPaginator = FinanceRequest::query()
             ->with([
@@ -57,17 +59,7 @@ class AdminAssignmentController extends Controller
                         });
                 });
             })
-            ->whereIn('workflow_stage', [
-                FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
-                FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
-                FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
-                FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
-                FinanceRequestWorkflowStage::PROCESSING->value,
-                FinanceRequestWorkflowStage::CONTRACT->value,
-                FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
-                FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
-                FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
-            ])
+            ->whereIn('workflow_stage', $manageableStages)
             ->orderByRaw(
                 "CASE
                     WHEN workflow_stage = ? THEN 0
@@ -79,18 +71,26 @@ class AdminAssignmentController extends Controller
                     WHEN workflow_stage = ? THEN 6
                     WHEN workflow_stage = ? THEN 7
                     WHEN workflow_stage = ? THEN 8
-                    ELSE 9
+                    WHEN workflow_stage = ? THEN 9
+                    WHEN workflow_stage = ? THEN 10
+                    WHEN workflow_stage = ? THEN 11
+                    WHEN workflow_stage = ? THEN 12
+                    ELSE 13
                 END",
                 [
                     FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
                     FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
                     FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+                    FinanceRequestWorkflowStage::UNDERSTUDY->value,
+                    FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value,
+                    FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW->value,
                     FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
                     FinanceRequestWorkflowStage::PROCESSING->value,
+                    FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
+                    FinanceRequestWorkflowStage::CLIENT_UPDATE_REQUESTED->value,
                     FinanceRequestWorkflowStage::CONTRACT->value,
                     FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
                     FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
-                    FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
                 ]
             )
             ->orderByDesc('latest_activity_at')
@@ -133,6 +133,12 @@ class AdminAssignmentController extends Controller
     {
         $admin = $request->user();
         $this->ensureRequestReadyForAssignment($financeRequest);
+        $currentWorkflowStage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+        $shouldMoveToDocumentCollection = in_array($currentWorkflowStage, [
+            FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
+            FinanceRequestWorkflowStage::CONTRACT->value,
+        ], true);
+        $previousPrimaryStaffId = $financeRequest->primary_staff_id ? (int) $financeRequest->primary_staff_id : null;
 
         $staffIds = collect($request->validated('staff_ids'))->map(fn ($id) => (int) $id)->values();
         $primaryStaffId = $request->filled('primary_staff_id')
@@ -140,7 +146,7 @@ class AdminAssignmentController extends Controller
             : (int) $staffIds->first();
         $notes = $request->filled('notes') ? trim((string) $request->input('notes')) : null;
 
-        DB::transaction(function () use ($financeRequest, $admin, $staffIds, $primaryStaffId, $notes) {
+        DB::transaction(function () use ($financeRequest, $admin, $staffIds, $primaryStaffId, $notes, $shouldMoveToDocumentCollection, $previousPrimaryStaffId) {
             $existingActiveAssignments = FinanceRequestStaffAssignment::query()
                 ->where('finance_request_id', $financeRequest->id)
                 ->where('is_active', true)
@@ -157,6 +163,8 @@ class AdminAssignmentController extends Controller
                     ->where('is_active', true)
                     ->update([
                         'is_active' => false,
+                        'is_primary' => false,
+                        'unassigned_by' => $admin?->id,
                         'unassigned_at' => now(),
                         'updated_at' => now(),
                     ]);
@@ -195,23 +203,70 @@ class AdminAssignmentController extends Controller
             $financeRequest->latest_activity_at = now();
             $financeRequest->save();
 
-            $this->workflowService->moveToDocumentCollection($financeRequest);
+            if ($shouldMoveToDocumentCollection) {
+                $this->workflowService->moveToDocumentCollection($financeRequest);
+            }
 
             $assignedUsers = User::query()
                 ->whereIn('id', $staffIdsToKeep)
                 ->orderBy('name')
                 ->get(['id', 'name']);
+            $assignedUsersById = $assignedUsers->keyBy('id');
+
+            $removedUsers = User::query()
+                ->whereIn('id', $removedStaffIds->all())
+                ->orderBy('name')
+                ->get(['id', 'name']);
+            $addedStaffIds = $staffIds->diff($existingActiveAssignments->keys())->values();
+            $keptStaffIds = $staffIds->intersect($existingActiveAssignments->keys())->values();
+
+            $activeStaff = $staffIds
+                ->map(function (int $staffId) use ($assignedUsersById, $primaryStaffId) {
+                    $user = $assignedUsersById->get($staffId);
+
+                    return [
+                        'id' => $staffId,
+                        'name' => $user?->name,
+                        'is_primary' => $staffId === $primaryStaffId,
+                    ];
+                })
+                ->values()
+                ->all();
 
             RequestTimelineLogger::log(
                 $financeRequest,
-                'request.assigned_to_staff',
+                $shouldMoveToDocumentCollection ? 'request.assigned_to_staff' : 'request.staff_assignment_updated',
                 $admin?->id,
-                'Request assigned to staff',
+                $shouldMoveToDocumentCollection ? 'Request assigned to staff' : 'Staff assignment updated',
                 'تم إسناد الطلب إلى الموظفين',
-                'The request was assigned to the staff workspace and the client can now upload the required documents.',
+                $shouldMoveToDocumentCollection
+                    ? 'The request was assigned to the staff workspace and the client can now upload the required documents.'
+                    : 'The request staff ownership was updated without changing the current workflow stage.',
                 'تم إسناد الطلب إلى مساحة عمل الموظفين ويمكن للعميل الآن رفع المستندات المطلوبة.',
                 [
                     'primary_staff_id' => $primaryStaffId,
+                    'previous_primary_staff_id' => $previousPrimaryStaffId,
+                    'active_staff' => $activeStaff,
+                    'added_staff' => $addedStaffIds
+                        ->map(fn (int $staffId) => [
+                            'id' => $staffId,
+                            'name' => $assignedUsersById->get($staffId)?->name,
+                            'is_primary' => $staffId === $primaryStaffId,
+                        ])
+                        ->values()
+                        ->all(),
+                    'kept_staff' => $keptStaffIds
+                        ->map(fn (int $staffId) => [
+                            'id' => $staffId,
+                            'name' => $assignedUsersById->get($staffId)?->name,
+                            'is_primary' => $staffId === $primaryStaffId,
+                        ])
+                        ->values()
+                        ->all(),
+                    'removed_staff' => $removedUsers->map(fn (User $user) => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                    ])->values()->all(),
                     'staff' => $assignedUsers->map(fn (User $user) => [
                         'id' => $user->id,
                         'name' => $user->name,
@@ -255,11 +310,17 @@ class AdminAssignmentController extends Controller
     {
         $contract = $financeRequest->currentContract;
         $workflowStage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+        $status = $financeRequest->status?->value ?? (string) $financeRequest->status;
 
         abort_unless(
-            $workflowStage === FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
+            ! in_array($status, [
+                FinanceRequestStatus::REJECTED->value,
+                FinanceRequestStatus::COMPLETED->value,
+                FinanceRequestStatus::CANCELLED->value,
+            ], true)
+            && in_array($workflowStage, $this->assignmentManageableStages(), true),
             422,
-            'This request is not currently ready for staff assignment.'
+            'Staff assignment can only be managed after the contract is signed and before the request is closed.'
         );
 
         abort_unless(
@@ -275,5 +336,24 @@ class AdminAssignmentController extends Controller
                 'Commercial registration contracts from both client and admin are required before staff assignment.'
             );
         }
+    }
+
+    private function assignmentManageableStages(): array
+    {
+        return [
+            FinanceRequestWorkflowStage::AWAITING_STAFF_ASSIGNMENT->value,
+            FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
+            FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
+            FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+            FinanceRequestWorkflowStage::UNDERSTUDY->value,
+            FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value,
+            FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW->value,
+            FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
+            FinanceRequestWorkflowStage::PROCESSING->value,
+            FinanceRequestWorkflowStage::READY_FOR_PROCESSING->value,
+            FinanceRequestWorkflowStage::CLIENT_UPDATE_REQUESTED->value,
+            FinanceRequestWorkflowStage::CONTRACT->value,
+            FinanceRequestWorkflowStage::ASSIGNED_TO_STAFF->value,
+        ];
     }
 }

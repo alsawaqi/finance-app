@@ -14,6 +14,7 @@ class FinanceRequestStaffAssignment extends Model
         'finance_request_id',
         'staff_id',
         'assigned_by',
+        'unassigned_by',
         'assignment_role',
         'notes',
         'is_primary',
@@ -45,5 +46,10 @@ class FinanceRequestStaffAssignment extends Model
     public function assignedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function unassignedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'unassigned_by');
     }
 }
