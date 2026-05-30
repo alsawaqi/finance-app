@@ -835,7 +835,7 @@ h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, select, textarea {
   flex-direction: column;
   max-height: 90vh;
 }
-.admin-modal--wide { max-width: 800px; }
+.admin-modal--wide { max-width: min(1080px, calc(100vw - 32px)); }
 
 .admin-modal__head {
   padding: 20px 24px;

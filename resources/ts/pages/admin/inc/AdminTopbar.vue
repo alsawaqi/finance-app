@@ -35,6 +35,7 @@ const currentSectionLabel = computed(() => {
   if (name === 'admin-banks') return t('adminSidebar.menu.banks')
   if (name === 'admin-categorization') return t('adminSidebar.menu.categorization')
   if (name === 'admin-request-filtration') return t('adminSidebar.menu.requestFiltration')
+  if (name === 'admin-client-requests') return t('adminSidebar.menu.clientRequests')
   if (name === 'admin-clients-overview') return t('adminSidebar.menu.clientsDirectory')
   if (name === 'admin-agents') return t('adminSidebar.menu.agents')
   if (name === 'admin-inbox') return t('adminSidebar.menu.inbox')

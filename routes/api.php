@@ -77,6 +77,7 @@ Route::prefix('client')
         Route::post('/requests/{financeRequest}/contract/sign', [ClientContractController::class, 'sign']);
         Route::post('/requests/{financeRequest}/contract/commercial-registration', [ClientContractController::class, 'uploadCommercialRegistration']);
         Route::get('/requests/{financeRequest}/contract/download', [ClientContractController::class, 'downloadPdf']);
+        Route::get('/requests/{financeRequest}/attachments/{attachment}/download', [RequestFileDownloadController::class, 'attachment']);
         Route::post('/change-password', ClientChangePasswordController::class);
     });
 
@@ -120,9 +121,11 @@ Route::prefix('admin')
     ->group(function () {
         Route::get('/categorization', AdminCategorizationController::class);
         Route::get('/request-filters', [AdminRequestFilteringController::class, 'requests']);
+        Route::delete('/request-filters/{financeRequest}', [AdminRequestFilteringController::class, 'destroy']);
         Route::get('/clients-overview', [AdminRequestFilteringController::class, 'clients']);
         Route::get('/clients-overview/{client}/requests', [AdminRequestFilteringController::class, 'clientRequests']);
         Route::patch('/clients-overview/{client}/toggle-active', [AdminRequestFilteringController::class, 'toggleClientActive']);
+        Route::delete('/clients-overview/{client}', [AdminRequestFilteringController::class, 'destroyClient']);
         Route::get('/finance-request-types', [FinanceRequestTypeController::class, 'index']);
         Route::post('/finance-request-types', [FinanceRequestTypeController::class, 'store']);
         Route::put('/finance-request-types/{financeRequestType}', [FinanceRequestTypeController::class, 'update']);

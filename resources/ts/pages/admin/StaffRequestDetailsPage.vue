@@ -102,6 +102,7 @@ const attachmentPickerOpen = ref(false)
 const emailEditorRef = ref<HTMLElement | null>(null)
 const emailEditorFocused = ref(false)
 const quickView = ref<'updateBatch' | 'attachments' | 'shareholders' | 'answers' | 'comments' | 'additionalDocuments' | null>(null)
+const actionDialog = ref<'comment' | 'additionalDocument' | null>(null)
 const { t, locale } = useI18n()
 const filePreviewOpen = ref(false)
 const filePreviewName = ref('')
@@ -269,6 +270,17 @@ const quickViewTitle = computed(() => {
       return t('staffRequestDetails.sections.requestedAdditionalDocuments')
     default:
       return uiText('Workspace details', 'تفاصيل مساحة العمل')
+  }
+})
+
+const actionDialogTitle = computed(() => {
+  switch (actionDialog.value) {
+    case 'comment':
+      return t('staffRequestDetails.sections.addInternalComment')
+    case 'additionalDocument':
+      return t('staffRequestDetails.sections.requestAdditionalDocument')
+    default:
+      return t('staffRequestDetails.sections.followUpTitle')
   }
 })
 
@@ -1124,6 +1136,21 @@ onMounted(load)
               <RouterLink class="ghost-btn" :to="{ name: 'staff-request-emails', params: { id: requestId } }">{{ uiText('Sent email history', 'سجل الرسائل المرسلة') }}</RouterLink>
             </div>
           </article>
+
+          <article class="panel-card slim-card request-action-dock-card">
+            <div class="panel-head"><h2>{{ uiText('Actions', 'الإجراءات') }}</h2></div>
+            <div class="request-action-dock">
+              <button type="button" class="ghost-btn" @click="actionDialog = 'comment'">
+                {{ t('staffRequestDetails.sections.addInternalComment') }}
+              </button>
+              <button type="button" class="ghost-btn" @click="actionDialog = 'additionalDocument'">
+                {{ t('staffRequestDetails.sections.requestAdditionalDocument') }}
+              </button>
+              <RouterLink :to="{ name: 'staff-request-send-email', params: { id: requestId } }" class="primary-btn">
+                {{ uiText('Send email', 'إرسال بريد') }}
+              </RouterLink>
+            </div>
+          </article>
         </div>
       </div>
     </template>
@@ -1137,6 +1164,12 @@ onMounted(load)
           <p>{{ staffNextAction.body }}</p>
         </div>
         <div class="request-command-active-actions">
+          <button type="button" class="ghost-btn" @click="actionDialog = 'comment'">
+            {{ t('staffRequestDetails.sections.addInternalComment') }}
+          </button>
+          <button type="button" class="ghost-btn" @click="actionDialog = 'additionalDocument'">
+            {{ t('staffRequestDetails.sections.requestAdditionalDocument') }}
+          </button>
           <button v-if="canSubmitUnderstudyPackage && understudySectionVisible" type="button" class="primary-btn" :disabled="submittingUnderstudyState || understudyLocked" @click="submitStudyToAdmin">
             {{ submittingUnderstudyState ? uiText('Submitting...', 'جارٍ الإرسال...') : uiText('Submit to admin', 'إرسال إلى الإدارة') }}
           </button>
@@ -1147,9 +1180,9 @@ onMounted(load)
         </div>
       </article>
 
-      <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
+      <RequestCoreDetailsCard v-if="false" :request="requestItem" :required-documents="requiredDocuments" />
 
-      <article class="panel-card request-quick-panel">
+      <article v-if="false" class="panel-card request-quick-panel">
         <div class="panel-head">
           <div>
             <h2>{{ uiText('Quick access', 'وصول سريع') }}</h2>
@@ -1235,7 +1268,7 @@ onMounted(load)
             </div>
           </details>
 
-          <details class="admin-accordion-card" open>
+          <details class="admin-accordion-card">
             <summary>
               <div>
                 <h2>{{ uiText('All attachments', 'كل المرفقات') }}</h2>
@@ -1265,7 +1298,7 @@ onMounted(load)
             </div>
           </details>
 
-          <details class="admin-accordion-card" open>
+          <details class="admin-accordion-card" :open="pendingRequiredCount > 0">
             <summary>
               <div>
                 <h2>{{ t('staffRequestDetails.sections.requiredChecklistTitle') }}</h2>
@@ -1524,7 +1557,7 @@ onMounted(load)
             </div>
           </details>
 
-          <details class="admin-accordion-card followup-workspace-card" open>
+          <details v-if="false" class="admin-accordion-card followup-workspace-card" open>
             <summary>
               <div>
                 <h2>{{ t('staffRequestDetails.sections.followUpTitle') }}</h2>
@@ -1862,22 +1895,36 @@ onMounted(load)
       </div>
     </template>
 
-    <template #side>
-      <div class="request-command-rail-stack">
-        <article class="request-command-next" :class="`is-${staffNextAction.tone}`">
-          <span>{{ uiText('Next required action', 'الإجراء المطلوب التالي') }}</span>
-          <h2>{{ staffNextAction.title }}</h2>
-          <p>{{ staffNextAction.body }}</p>
-          <div class="request-command-pulse">
-            {{ uiText('Work-focused guidance', 'إرشاد عملي') }}
+    <template #support>
+      <div class="request-command-support-stack">
+        <details class="request-command-rail-card request-command-collapsible request-command-support-card request-command-support-card--overview">
+          <summary class="request-command-rail-head">
+            <h2>{{ t('adminRequestDetails.core.title') }}</h2>
+            <p>{{ t('adminRequestDetails.core.subtitle') }}</p>
+          </summary>
+          <div class="request-command-support-body">
+            <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
           </div>
-        </article>
+        </details>
 
-        <article class="request-command-rail-card">
-          <div class="request-command-rail-head">
+        <details class="request-command-next request-command-collapsible request-command-support-card" :class="`is-${staffNextAction.tone}`">
+          <summary class="request-command-rail-head">
+            <span>{{ uiText('Next required action', 'الإجراء المطلوب التالي') }}</span>
+            <h2>{{ staffNextAction.title }}</h2>
+          </summary>
+          <div class="request-command-support-body">
+            <p>{{ staffNextAction.body }}</p>
+            <div class="request-command-pulse">
+              {{ uiText('Work-focused guidance', 'إرشاد عملي') }}
+            </div>
+          </div>
+        </details>
+
+        <details class="request-command-rail-card request-command-collapsible request-command-support-card">
+          <summary class="request-command-rail-head">
             <h2>{{ uiText('Quick views', 'عروض سريعة') }}</h2>
             <p>{{ uiText('Open read-only request details without losing your place.', 'افتح تفاصيل الطلب للقراءة فقط بدون فقدان مكانك.') }}</p>
-          </div>
+          </summary>
           <div class="request-command-quick-grid">
             <button v-if="activeUpdateBatch" type="button" @click="quickView = 'updateBatch'">
               <strong>{{ uiText('Updates', 'التحديثات') }}</strong>
@@ -1904,21 +1951,23 @@ onMounted(load)
               <span>{{ activityCounts.emails }}</span>
             </RouterLink>
           </div>
-        </article>
+        </details>
 
-        <article class="request-command-rail-card">
-          <div class="request-command-rail-head">
+        <details class="request-command-rail-card request-command-collapsible request-command-support-card">
+          <summary class="request-command-rail-head">
             <h2>{{ uiText('Recent activity', 'آخر النشاط') }}</h2>
             <p>{{ uiText('Latest notes and email events for this request.', 'أحدث الملاحظات وأحداث البريد لهذا الطلب.') }}</p>
-          </div>
-          <div v-if="recentStaffActivity.length" class="request-command-activity-list">
-            <div v-for="(item, index) in recentStaffActivity" :key="`${item.date || 'activity'}-${index}`" class="request-command-activity">
-              <strong>{{ item.title }}</strong>
-              <span>{{ item.body }}<template v-if="item.date"> · {{ readableDateTime(item.date) }}</template></span>
+          </summary>
+          <div class="request-command-support-body">
+            <div v-if="recentStaffActivity.length" class="request-command-activity-list">
+              <div v-for="(item, index) in recentStaffActivity" :key="`${item.date || 'activity'}-${index}`" class="request-command-activity">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.body }}<template v-if="item.date"> · {{ readableDateTime(item.date) }}</template></span>
+              </div>
             </div>
+            <p v-else class="empty-state">{{ uiText('No recent activity yet.', 'لا يوجد نشاط حديث بعد.') }}</p>
           </div>
-          <p v-else class="empty-state">{{ uiText('No recent activity yet.', 'لا يوجد نشاط حديث بعد.') }}</p>
-        </article>
+        </details>
       </div>
     </template>
 
@@ -1944,6 +1993,47 @@ onMounted(load)
             </div>
           </article>
       </div>
+
+      <AdminQuickViewModal
+        :model-value="actionDialog !== null"
+        @update:model-value="(value) => { if (!value) actionDialog = null }"
+        :title="actionDialogTitle"
+        :subtitle="uiText('Complete the follow-up without leaving the request details.', 'أنجز المتابعة بدون مغادرة تفاصيل الطلب.')"
+        wide
+      >
+        <div v-if="actionDialog === 'comment'" class="request-dialog-stack">
+          <div class="field-block field-block--grow">
+            <span>{{ t('staffRequestDetails.form.visibility') }}</span>
+            <select v-model="commentVisibility" class="admin-select">
+              <option value="internal">{{ t('staffRequestDetails.form.internal') }}</option>
+              <option value="admin_only">{{ t('staffRequestDetails.form.adminOnly') }}</option>
+              <option value="client_visible">{{ t('staffRequestDetails.form.clientVisible') }}</option>
+            </select>
+          </div>
+          <textarea v-model="commentText" rows="5" class="admin-textarea" :placeholder="t('staffRequestDetails.placeholders.commentText')"></textarea>
+          <div class="approve-actions">
+            <button class="primary-btn" type="button" :disabled="savingComment || !commentText.trim()" @click="submitComment">
+              {{ savingComment ? t('staffRequestDetails.actions.saving') : t('staffRequestDetails.actions.saveComment') }}
+            </button>
+            <button type="button" class="ghost-btn" @click="actionDialog = null; quickView = 'comments'">
+              {{ t('staffRequestDetails.sections.recentInternalHistory') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="actionDialog === 'additionalDocument'" class="request-dialog-stack">
+          <input v-model="additionalDocumentTitle" type="text" class="admin-input" :placeholder="t('staffRequestDetails.placeholders.documentTitle')" />
+          <textarea v-model="additionalDocumentReason" rows="5" class="admin-textarea" :placeholder="t('staffRequestDetails.placeholders.additionalReason')"></textarea>
+          <div class="approve-actions">
+            <button class="primary-btn" type="button" :disabled="savingAdditionalDocument || !additionalDocumentTitle.trim()" @click="submitAdditionalDocumentRequest">
+              {{ savingAdditionalDocument ? t('staffRequestDetails.actions.saving') : t('staffRequestDetails.actions.createRequest') }}
+            </button>
+            <button type="button" class="ghost-btn" @click="actionDialog = null; quickView = 'additionalDocuments'">
+              {{ t('staffRequestDetails.sections.requestedAdditionalDocuments') }}
+            </button>
+          </div>
+        </div>
+      </AdminQuickViewModal>
 
       <AdminQuickViewModal
         :model-value="quickView !== null"

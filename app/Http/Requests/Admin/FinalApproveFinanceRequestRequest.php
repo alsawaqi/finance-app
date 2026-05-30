@@ -15,7 +15,8 @@ class FinalApproveFinanceRequestRequest extends FormRequest
     {
         return [
             'final_approval_notes' => ['nullable', 'string', 'max:2000'],
+            'final_approval_attachments' => ['nullable', 'array', 'max:5'],
+            'final_approval_attachments.*' => ['file', 'max:10240'],
         ];
     }
 }
-

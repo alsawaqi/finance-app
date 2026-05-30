@@ -14,6 +14,8 @@ export interface DocumentUploadStepItem {
   allowed_file_types_json: string[]
   allowed_file_types_count: number
   max_file_size_mb: number | null
+  max_file_size_kb: number | null
+  max_file_size_label: string | null
   sort_order: number
   is_active: boolean
   request_document_uploads_count: number
@@ -30,6 +32,7 @@ export interface DocumentUploadStepPayload {
   is_multiple?: boolean
   allowed_file_types_json?: string[] | null
   max_file_size_mb?: number | null
+  max_file_size_kb?: number | null
   sort_order?: number
   is_active?: boolean
 }

@@ -55,8 +55,12 @@ const activityCounts = computed(() => ({
   answers: requestItem.value?.answers?.length ?? 0,
   comments: requestItem.value?.comments?.length ?? 0,
   timeline: requestItem.value?.timeline?.length ?? 0,
-  assignments: requestItem.value?.assignments?.length ?? 0,
+  assignments: activeStaffAssignments.value.length,
 }))
+
+const activeStaffAssignments = computed(() =>
+  (requestItem.value?.assignments ?? []).filter((entry) => entry?.is_active !== false),
+)
 
 const timelineRows = computed(() => buildTimelineRows(requestItem.value?.timeline, locale.value))
 
@@ -79,7 +83,7 @@ function answerText(answer: any) {
 }
 
 function prefillAssignmentState(item: FinanceRequestDetail | null) {
-  const activeAssignments = item?.assignments ?? []
+  const activeAssignments = (item?.assignments ?? []).filter((entry) => entry?.is_active !== false)
   selectedStaffIds.value = activeAssignments.map((entry) => Number(entry.staff_id))
   primaryStaffId.value = activeAssignments.find((entry) => entry.is_primary)?.staff_id ?? selectedStaffIds.value[0] ?? null
   assignmentNotes.value = activeAssignments[0]?.notes || ''
@@ -254,8 +258,8 @@ onMounted(load)
 
         <article class="panel-card slim-card request-top-panel--span-2">
           <div class="panel-head"><h2>{{ t('adminAssignmentDetails.sections.currentOwners') }}</h2></div>
-          <div v-if="requestItem.assignments?.length" class="assignment-chip-list assignment-chip-list--stacked">
-            <div v-for="assignment in requestItem.assignments" :key="assignment.id" class="assignment-chip">
+          <div v-if="activeStaffAssignments.length" class="assignment-chip-list assignment-chip-list--stacked">
+            <div v-for="assignment in activeStaffAssignments" :key="assignment.id" class="assignment-chip">
               <strong>{{ assignment.staff?.name || t('adminAssignmentDetails.states.staffMemberFallback') }}</strong>
               <span>{{ assignment.is_primary ? t('adminAssignmentDetails.states.leadOwner') : assignment.assignment_role || t('adminAssignmentDetails.states.support') }}</span>
             </div>

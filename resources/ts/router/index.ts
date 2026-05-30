@@ -29,6 +29,7 @@ const AdminStaffPage = () => import('@/pages/admin/AdminStaffPage.vue')
 const AdminBanksPage = () => import('@/pages/admin/AdminBanksPage.vue')
 const AdminCategorizationPage = () => import('@/pages/admin/AdminCategorizationPage.vue')
 const AdminRequestFilteringPage = () => import('@/pages/admin/AdminRequestFilteringPage.vue')
+const AdminClientRequestsPage = () => import('@/pages/admin/AdminClientRequestsPage.vue')
 const AdminClientsOverviewPage = () => import('@/pages/admin/AdminClientsOverviewPage.vue')
 const AdminAgentsPage = () => import('@/pages/admin/AdminAgentsPage.vue')
 const AdminNewRequestsPage = () => import('@/pages/admin/AdminNewRequestsPage.vue')
@@ -97,6 +98,7 @@ const router = createRouter({
         { path: 'banks', name: 'admin-banks', component: AdminBanksPage, meta: { allowedRoles: ['admin'] } },
         { path: 'categorization', name: 'admin-categorization', component: AdminCategorizationPage, meta: { allowedRoles: ['admin'] } },
         { path: 'request-filtration', name: 'admin-request-filtration', component: AdminRequestFilteringPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'client-requests', name: 'admin-client-requests', component: AdminClientRequestsPage, meta: { allowedRoles: ['admin'] } },
         { path: 'clients-overview', name: 'admin-clients-overview', component: AdminClientsOverviewPage, meta: { allowedRoles: ['admin'] } },
         { path: 'clients-overview/deactivated', name: 'admin-clients-overview-deactivated', component: AdminClientsOverviewPage, meta: { allowedRoles: ['admin'] } },
         { path: 'agents', name: 'admin-agents', component: AdminAgentsPage },

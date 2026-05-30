@@ -58,7 +58,7 @@ class FinanceRequestStaffQuestionService
             'pending_required_review_total' => $pendingRequiredReview,
             'all_required_answered' => $pendingRequired === 0,
             'all_required_reviewed' => $pendingRequiredReview === 0,
-            'can_advance_from_understudy' => $pendingRequiredReview === 0,
+            'can_advance_from_understudy' => $pendingRequired === 0,
         ];
     }
 
@@ -309,9 +309,9 @@ class FinanceRequestStaffQuestionService
             ]);
         }
 
-        if ($action === 'approve' && $this->pendingRequiredReviewCount($financeRequest) > 0) {
+        if ($action === 'approve' && $this->pendingRequiredCount($financeRequest) > 0) {
             throw ValidationException::withMessages([
-                'staff_questions' => 'All required staff study questions must be reviewed before approving the understudy.',
+                'staff_questions' => 'All required staff study questions must be answered before approving the understudy.',
             ]);
         }
 
@@ -331,6 +331,16 @@ class FinanceRequestStaffQuestionService
             'workflow_stage' => $targetStage,
             'latest_activity_at' => now(),
         ])->save();
+
+        if ($action === 'approve') {
+            $financeRequest->staffQuestions()
+                ->where('status', FinanceRequestStaffQuestionStatus::ANSWERED->value)
+                ->update([
+                    'status' => FinanceRequestStaffQuestionStatus::CLOSED->value,
+                    'closed_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
 
         RequestTimelineLogger::log(
             $financeRequest,

@@ -19,6 +19,7 @@ class DocumentUploadStep extends Model
         'is_multiple',
         'allowed_file_types_json',
         'max_file_size_mb',
+        'max_file_size_kb',
         'sort_order',
         'is_active',
     ];
@@ -29,6 +30,8 @@ class DocumentUploadStep extends Model
             'is_required'             => 'boolean',
             'is_multiple'             => 'boolean',
             'allowed_file_types_json' => 'array',
+            'max_file_size_mb'        => 'integer',
+            'max_file_size_kb'        => 'integer',
             'is_active'               => 'boolean',
         ];
     }

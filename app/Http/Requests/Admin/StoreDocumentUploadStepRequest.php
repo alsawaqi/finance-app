@@ -24,6 +24,7 @@ class StoreDocumentUploadStepRequest extends FormRequest
             'allowed_file_types_json' => ['nullable', 'array'],
             'allowed_file_types_json.*' => ['string', 'max:100'],
             'max_file_size_mb' => ['nullable', 'integer', 'min:1', 'max:10240'],
+            'max_file_size_kb' => ['nullable', 'integer', 'min:1', 'max:10485760'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['sometimes', 'boolean'],
         ];
@@ -31,6 +32,11 @@ class StoreDocumentUploadStepRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $maxFileSizeKb = $this->normalizeMaxFileSizeKb(
+            $this->input('max_file_size_kb'),
+            $this->input('max_file_size_mb'),
+        );
+
         $this->merge([
             'code' => $this->filled('code') ? trim((string) $this->input('code')) : null,
             'name' => trim((string) $this->input('name', '')),
@@ -39,10 +45,24 @@ class StoreDocumentUploadStepRequest extends FormRequest
             'is_required' => $this->boolean('is_required'),
             'is_multiple' => $this->boolean('is_multiple'),
             'is_active' => $this->has('is_active') ? $this->boolean('is_active') : true,
-            'max_file_size_mb' => $this->filled('max_file_size_mb') ? (int) $this->input('max_file_size_mb') : null,
+            'max_file_size_mb' => $maxFileSizeKb !== null ? (int) ceil($maxFileSizeKb / 1024) : null,
+            'max_file_size_kb' => $maxFileSizeKb,
             'sort_order' => $this->filled('sort_order') ? (int) $this->input('sort_order') : 0,
             'allowed_file_types_json' => $this->normalizeAllowedTypes($this->input('allowed_file_types_json')),
         ]);
+    }
+
+    private function normalizeMaxFileSizeKb(mixed $kilobytes, mixed $megabytes): ?int
+    {
+        if ($kilobytes !== null && $kilobytes !== '') {
+            return (int) round((float) $kilobytes);
+        }
+
+        if ($megabytes !== null && $megabytes !== '') {
+            return (int) round((float) $megabytes * 1024);
+        }
+
+        return null;
     }
 
     private function normalizeAllowedTypes(mixed $value): ?array

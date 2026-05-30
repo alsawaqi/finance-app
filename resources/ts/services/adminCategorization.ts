@@ -19,6 +19,7 @@ export type CategorizedBank = {
   id: number
   name: string
   short_name?: string | null
+  code?: string | null
   agents_count: number
   emails_count: number
   requests_count: number
@@ -65,10 +66,51 @@ export type CategorizedClient = {
   last_login_at?: string | null
 }
 
+export type CategorizedRequestAgent = {
+  id: number
+  name: string
+  email?: string | null
+  bank_id?: number | null
+  bank_name?: string | null
+  bank_short_name?: string | null
+}
+
+export type CategorizedRequest = {
+  id: number
+  reference_number: string
+  approval_reference_number?: string | null
+  company_name?: string | null
+  status?: string | null
+  workflow_stage?: string | null
+  submitted_at?: string | null
+  latest_activity_at?: string | null
+  latest_email_at?: string | null
+  emails_count: number
+  matched_emails_count: number
+  client?: {
+    id: number
+    name: string
+    email: string
+  } | null
+  agents: CategorizedRequestAgent[]
+}
+
+export type CategorizationFilteredSummary = {
+  total_requests: number
+  total_emails: number
+  unique_agents: number
+  unique_banks: number
+  latest_email_at?: string | null
+}
+
 export async function getAdminCategorization(params?: {
   tab?: 'agents' | 'staff' | 'clients'
+  bank_id?: number | null
+  agent_id?: number | null
   page?: number
   per_page?: number
+  request_page?: number
+  request_per_page?: number
 }) {
   const { data } = await api.get('/api/admin/categorization', { params })
   return data as {
@@ -93,6 +135,10 @@ export async function getAdminCategorization(params?: {
       }
     }
     bank_breakdown: CategorizedBank[]
+    explorer_agents: CategorizedAgent[]
+    filtered_summary: CategorizationFilteredSummary
+    related_requests: CategorizedRequest[]
+    request_pagination: PaginationMeta
     agents: CategorizedAgent[]
     staff: CategorizedStaff[]
     clients: CategorizedClient[]

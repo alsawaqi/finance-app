@@ -61,6 +61,7 @@ const approving = ref(false)
 const approvalNotes = ref('')
 const finalizingApproval = ref(false)
 const finalApprovalNotes = ref('')
+const finalApprovalAttachments = ref<File[]>([])
 const rejectingRequest = ref(false)
 const rejectReason = ref('')
 const reviewingUnderstudy = ref(false)
@@ -89,6 +90,7 @@ const quickView = ref<
   | 'timeline'
   | null
 >(null)
+const actionDialog = ref<'comment' | 'reject' | 'approve' | 'finalApprove' | 'updateBatch' | 'agentAccess' | null>(null)
 const staffQuestionSummary = ref<any | null>(null)
 const emailBankOptions = ref<any[]>([])
 const emailAgentOptions = ref<any[]>([])
@@ -250,6 +252,25 @@ const quickViewTitle = computed(() => {
       return t('adminRequestDetails.emailActivity.title')
     default:
       return t('adminRequestDetails.modal.timeline')
+  }
+})
+
+const actionDialogTitle = computed(() => {
+  switch (actionDialog.value) {
+    case 'comment':
+      return uiText('Follow-up comments', 'تعليقات المتابعة')
+    case 'reject':
+      return t('adminRequestDetails.rejectRequest.title')
+    case 'approve':
+      return t('adminRequestDetails.sections.approveRequest')
+    case 'finalApprove':
+      return t('adminRequestDetails.sections.finalApproveRequest')
+    case 'updateBatch':
+      return t('adminRequestDetails.updateBatch.title')
+    case 'agentAccess':
+      return t('adminRequestDetails.agentAssignments.manageAccess')
+    default:
+      return uiText('Request action', 'إجراء الطلب')
   }
 })
 
@@ -879,6 +900,15 @@ function previewAgentAssignmentDocument(document: any) {
   openFilePreview(document.file_name, document.download_url, document.mime_type)
 }
 
+function onFinalApprovalAttachmentChange(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  finalApprovalAttachments.value = Array.from(input?.files ?? [])
+}
+
+function removeFinalApprovalAttachment(index: number) {
+  finalApprovalAttachments.value = finalApprovalAttachments.value.filter((_, fileIndex) => fileIndex !== index)
+}
+
 async function submitAgentAssignments() {
   if (!requestItem.value || !canSaveAgentAssignments.value || savingAgentAssignments.value) return
 
@@ -979,7 +1009,7 @@ async function submitUnderstudyReview(action: 'approve' | 'reject') {
   }
 }
 
-async function submitStaffQuestionReview(question: any, action: 'close' | 'reopen') {
+async function submitStaffQuestionRevision(question: any) {
   if (!requestItem.value) return
   const questionId = Number(question?.id ?? 0)
   if (!questionId) return
@@ -995,7 +1025,7 @@ async function submitStaffQuestionReview(question: any, action: 'close' | 'reope
   try {
     const reviewNote = String(staffQuestionReviewNotes.value[questionId] || '').trim()
     const data = await reviewAdminStaffQuestion(requestItem.value.id, questionId, {
-      action,
+      action: 'reopen',
       review_note: reviewNote || undefined,
     })
 
@@ -1003,11 +1033,7 @@ async function submitStaffQuestionReview(question: any, action: 'close' | 'reope
     requiredDocuments.value = data.required_documents ?? requiredDocuments.value
     staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
 
-    if (action === 'close') {
-      successMessage.value = uiText('Question marked as reviewed.', 'تم اعتماد السؤال كمراجع.')
-    } else {
-      successMessage.value = uiText('Question reopened and sent back to staff for re-answer.', 'تمت إعادة فتح السؤال وإعادته إلى الموظف لإعادة الإجابة.')
-    }
+    successMessage.value = uiText('Question sent back to staff for revision.', 'تم إرسال السؤال إلى الموظف للمراجعة.')
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || uiText('Failed to review this study question.', 'تعذر مراجعة سؤال الدراسة هذا.')
   } finally {
@@ -1076,10 +1102,13 @@ async function finalizeRequest() {
   try {
     const data = await finalizeAdminRequest(requestItem.value.id, {
       final_approval_notes: finalApprovalNotes.value || undefined,
+      final_approval_attachments: finalApprovalAttachments.value,
     })
     requestItem.value = data.request ?? requestItem.value
     requiredDocuments.value = data.required_documents ?? requiredDocuments.value
     staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    finalApprovalAttachments.value = []
+    actionDialog.value = null
     successMessage.value = data.message || t('adminRequestDetails.messages.requestFinalApproved')
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminRequestDetails.errors.finalApproveFailed')
@@ -1325,7 +1354,31 @@ onMounted(() => {
             </div>
           </article>
 
-          <article v-if="canRejectRequest" class="panel-card slim-card action-card">
+          <article class="panel-card slim-card request-action-dock-card">
+            <div class="panel-head"><h2>{{ uiText('Actions', 'الإجراءات') }}</h2></div>
+            <div class="request-action-dock">
+              <button type="button" class="ghost-btn" @click="actionDialog = 'comment'">
+                {{ uiText('Follow-up comment', 'تعليق متابعة') }}
+              </button>
+              <button type="button" class="ghost-btn" @click="actionDialog = 'updateBatch'">
+                {{ t('adminRequestDetails.updateBatch.title') }}
+              </button>
+              <button v-if="agentAssignmentVisible" type="button" class="ghost-btn" @click="actionDialog = 'agentAccess'">
+                {{ t('adminRequestDetails.agentAssignments.manageAccess') }}
+              </button>
+              <button v-if="canRejectRequest" type="button" class="ghost-btn" @click="actionDialog = 'reject'">
+                {{ t('adminRequestDetails.rejectRequest.title') }}
+              </button>
+              <button v-if="canFinalizeApproval" type="button" class="primary-btn" @click="actionDialog = 'finalApprove'">
+                {{ t('adminRequestDetails.sections.finalApproveRequest') }}
+              </button>
+              <button v-else-if="!requestItem?.approval_reference_number" type="button" class="primary-btn" @click="actionDialog = 'approve'">
+                {{ t('adminRequestDetails.sections.approveRequest') }}
+              </button>
+            </div>
+          </article>
+
+          <article v-if="false && canRejectRequest" class="panel-card slim-card action-card">
             <div class="panel-head"><h2>{{ t('adminRequestDetails.rejectRequest.title') }}</h2></div>
             <p class="subtext">{{ t('adminRequestDetails.rejectRequest.subtitle') }}</p>
             <textarea v-model="rejectReason" rows="4" class="admin-textarea" :placeholder="t('adminRequestDetails.rejectRequest.placeholder')"></textarea>
@@ -1336,7 +1389,7 @@ onMounted(() => {
             </div>
           </article>
 
-          <article v-if="canFinalizeApproval" class="panel-card slim-card action-card">
+          <article v-if="false && canFinalizeApproval" class="panel-card slim-card action-card">
             <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.finalApproveRequest') }}</h2></div>
             <p class="subtext">{{ t('adminRequestDetails.sections.finalApproveSubtitle') }}</p>
             <textarea v-model="finalApprovalNotes" rows="4" class="admin-textarea" :placeholder="t('adminRequestDetails.sections.finalApprovePlaceholder')"></textarea>
@@ -1347,7 +1400,7 @@ onMounted(() => {
             </div>
           </article>
 
-          <article v-if="!requestItem?.approval_reference_number" class="panel-card slim-card action-card request-top-panel--span-2">
+          <article v-if="false && !requestItem?.approval_reference_number" class="panel-card slim-card action-card request-top-panel--span-2">
             <div class="panel-head"><h2>{{ t('adminRequestDetails.sections.approveRequest') }}</h2></div>
             <p class="subtext">{{ t('adminRequestDetails.sections.approveSubtitle') }}</p>
             <textarea v-model="approvalNotes" rows="5" class="admin-textarea" :placeholder="t('adminRequestDetails.sections.approvePlaceholder')"></textarea>
@@ -1371,21 +1424,59 @@ onMounted(() => {
         </div>
         <div class="request-command-active-actions">
           <RouterLink v-if="canOpenStaffAssignment" :to="{ name: 'admin-assignment-details', params: { id: requestId }, query: { return_to: String(route.fullPath || `/admin/requests/${requestId}`) } }" class="ghost-btn">{{ t('adminRequestDetails.hero.assignStaff') }}</RouterLink>
+          <button type="button" class="ghost-btn" @click="actionDialog = 'comment'">
+            {{ uiText('Follow-up', 'متابعة') }}
+          </button>
+          <button type="button" class="ghost-btn" @click="actionDialog = 'updateBatch'">
+            {{ t('adminRequestDetails.updateBatch.title') }}
+          </button>
+          <button v-if="agentAssignmentVisible" type="button" class="ghost-btn" @click="actionDialog = 'agentAccess'">
+            {{ t('adminRequestDetails.agentAssignments.manageAccess') }}
+          </button>
+          <button v-if="canRejectRequest" type="button" class="ghost-btn" @click="actionDialog = 'reject'">
+            {{ t('adminRequestDetails.rejectRequest.title') }}
+          </button>
           <button v-if="understudyReadyForReview" type="button" class="primary-btn" :disabled="reviewingUnderstudy || !understudyApproveReady" @click="submitUnderstudyReview('approve')">
             {{ reviewingUnderstudy ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.understudy.approveForNextStep') }}
           </button>
-          <button v-else-if="canFinalizeApproval" class="primary-btn" type="button" :disabled="finalizingApproval" @click="finalizeRequest">
+          <button v-else-if="canFinalizeApproval" class="primary-btn" type="button" :disabled="finalizingApproval" @click="actionDialog = 'finalApprove'">
             {{ finalizingApproval ? t('adminRequestDetails.actions.finalizingApproval') : t('adminRequestDetails.actions.finalApproveNow') }}
           </button>
-          <button v-else-if="!requestItem?.approval_reference_number" class="primary-btn" type="button" :disabled="approving" @click="approveRequest">
+          <button v-else-if="!requestItem?.approval_reference_number" class="primary-btn" type="button" :disabled="approving" @click="actionDialog = 'approve'">
             {{ approving ? t('adminRequestDetails.actions.approving') : t('adminRequestDetails.actions.approveAndContinue') }}
           </button>
         </div>
       </article>
 
-      <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
+      <AdminAgentAccessPanel
+        v-if="agentAssignmentVisible && actionDialog !== 'agentAccess'"
+        :active-assignments="activeAgentAssignments"
+        :bank-options="emailBankOptions"
+        :agent-options="emailAgentOptions"
+        :available-documents="availableEmailDocuments"
+        :selected-bank-id="selectedAssignmentBankId"
+        :selected-agent-ids="selectedAgentIds"
+        :selected-agent-document-keys="selectedAgentDocumentKeys"
+        :review-note="agentAssignmentReviewNote"
+        :saving="savingAgentAssignments"
+        :can-save="canSaveAgentAssignments"
+        :dirty="agentAssignmentDraftDirty"
+        :stage-after-save-label="selectedAgentIds.length ? stageMeta('processing').label : stageMeta('awaiting_agent_assignment').label"
+        @update:selected-bank-id="selectedAssignmentBankId = $event"
+        @update:review-note="agentAssignmentReviewNote = $event"
+        @toggle-agent="toggleAgentSelection"
+        @toggle-document="toggleAgentDocument"
+        @select-all-documents="selectAllAgentDocuments"
+        @clear-documents="clearAgentDocuments"
+        @remove-agent="removeAgentFromDraft"
+        @reset-draft="syncAgentAssignmentDraftFromRequest"
+        @submit="submitAgentAssignments"
+        @preview-file="previewAgentAssignmentDocument"
+      />
 
-      <article class="panel-card request-quick-panel">
+      <RequestCoreDetailsCard v-if="false" :request="requestItem" :required-documents="requiredDocuments" />
+
+      <article v-if="false" class="panel-card request-quick-panel">
         <div class="panel-head">
           <div>
             <h2>{{ t('adminRequestDetails.quick.title') }}</h2>
@@ -1452,7 +1543,7 @@ onMounted(() => {
         </div>
       </article>
 
-      <article class="panel-card slim-card">
+      <article v-if="false" class="panel-card slim-card">
         <div class="panel-head">
           <div>
             <h2>{{ uiText('Follow-up comments', 'تعليقات المتابعة') }}</h2>
@@ -1500,7 +1591,7 @@ onMounted(() => {
         </div>
       </article>
 
-      <details v-if="understudyVisible" class="admin-accordion-card" open>
+      <details v-if="understudyVisible && !requestItem?.understudy_reviewed_at" class="admin-accordion-card" open>
         <summary>
           <div>
             <h2>{{ t('adminRequestDetails.understudy.title') }}</h2>
@@ -1512,8 +1603,6 @@ onMounted(() => {
             <div><span>{{ t('adminRequestDetails.understudy.stats.studyStatus') }}</span><strong>{{ readableUnderstudyStatus(requestItem?.understudy_status || 'draft') }}</strong></div>
             <div><span>{{ t('adminRequestDetails.understudy.stats.requiredAnswered') }}</span><strong>{{ staffQuestionSummary?.required_answered_count ?? 0 }}/{{ staffQuestionSummary?.required_count ?? 0 }}</strong></div>
             <div><span>{{ t('adminRequestDetails.understudy.stats.allRequiredAnswered') }}</span><strong>{{ staffQuestionSummary?.all_required_answered ? t('adminRequestDetails.states.yes') : t('adminRequestDetails.states.no') }}</strong></div>
-            <div><span>{{ t('adminRequestDetails.understudy.stats.requiredReviewed') }}</span><strong>{{ staffQuestionSummary?.required_reviewed_count ?? 0 }}/{{ staffQuestionSummary?.required_count ?? 0 }}</strong></div>
-            <div><span>{{ t('adminRequestDetails.understudy.stats.allRequiredReviewed') }}</span><strong>{{ staffQuestionSummary?.all_required_reviewed ? t('adminRequestDetails.states.yes') : t('adminRequestDetails.states.no') }}</strong></div>
           </div>
 
           <div v-if="requestItem?.understudy_submitted_at" class="notes-box" style="margin-bottom: 1rem;">
@@ -1543,12 +1632,12 @@ onMounted(() => {
               <p v-if="studyQuestionAnswerAudit(question)" class="client-subtext" style="margin-top: 0.35rem;">{{ studyQuestionAnswerAudit(question) }}</p>
               <template v-if="understudyReadyForReview">
                 <div class="client-form-group" style="margin-top: 0.75rem;">
-                  <label class="client-form-label">{{ uiText('Question review note (optional)', 'ملاحظة مراجعة السؤال (اختياري)') }}</label>
+                  <label class="client-form-label">{{ uiText('Revision note for staff (optional)', 'ملاحظة المراجعة للموظف (اختياري)') }}</label>
                   <textarea
                     v-model="staffQuestionReviewNotes[question.id]"
                     rows="2"
                     class="client-form-control client-form-control--textarea"
-                    :placeholder="uiText('Explain what to update if you request re-answer.', 'اكتب ما المطلوب تحديثه إذا طلبت إعادة الإجابة.')"
+                    :placeholder="uiText('Explain exactly what this answer needs revised.', 'اكتب ما الذي يحتاج إلى مراجعة في هذه الإجابة.')"
                   />
                 </div>
                 <div class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
@@ -1556,17 +1645,9 @@ onMounted(() => {
                     type="button"
                     class="ghost-btn"
                     :disabled="Boolean(reviewingStaffQuestion[question.id]) || String(question.status || '').toLowerCase() === 'pending'"
-                    @click="submitStaffQuestionReview(question, 'reopen')"
+                    @click="submitStaffQuestionRevision(question)"
                   >
-                    {{ reviewingStaffQuestion[question.id] ? t('adminRequestDetails.actions.saving') : uiText('Request re-answer', 'طلب إعادة الإجابة') }}
-                  </button>
-                  <button
-                    type="button"
-                    class="primary-btn"
-                    :disabled="Boolean(reviewingStaffQuestion[question.id]) || String(question.status || '').toLowerCase() === 'closed'"
-                    @click="submitStaffQuestionReview(question, 'close')"
-                  >
-                    {{ reviewingStaffQuestion[question.id] ? t('adminRequestDetails.actions.saving') : uiText('Mark reviewed', 'تأكيد المراجعة') }}
+                    {{ reviewingStaffQuestion[question.id] ? t('adminRequestDetails.actions.saving') : uiText('Request revision', 'طلب مراجعة') }}
                   </button>
                 </div>
               </template>
@@ -1580,9 +1661,6 @@ onMounted(() => {
           </div>
 
           <div v-if="understudyReadyForReview" class="approve-actions" style="margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap;">
-            <button type="button" class="ghost-btn" :disabled="reviewingUnderstudy" @click="submitUnderstudyReview('reject')">
-              {{ reviewingUnderstudy ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.understudy.rejectStudyAnswers') }}
-            </button>
             <button type="button" class="primary-btn" :disabled="reviewingUnderstudy || !understudyApproveReady" @click="submitUnderstudyReview('approve')">
               {{ reviewingUnderstudy ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.understudy.approveForNextStep') }}
             </button>
@@ -1605,7 +1683,7 @@ onMounted(() => {
       </details>
 
       <AdminAgentAccessPanel
-        v-if="agentAssignmentVisible"
+        v-if="false && agentAssignmentVisible"
         :active-assignments="activeAgentAssignments"
         :bank-options="emailBankOptions"
         :agent-options="emailAgentOptions"
@@ -1760,7 +1838,7 @@ onMounted(() => {
         </div>
       </details>
 
-      <div class="admin-workspace-layout admin-workspace-layout--compact-side">
+      <div v-if="false" class="admin-workspace-layout admin-workspace-layout--compact-side">
         <div class="admin-workspace-main">
           <article class="panel-card slim-card" style="margin-top: 1.25rem;">
             <div class="panel-head">
@@ -1907,22 +1985,36 @@ onMounted(() => {
       </div>
     </template>
 
-    <template #side>
-      <div class="request-command-rail-stack">
-        <article class="request-command-next" :class="`is-${adminNextAction.tone}`">
-          <span>{{ uiText('Next required action', 'الإجراء المطلوب التالي') }}</span>
-          <h2>{{ adminNextAction.title }}</h2>
-          <p>{{ adminNextAction.body }}</p>
-          <div class="request-command-pulse">
-            {{ uiText('Stage-aware guidance', 'إرشاد حسب المرحلة') }}
+    <template #support>
+      <div class="request-command-support-stack">
+        <details class="request-command-rail-card request-command-collapsible request-command-support-card request-command-support-card--overview">
+          <summary class="request-command-rail-head">
+            <h2>{{ t('adminRequestDetails.core.title') }}</h2>
+            <p>{{ t('adminRequestDetails.core.subtitle') }}</p>
+          </summary>
+          <div class="request-command-support-body">
+            <RequestCoreDetailsCard :request="requestItem" :required-documents="requiredDocuments" />
           </div>
-        </article>
+        </details>
 
-        <article class="request-command-rail-card">
-          <div class="request-command-rail-head">
+        <details class="request-command-next request-command-collapsible request-command-support-card" :class="`is-${adminNextAction.tone}`">
+          <summary class="request-command-rail-head">
+            <span>{{ uiText('Next required action', 'الإجراء المطلوب التالي') }}</span>
+            <h2>{{ adminNextAction.title }}</h2>
+          </summary>
+          <div class="request-command-support-body">
+            <p>{{ adminNextAction.body }}</p>
+            <div class="request-command-pulse">
+              {{ uiText('Stage-aware guidance', 'إرشاد حسب المرحلة') }}
+            </div>
+          </div>
+        </details>
+
+        <details class="request-command-rail-card request-command-collapsible request-command-support-card">
+          <summary class="request-command-rail-head">
             <h2>{{ uiText('Quick views', 'عروض سريعة') }}</h2>
             <p>{{ uiText('Open supporting information without stretching the page.', 'افتح المعلومات الداعمة بدون إطالة الصفحة.') }}</p>
-          </div>
+          </summary>
           <div class="request-command-quick-grid">
             <button type="button" @click="quickView = 'requiredDocuments'">
               <strong>{{ t('adminRequestDetails.requiredDocuments.title') }}</strong>
@@ -1949,25 +2041,291 @@ onMounted(() => {
               <span>{{ activityCounts.assignments }}</span>
             </button>
           </div>
-        </article>
+        </details>
 
-        <article class="request-command-rail-card">
-          <div class="request-command-rail-head">
+        <details class="request-command-rail-card request-command-collapsible request-command-support-card">
+          <summary class="request-command-rail-head">
             <h2>{{ uiText('Recent activity', 'آخر النشاط') }}</h2>
             <p>{{ uiText('Latest timeline events for this request.', 'أحدث أحداث المخطط الزمني لهذا الطلب.') }}</p>
-          </div>
-          <div v-if="recentTimelineRows.length" class="request-command-activity-list">
-            <div v-for="(row, index) in recentTimelineRows" :key="row.entry.id ?? `rail-timeline-${index}`" class="request-command-activity">
-              <strong>{{ row.entry.title || row.entry.event_type || t('adminRequestDetails.states.system') }}</strong>
-              <span>{{ timelineDateLabel(row.entry.created_at) }}</span>
+          </summary>
+          <div class="request-command-support-body">
+            <div v-if="recentTimelineRows.length" class="request-command-activity-list">
+              <div v-for="(row, index) in recentTimelineRows" :key="row.entry.id ?? `rail-timeline-${index}`" class="request-command-activity">
+                <strong>{{ row.entry.title || row.entry.event_type || t('adminRequestDetails.states.system') }}</strong>
+                <span>{{ timelineDateLabel(row.entry.created_at) }}</span>
+              </div>
             </div>
+            <p v-else class="empty-state">{{ t('adminRequestDetails.states.noTimelineEvents') }}</p>
           </div>
-          <p v-else class="empty-state">{{ t('adminRequestDetails.states.noTimelineEvents') }}</p>
-        </article>
+        </details>
       </div>
     </template>
 
     <template #after>
+      <AdminQuickViewModal
+        :model-value="actionDialog !== null"
+        @update:model-value="(value) => { if (!value) actionDialog = null }"
+        :title="actionDialogTitle"
+        :subtitle="uiText('Complete the action without losing your place in the request details.', 'أنجز الإجراء بدون فقدان مكانك في تفاصيل الطلب.')"
+        :wide="actionDialog === 'updateBatch' || actionDialog === 'comment' || actionDialog === 'agentAccess'"
+      >
+        <div v-if="actionDialog === 'comment'" class="request-dialog-stack">
+          <div class="admin-inline-block-grid">
+            <div class="field-block field-block--grow">
+              <span>{{ uiText('Visibility', 'الظهور') }}</span>
+              <select v-model="commentVisibility" class="admin-select">
+                <option value="internal">{{ uiText('Internal', 'داخلي') }}</option>
+                <option value="admin_only">{{ uiText('Admin only', 'للإدارة فقط') }}</option>
+                <option value="client_visible">{{ uiText('Client visible', 'مرئي للعميل') }}</option>
+              </select>
+            </div>
+          </div>
+
+          <textarea
+            v-model="commentText"
+            rows="4"
+            class="admin-textarea"
+            :placeholder="uiText('Write a clear follow-up comment for this request.', 'اكتب تعليق متابعة واضح لهذا الطلب.')"
+          />
+
+          <div class="approve-actions">
+            <button class="primary-btn" type="button" :disabled="savingComment || !commentText.trim()" @click="submitComment">
+              {{ savingComment ? t('adminRequestDetails.actions.saving') : uiText('Save comment', 'حفظ التعليق') }}
+            </button>
+            <button type="button" class="ghost-btn" @click="actionDialog = null; quickView = 'comments'">
+              {{ uiText('Open all comments', 'فتح جميع التعليقات') }}
+            </button>
+          </div>
+
+          <div v-if="requestItem.comments?.length" class="timeline-list compact-list">
+            <div
+              v-for="comment in (requestItem.comments || []).slice(0, 3)"
+              :key="`comment-dialog-${comment.id}`"
+              class="timeline-item"
+            >
+              <strong>{{ comment.user?.name || t('adminRequestDetails.states.system') }}</strong>
+              <p>{{ comment.comment_text }}</p>
+              <span>{{ formatDateTime(comment.created_at, locale, t('adminRequestDetails.states.emptyValue')) }} · {{ readableCommentVisibility(comment.visibility) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="actionDialog === 'reject'" class="request-dialog-stack">
+          <p class="subtext">{{ t('adminRequestDetails.rejectRequest.subtitle') }}</p>
+          <textarea v-model="rejectReason" rows="4" class="admin-textarea" :placeholder="t('adminRequestDetails.rejectRequest.placeholder')"></textarea>
+          <div class="approve-actions">
+            <button class="ghost-btn" type="button" :disabled="rejectingRequest" @click="rejectRequest">
+              {{ rejectingRequest ? t('adminRequestDetails.rejectRequest.rejecting') : t('adminRequestDetails.rejectRequest.rejectNow') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="actionDialog === 'approve'" class="request-dialog-stack">
+          <p class="subtext">{{ t('adminRequestDetails.sections.approveSubtitle') }}</p>
+          <textarea v-model="approvalNotes" rows="5" class="admin-textarea" :placeholder="t('adminRequestDetails.sections.approvePlaceholder')"></textarea>
+          <div class="approve-actions">
+            <button class="primary-btn" type="button" :disabled="approving" @click="approveRequest">
+              {{ approving ? t('adminRequestDetails.actions.approving') : t('adminRequestDetails.actions.approveAndContinue') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="actionDialog === 'finalApprove'" class="request-dialog-stack">
+          <p class="subtext">{{ t('adminRequestDetails.sections.finalApproveSubtitle') }}</p>
+          <textarea v-model="finalApprovalNotes" rows="4" class="admin-textarea" :placeholder="t('adminRequestDetails.sections.finalApprovePlaceholder')"></textarea>
+          <div class="client-form-group">
+            <label class="client-form-label">{{ uiText('Final approval attachment', 'مرفق الاعتماد النهائي') }}</label>
+            <input
+              type="file"
+              multiple
+              class="client-form-control"
+              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+              @change="onFinalApprovalAttachmentChange"
+            />
+            <p class="form-help">{{ uiText('Attach the bank final approval file that the client should receive.', 'أرفق ملف الاعتماد النهائي من البنك ليتمكن العميل من الاطلاع عليه.') }}</p>
+            <div v-if="finalApprovalAttachments.length" class="file-list compact-list" style="margin-top: 0.75rem;">
+              <div v-for="(file, index) in finalApprovalAttachments" :key="`${file.name}-${index}`" class="file-item">
+                <div>
+                  <strong>{{ file.name }}</strong>
+                  <span>{{ file.type || uiText('Selected file', 'ملف محدد') }}</span>
+                </div>
+                <button type="button" class="ghost-btn" @click="removeFinalApprovalAttachment(index)">
+                  {{ uiText('Remove', 'إزالة') }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="approve-actions">
+            <button class="primary-btn" type="button" :disabled="finalizingApproval" @click="finalizeRequest">
+              {{ finalizingApproval ? t('adminRequestDetails.actions.finalizingApproval') : t('adminRequestDetails.actions.finalApproveNow') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="actionDialog === 'updateBatch'" class="request-dialog-stack">
+          <div class="catalog-mini-stats request-kpi-grid request-kpi-grid--two">
+            <div><span>{{ t('adminRequestDetails.updateBatch.openBatch') }}</span><strong>{{ activeOpenBatch ? formatUpdateBatchStatus(activeOpenBatch.status, locale, t('adminRequestDetails.states.none')) : t('adminRequestDetails.states.none') }}</strong></div>
+            <div><span>{{ t('adminRequestDetails.updateBatch.totalBatches') }}</span><strong>{{ activityCounts.updateBatches }}</strong></div>
+          </div>
+
+          <div v-if="!activeOpenBatch" class="request-dialog-stack">
+            <div class="request-dialog-grid">
+              <div class="client-form-group">
+                <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.reasonInEnglish') }}</label>
+                <textarea v-model="batchReasonEn" rows="3" class="client-form-control client-form-control--textarea" :placeholder="t('adminRequestDetails.updateBatch.reasonEnPlaceholder')" />
+              </div>
+
+              <div class="client-form-group">
+                <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.reasonInArabic') }}</label>
+                <textarea v-model="batchReasonAr" rows="3" class="client-form-control client-form-control--textarea" :placeholder="t('adminRequestDetails.updateBatch.reasonArPlaceholder')" />
+              </div>
+            </div>
+
+            <div v-for="item in updateDraftItems" :key="item.local_id" class="panel-card slim-card request-draft-item">
+              <div class="summary-grid summary-grid--compact">
+                <div class="client-form-group">
+                  <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.itemType') }}</label>
+                  <select v-model="item.item_type" class="client-form-control" @change="onDraftTypeChange(item)">
+                    <option value="" disabled>{{ t('adminRequestDetails.updateBatch.selectItemType') }}</option>
+                    <option v-for="option in draftItemTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                  </select>
+                </div>
+
+                <div class="client-form-group" v-if="item.item_type === 'intake_field'">
+                  <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.field') }}</label>
+                  <select v-model="item.field_key" class="client-form-control">
+                    <option :value="null" disabled>{{ t('adminRequestDetails.updateBatch.selectField') }}</option>
+                    <option v-for="field in intakeFieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                  </select>
+                </div>
+
+                <div class="client-form-group" v-else-if="item.item_type === 'request_answer'">
+                  <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.question') }}</label>
+                  <select v-model="item.question_id" class="client-form-control">
+                    <option :value="null" disabled>{{ t('adminRequestDetails.updateBatch.selectQuestion') }}</option>
+                    <option v-for="question in questionOptions" :key="question.id" :value="question.id">
+                      {{ question.question_text }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="client-form-group" v-else-if="item.item_type === 'attachment'">
+                  <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.attachment') }}</label>
+                  <select v-model="item.field_key" class="client-form-control">
+                    <option :value="null" disabled>{{ t('adminRequestDetails.updateBatch.selectAttachment') }}</option>
+                    <option v-for="field in attachmentFieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                  </select>
+                </div>
+
+                <div class="client-form-group">
+                  <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.requiredLabel') }}</label>
+                  <select v-model="item.is_required" class="client-form-control">
+                    <option :value="true">{{ t('adminRequestDetails.updateBatch.required') }}</option>
+                    <option :value="false">{{ t('adminRequestDetails.updateBatch.optional') }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="client-form-group">
+                <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.customLabel') }}</label>
+                <input v-model="item.label_en" type="text" class="client-form-control" :placeholder="t('adminRequestDetails.updateBatch.customLabelPlaceholder')" />
+              </div>
+
+              <div class="client-form-group">
+                <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.instruction') }}</label>
+                <textarea v-model="item.instruction_en" rows="3" class="client-form-control client-form-control--textarea" :placeholder="t('adminRequestDetails.updateBatch.instructionPlaceholder')" />
+              </div>
+
+              <div class="approve-actions">
+                <button type="button" class="ghost-btn" @click="removeUpdateDraftItem(item.local_id)">{{ t('adminRequestDetails.updateBatch.removeItem') }}</button>
+              </div>
+            </div>
+
+            <div class="approve-actions">
+              <button type="button" class="ghost-btn" @click="addUpdateDraftItem">{{ updateDraftItems.length ? t('adminRequestDetails.updateBatch.addAnotherItem') : t('adminRequestDetails.updateBatch.addFirstItem') }}</button>
+              <button type="button" class="primary-btn" :disabled="!canSubmitUpdateBatch" @click="submitUpdateBatch">
+                {{ creatingBatch ? t('adminRequestDetails.updateBatch.creatingBatch') : t('adminRequestDetails.updateBatch.openClientUpdateBatch') }}
+              </button>
+            </div>
+          </div>
+
+          <div v-else class="request-dialog-stack">
+            <div class="notes-box">
+              <span>{{ t('adminRequestDetails.updateBatch.currentBatchReason') }}</span>
+              <p>{{ localizedText(activeOpenBatch.reason_en, activeOpenBatch.reason_ar, t('adminRequestDetails.updateBatch.noReasonAdded')) }}</p>
+            </div>
+
+            <div class="approve-actions">
+              <button type="button" class="ghost-btn" :disabled="cancellingBatch" @click="cancelActiveBatch">
+                {{ cancellingBatch ? t('adminRequestDetails.updateBatch.cancellingBatch') : t('adminRequestDetails.updateBatch.cancelThisUpdateBatch') }}
+              </button>
+            </div>
+
+            <div v-for="item in activeOpenBatch.items || []" :key="item.id" class="panel-card slim-card request-draft-item">
+              <div class="client-card-head">
+                <div>
+                  <h3>{{ localizedText(item.label_en, item.label_ar, t('adminRequestDetails.updateBatch.requestedUpdate')) }}</h3>
+                  <p class="client-subtext">{{ localizedText(item.instruction_en, item.instruction_ar, t('adminRequestDetails.updateBatch.noExtraInstruction')) }}</p>
+                </div>
+                <span :class="updateStatusClass(item.status)">{{ updateStatusLabel(item.status) }}</span>
+              </div>
+
+              <div class="summary-grid summary-grid--compact">
+                <div>
+                  <span>{{ t('adminRequestDetails.updateBatch.previousValue') }}</span>
+                  <strong>{{ formatUpdateValue(item, 'old') }}</strong>
+                </div>
+                <div>
+                  <span>{{ t('adminRequestDetails.updateBatch.clientSubmission') }}</span>
+                  <strong>{{ formatUpdateValue(item, 'new') }}</strong>
+                </div>
+              </div>
+
+              <div class="client-form-group">
+                <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.reviewNote') }}</label>
+                <textarea v-model="reviewNotes[item.id]" rows="3" class="client-form-control client-form-control--textarea" :placeholder="t('adminRequestDetails.updateBatch.reviewNotePlaceholder')" />
+              </div>
+
+              <div class="approve-actions">
+                <button type="button" class="ghost-btn" :disabled="reviewingUpdateItems[item.id] || item.status !== 'updated'" @click="reviewUpdateItem(item, 'reject')">
+                  {{ reviewingUpdateItems[item.id] ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.actions.reject') }}
+                </button>
+                <button type="button" class="primary-btn" :disabled="reviewingUpdateItems[item.id] || item.status !== 'updated'" @click="reviewUpdateItem(item, 'approve')">
+                  {{ reviewingUpdateItems[item.id] ? t('adminRequestDetails.actions.saving') : t('adminRequestDetails.actions.approve') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-else-if="actionDialog === 'agentAccess'" class="request-dialog-stack">
+          <AdminAgentAccessPanel
+            :active-assignments="activeAgentAssignments"
+            :bank-options="emailBankOptions"
+            :agent-options="emailAgentOptions"
+            :available-documents="availableEmailDocuments"
+            :selected-bank-id="selectedAssignmentBankId"
+            :selected-agent-ids="selectedAgentIds"
+            :selected-agent-document-keys="selectedAgentDocumentKeys"
+            :review-note="agentAssignmentReviewNote"
+            :saving="savingAgentAssignments"
+            :can-save="canSaveAgentAssignments"
+            :dirty="agentAssignmentDraftDirty"
+            :stage-after-save-label="selectedAgentIds.length ? stageMeta('processing').label : stageMeta('awaiting_agent_assignment').label"
+            @update:selected-bank-id="selectedAssignmentBankId = $event"
+            @update:review-note="agentAssignmentReviewNote = $event"
+            @toggle-agent="toggleAgentSelection"
+            @toggle-document="toggleAgentDocument"
+            @select-all-documents="selectAllAgentDocuments"
+            @clear-documents="clearAgentDocuments"
+            @remove-agent="removeAgentFromDraft"
+            @reset-draft="syncAgentAssignmentDraftFromRequest"
+            @submit="submitAgentAssignments"
+            @preview-file="previewAgentAssignmentDocument"
+          />
+        </div>
+      </AdminQuickViewModal>
+
       <AdminQuickViewModal
         :model-value="quickView !== null"
         @update:model-value="(value) => { if (!value) quickView = null }"

@@ -51,20 +51,32 @@ trait ValidatesRequiredDocumentUpload
 
     private function validateConfiguredMaxSize(Validator $validator, UploadedFile $file, DocumentUploadStep $step): void
     {
-        $maxFileSizeMb = $step->max_file_size_mb !== null
-            ? (int) $step->max_file_size_mb
-            : 10;
+        $maxFileSizeKb = $step->max_file_size_kb !== null
+            ? (int) $step->max_file_size_kb
+            : ($step->max_file_size_mb !== null ? (int) $step->max_file_size_mb * 1024 : 10 * 1024);
 
-        if ($maxFileSizeMb <= 0) {
+        if ($maxFileSizeKb <= 0) {
             return;
         }
 
         $fileSize = $file->getSize();
-        $maxFileSizeBytes = $maxFileSizeMb * 1024 * 1024;
+        $maxFileSizeBytes = $maxFileSizeKb * 1024;
 
         if (is_int($fileSize) && $fileSize > $maxFileSizeBytes) {
-            $validator->errors()->add('file', "The file may not be greater than {$maxFileSizeMb} MB.");
+            $validator->errors()->add('file', 'The file may not be greater than ' . $this->formatConfiguredMaxSize($maxFileSizeKb) . '.');
         }
+    }
+
+    private function formatConfiguredMaxSize(int $kilobytes): string
+    {
+        if ($kilobytes < 1024) {
+            return $kilobytes . ' KB';
+        }
+
+        $megabytes = $kilobytes / 1024;
+        $formatted = rtrim(rtrim(number_format($megabytes, 2, '.', ''), '0'), '.');
+
+        return $formatted . ' MB';
     }
 
     /**

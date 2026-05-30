@@ -24,7 +24,8 @@ type StepForm = {
   finance_type: DocumentStepFinanceType
   description: string
   allowed_file_types_text: string
-  max_file_size_mb: number | null
+  max_file_size_value: number | null
+  max_file_size_unit: 'mb' | 'kb'
   sort_order: number
   is_required: boolean
   is_multiple: boolean
@@ -83,7 +84,8 @@ function createDefaultForm(): StepForm {
     finance_type: 'all',
     description: '',
     allowed_file_types_text: 'pdf\njpg\npng',
-    max_file_size_mb: 10,
+    max_file_size_value: 10,
+    max_file_size_unit: 'mb',
     sort_order: steps.value.length + 1,
     is_required: true,
     is_multiple: false,
@@ -103,13 +105,16 @@ function resetForm() {
 }
 
 function buildPayload(): DocumentUploadStepPayload {
+  const maxFileSizeKb = normalizeFormFileSizeKb()
+
   return {
     code: form.value.code.trim() || null,
     name: form.value.name.trim(),
     finance_type: form.value.finance_type,
     description: form.value.description.trim() || null,
     allowed_file_types_json: parsedAllowedFileTypes.value.length ? parsedAllowedFileTypes.value : null,
-    max_file_size_mb: form.value.max_file_size_mb,
+    max_file_size_mb: maxFileSizeKb !== null ? Number((maxFileSizeKb / 1024).toFixed(3)) : null,
+    max_file_size_kb: maxFileSizeKb,
     sort_order: form.value.sort_order,
     is_required: form.value.is_required,
     is_multiple: form.value.is_multiple,
@@ -174,7 +179,7 @@ function editStep(row: DocumentUploadStepItem) {
     finance_type: row.finance_type || 'all',
     description: row.description ?? '',
     allowed_file_types_text: row.allowed_file_types_json.join('\n'),
-    max_file_size_mb: row.max_file_size_mb,
+    ...fileSizeFieldsFromStep(row),
     sort_order: row.sort_order,
     is_required: row.is_required,
     is_multiple: row.is_multiple,
@@ -259,6 +264,57 @@ function extractErrorMessage(error: unknown, fallback: string) {
 
   return fallback
 }
+
+function normalizeFormFileSizeKb(): number | null {
+  const rawValue = form.value.max_file_size_value
+
+  if (rawValue === null || rawValue === undefined || !Number.isFinite(Number(rawValue))) {
+    return null
+  }
+
+  if (form.value.max_file_size_unit === 'kb') {
+    return Math.round(Number(rawValue))
+  }
+
+  return Math.round(Number(rawValue) * 1024)
+}
+
+function fileSizeFieldsFromStep(row: DocumentUploadStepItem): Pick<StepForm, 'max_file_size_value' | 'max_file_size_unit'> {
+  const kilobytes = row.max_file_size_kb ?? (row.max_file_size_mb ? Math.round(row.max_file_size_mb * 1024) : null)
+
+  if (!kilobytes) {
+    return {
+      max_file_size_value: null,
+      max_file_size_unit: 'mb',
+    }
+  }
+
+  if (kilobytes < 1024) {
+    return {
+      max_file_size_value: kilobytes,
+      max_file_size_unit: 'kb',
+    }
+  }
+
+  return {
+    max_file_size_value: Number((kilobytes / 1024).toFixed(2)),
+    max_file_size_unit: 'mb',
+  }
+}
+
+function previewFileSizeLabel() {
+  const rawValue = form.value.max_file_size_value
+
+  if (rawValue === null || rawValue === undefined || !Number.isFinite(Number(rawValue))) {
+    return null
+  }
+
+  if (form.value.max_file_size_unit === 'kb') {
+    return `${Math.round(Number(rawValue))} KB`
+  }
+
+  return `${Number(Number(rawValue).toFixed(2))} MB`
+}
 </script>
 
 <template>
@@ -308,7 +364,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
         :description="form.description"
         :finance-type="form.finance_type"
         :allowed-file-types="parsedAllowedFileTypes"
-        :max-file-size-mb="form.max_file_size_mb"
+        :max-file-size-label="previewFileSizeLabel()"
         :is-required="form.is_required"
         :is-multiple="form.is_multiple"
         :is-active="form.is_active"
@@ -471,6 +527,16 @@ function extractErrorMessage(error: unknown, fallback: string) {
 
 .document-step-input { min-height: 52px; }
 .document-step-textarea { resize: vertical; }
+
+.document-step-size-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 10px;
+}
+
+.document-step-size-unit {
+  font-weight: 800;
+}
 
 .document-step-input:focus,
 .document-step-textarea:focus {
@@ -713,6 +779,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
   .document-step-hero { flex-direction: column; }
   .document-step-hero h4,
   .document-step-panel__head h2 { font-size: 24px; }
+  .document-step-size-control { grid-template-columns: 1fr; }
   .document-step-upload-box { flex-direction: column; align-items: flex-start; }
 }
 </style>

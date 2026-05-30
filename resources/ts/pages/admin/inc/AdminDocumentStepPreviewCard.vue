@@ -6,7 +6,7 @@ defineProps<{
   description: string
   financeType: 'all' | 'individual' | 'company'
   allowedFileTypes: string[]
-  maxFileSizeMb: number | null
+  maxFileSizeLabel: string | null
   isRequired: boolean
   isMultiple: boolean
   isActive: boolean
@@ -62,7 +62,7 @@ function financeTypeLabel(financeType: 'all' | 'individual' | 'company') {
 
         <div>
           <strong>{{ t('adminSharedWidgets.documentPreview.maxSize') }}</strong>
-          <span class="document-step-meta-text">{{ maxFileSizeMb ? `${maxFileSizeMb} MB` : t('adminSharedWidgets.documentPreview.defaultSize') }}</span>
+          <span class="document-step-meta-text">{{ maxFileSizeLabel || t('adminSharedWidgets.documentPreview.defaultSize') }}</span>
         </div>
       </div>
 

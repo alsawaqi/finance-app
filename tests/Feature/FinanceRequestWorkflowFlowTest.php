@@ -19,6 +19,7 @@ use App\Models\FinanceRequestAgentAssignment;
 use App\Models\FinanceRequestAgentAssignmentDocument;
 use App\Models\FinanceRequestStaffAssignment;
 use App\Models\FinanceRequestStaffQuestion;
+use App\Models\RequestAttachment;
 use App\Models\RequestDocumentUpload;
 use App\Models\RequestEmail;
 use App\Models\RequestTimeline;
@@ -305,6 +306,16 @@ class FinanceRequestWorkflowFlowTest extends TestCase
             'name' => $replacementStaff->name,
             'is_primary' => true,
         ]], $timeline->metadata_json['active_staff']);
+
+        $detailsResponse = $this
+            ->actingAs($admin)
+            ->getJson("/api/admin/requests/{$financeRequest->id}");
+
+        $detailsResponse
+            ->assertOk()
+            ->assertJsonCount(1, 'request.assignments')
+            ->assertJsonPath('request.assignments.0.staff_id', $replacementStaff->id)
+            ->assertJsonPath('request.assignments.0.is_active', true);
     }
 
     public function test_staff_question_answer_keeps_the_staff_member_who_answered_even_after_reassignment(): void
@@ -510,7 +521,7 @@ class FinanceRequestWorkflowFlowTest extends TestCase
         ]);
     }
 
-    public function test_understudy_approval_requires_required_questions_to_be_reviewed_closed(): void
+    public function test_understudy_approval_accepts_answered_questions_without_individual_question_closure(): void
     {
         $client = $this->createUser('client');
         $admin = $this->createUser('admin');
@@ -543,31 +554,52 @@ class FinanceRequestWorkflowFlowTest extends TestCase
             ->assertJsonPath('staff_question_summary.required_answered_count', 1)
             ->assertJsonPath('staff_question_summary.required_reviewed_count', 0)
             ->assertJsonPath('staff_question_summary.all_required_answered', true)
-            ->assertJsonPath('staff_question_summary.can_advance_from_understudy', false);
+            ->assertJsonPath('staff_question_summary.can_advance_from_understudy', true);
 
         $approveResponse = $this
             ->actingAs($admin)
             ->postJson("/api/admin/requests/{$financeRequest->id}/understudy-review", [
                 'action' => 'approve',
+                'review_note' => 'The study answers are acceptable.',
             ]);
 
-        $approveResponse
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('staff_questions');
+        $approveResponse->assertOk();
 
-        $advanceResponse = $this
-            ->actingAs($admin)
-            ->postJson("/api/admin/requests/{$financeRequest->id}/advance-understudy", [
-                'review_note' => 'Trying to bypass review.',
-            ]);
+        $this->assertDatabaseHas('finance_requests', [
+            'id' => $financeRequest->id,
+            'understudy_status' => FinanceRequestUnderstudyStatus::APPROVED->value,
+            'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
+            'understudy_review_note' => 'The study answers are acceptable.',
+        ]);
 
-        $advanceResponse
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('staff_questions');
+        $this->assertDatabaseHas('finance_request_staff_questions', [
+            'finance_request_id' => $financeRequest->id,
+            'question_code' => 'study-risk',
+            'status' => FinanceRequestStaffQuestionStatus::CLOSED->value,
+        ]);
+
+        $revisionRequest = $this->createFinanceRequest($client, [
+            'status' => FinanceRequestStatus::ACTIVE,
+            'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW,
+            'understudy_status' => FinanceRequestUnderstudyStatus::SUBMITTED,
+            'understudy_submitted_at' => now(),
+        ]);
+
+        FinanceRequestStaffQuestion::create([
+            'finance_request_id' => $revisionRequest->id,
+            'question_code' => 'study-income',
+            'question_text_en' => 'Was income verified?',
+            'question_type' => 'text',
+            'answer_text' => 'Needs more details.',
+            'status' => FinanceRequestStaffQuestionStatus::ANSWERED,
+            'is_required' => true,
+            'sort_order' => 1,
+            'answered_at' => now(),
+        ]);
 
         $rejectResponse = $this
             ->actingAs($admin)
-            ->postJson("/api/admin/requests/{$financeRequest->id}/understudy-review", [
+            ->postJson("/api/admin/requests/{$revisionRequest->id}/understudy-review", [
                 'action' => 'reject',
                 'review_note' => 'Please refine the answer.',
             ]);
@@ -575,9 +607,100 @@ class FinanceRequestWorkflowFlowTest extends TestCase
         $rejectResponse->assertOk();
 
         $this->assertDatabaseHas('finance_requests', [
+            'id' => $revisionRequest->id,
+            'understudy_status' => FinanceRequestUnderstudyStatus::REJECTED->value,
+            'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value,
+        ]);
+    }
+
+    public function test_admin_cannot_mark_individual_understudy_question_reviewed(): void
+    {
+        $client = $this->createUser('client');
+        $admin = $this->createUser('admin');
+        $financeRequest = $this->createFinanceRequest($client, [
+            'status' => FinanceRequestStatus::ACTIVE,
+            'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW,
+            'understudy_status' => FinanceRequestUnderstudyStatus::SUBMITTED,
+            'understudy_submitted_at' => now(),
+        ]);
+
+        $staffQuestion = FinanceRequestStaffQuestion::create([
+            'finance_request_id' => $financeRequest->id,
+            'question_code' => 'study-risk',
+            'question_text_en' => 'Has the risk been assessed?',
+            'question_type' => 'text',
+            'answer_text' => 'Yes, initial assessment completed.',
+            'status' => FinanceRequestStaffQuestionStatus::ANSWERED,
+            'is_required' => true,
+            'sort_order' => 1,
+            'answered_at' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->patchJson("/api/admin/requests/{$financeRequest->id}/staff-questions/{$staffQuestion->id}/review", [
+                'action' => 'close',
+                'review_note' => 'Looks fine.',
+            ]);
+
+        $response
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('action');
+
+        $this->assertDatabaseHas('finance_request_staff_questions', [
+            'id' => $staffQuestion->id,
+            'status' => FinanceRequestStaffQuestionStatus::ANSWERED->value,
+            'closed_at' => null,
+        ]);
+    }
+
+    public function test_admin_can_request_revision_for_specific_understudy_question(): void
+    {
+        $client = $this->createUser('client');
+        $admin = $this->createUser('admin');
+        $financeRequest = $this->createFinanceRequest($client, [
+            'status' => FinanceRequestStatus::ACTIVE,
+            'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW,
+            'understudy_status' => FinanceRequestUnderstudyStatus::SUBMITTED,
+            'understudy_submitted_at' => now(),
+        ]);
+
+        $staffQuestion = FinanceRequestStaffQuestion::create([
+            'finance_request_id' => $financeRequest->id,
+            'question_code' => 'study-cashflow',
+            'question_text_en' => 'Is cashflow sufficient?',
+            'question_type' => 'text',
+            'answer_text' => 'Mostly sufficient.',
+            'status' => FinanceRequestStaffQuestionStatus::ANSWERED,
+            'is_required' => true,
+            'sort_order' => 1,
+            'answered_at' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->patchJson("/api/admin/requests/{$financeRequest->id}/staff-questions/{$staffQuestion->id}/review", [
+                'action' => 'reopen',
+                'review_note' => 'Please add the projected cashflow source.',
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('request.understudy_status', FinanceRequestUnderstudyStatus::REJECTED->value)
+            ->assertJsonPath('request.workflow_stage', FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value)
+            ->assertJsonPath('staff_question.status', FinanceRequestStaffQuestionStatus::PENDING->value);
+
+        $this->assertDatabaseHas('finance_requests', [
             'id' => $financeRequest->id,
             'understudy_status' => FinanceRequestUnderstudyStatus::REJECTED->value,
             'workflow_stage' => FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value,
+            'understudy_review_note' => 'Please add the projected cashflow source.',
+        ]);
+
+        $this->assertDatabaseHas('finance_request_staff_questions', [
+            'id' => $staffQuestion->id,
+            'status' => FinanceRequestStaffQuestionStatus::PENDING->value,
+            'closed_at' => null,
         ]);
     }
 
@@ -866,6 +989,65 @@ class FinanceRequestWorkflowFlowTest extends TestCase
             ->where('finance_request_id', $financeRequest->id)
             ->where('is_active', true)
             ->count());
+    }
+
+    public function test_final_approval_uploads_bank_attachment_for_client_access(): void
+    {
+        $client = $this->createUser('client');
+        $admin = $this->createUser('admin');
+        $financeRequest = $this->createFinanceRequest($client, [
+            'status' => FinanceRequestStatus::ACTIVE,
+            'workflow_stage' => FinanceRequestWorkflowStage::PROCESSING,
+            'approved_at' => now(),
+            'approval_reference_number' => 'APR-2026-000012',
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->post("/api/admin/requests/{$financeRequest->id}/final-approve", [
+                'final_approval_notes' => 'Approved by the bank.',
+                'final_approval_attachments' => [
+                    UploadedFile::fake()->create('bank-final-approval.pdf', 80, 'application/pdf'),
+                ],
+            ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('request.status', FinanceRequestStatus::COMPLETED->value)
+            ->assertJsonPath('request.workflow_stage', FinanceRequestWorkflowStage::COMPLETED->value);
+
+        $this->assertDatabaseHas('request_attachments', [
+            'finance_request_id' => $financeRequest->id,
+            'category' => 'final_approval',
+            'file_name' => 'bank-final-approval.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_by' => $admin->id,
+        ]);
+
+        $attachment = RequestAttachment::query()
+            ->where('finance_request_id', $financeRequest->id)
+            ->where('category', 'final_approval')
+            ->firstOrFail();
+
+        Storage::disk('public')->assertExists($attachment->file_path);
+
+        $clientResponse = $this
+            ->actingAs($client)
+            ->getJson("/api/client/requests/{$financeRequest->id}");
+
+        $clientResponse
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $attachment->id,
+                'category' => 'final_approval',
+                'file_name' => 'bank-final-approval.pdf',
+                'download_url' => "/api/client/requests/{$financeRequest->id}/attachments/{$attachment->id}/download",
+            ]);
+
+        $this
+            ->actingAs($client)
+            ->get("/api/client/requests/{$financeRequest->id}/attachments/{$attachment->id}/download")
+            ->assertOk();
     }
 
     public function test_client_required_document_upload_uses_step_allowed_file_types(): void

@@ -47,6 +47,8 @@ const commercialContractFile = ref<File | null>(null)
 const uploadingCommercialContract = ref(false)
 const isArabic = computed(() => locale.value === 'ar')
 const emptyValueLabel = computed(() => t('clientRequestDetails.states.emptyValue'))
+const finalApprovalAttachments = computed(() => (requestItem.value?.attachments ?? []).filter((file: any) => file?.category === 'final_approval'))
+const submittedAttachments = computed(() => (requestItem.value?.attachments ?? []).filter((file: any) => file?.category !== 'final_approval'))
 
 function uiText(en: string, ar: string) {
   return isArabic.value ? ar : en
@@ -219,6 +221,19 @@ function openContractPreview() {
   filePreviewOpen.value = true
 }
 
+function clientAttachmentDownloadUrl(file: any) {
+  return file?.download_url || `/api/client/requests/${requestId.value}/attachments/${file?.id}/download`
+}
+
+function openAttachmentPreview(file: any) {
+  const downloadUrl = clientAttachmentDownloadUrl(file)
+  filePreviewName.value = file?.file_name || uiText('Attachment', 'مرفق')
+  filePreviewMime.value = file?.mime_type || file?.file_extension || ''
+  fileDownloadUrl.value = downloadUrl
+  filePreviewUrl.value = buildPreviewUrl(downloadUrl)
+  filePreviewOpen.value = true
+}
+
 function onCommercialContractFileChange(event: Event) {
   const input = event.target as HTMLInputElement | null
   commercialContractFile.value = input?.files?.[0] ?? null
@@ -347,6 +362,31 @@ onMounted(load)
           <span>{{ t('clientRequestDetails.summary.contractState') }}</span>
         </div>
       </div>
+
+      <article v-if="finalApprovalAttachments.length" class="panel-card slim-card client-reveal-up">
+        <div class="panel-head">
+          <div>
+            <h2>{{ uiText('Final approval documents', 'مستندات الاعتماد النهائي') }}</h2>
+            <p>{{ uiText('Bank approval files uploaded by the admin for this completed request.', 'ملفات الاعتماد البنكي التي رفعتها الإدارة لهذا الطلب المكتمل.') }}</p>
+          </div>
+        </div>
+        <div class="file-list compact-list">
+          <div v-for="file in finalApprovalAttachments" :key="file.id" class="file-item">
+            <div>
+              <strong>{{ file.file_name }}</strong>
+              <span>{{ dateTimeText(file.uploaded_at, uiText('Uploaded by admin', 'مرفوع من الإدارة')) }}</span>
+            </div>
+            <div class="approve-actions">
+              <button type="button" class="ghost-btn" @click="openAttachmentPreview(file)">
+                {{ uiText('Preview', 'معاينة') }}
+              </button>
+              <a :href="clientAttachmentDownloadUrl(file)" target="_blank" rel="noopener" class="ghost-btn">
+                {{ uiText('Download', 'تنزيل') }}
+              </a>
+            </div>
+          </div>
+        </div>
+      </article>
 
       <div class="client-accordion-stack">
         <details v-if="activeUpdateBatch" class="client-accordion-card client-reveal-left" open>
@@ -496,8 +536,8 @@ onMounted(load)
 
               <article class="panel-card slim-card">
                 <div class="panel-head"><h3>{{ t('clientRequestDetails.sections.submittedFiles') }}</h3></div>
-                <div v-if="requestItem.attachments?.length" class="file-list compact-list">
-                  <div v-for="file in requestItem.attachments" :key="file.id" class="file-item">
+                <div v-if="submittedAttachments.length" class="file-list compact-list">
+                  <div v-for="file in submittedAttachments" :key="file.id" class="file-item">
                     <strong>{{ file.file_name }}</strong>
                     <span>{{ file.category }}</span>
                   </div>

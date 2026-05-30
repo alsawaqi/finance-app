@@ -4,11 +4,13 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/AppPagination.vue'
 import {
+  deleteAdminFilteredRequest,
   getAdminRequestFilterData,
   type FilterAgentOption,
   type FilterBankOption,
   type FilterBreakdownAgent,
   type FilterBreakdownBank,
+  type FilterClientOption,
   type FilteredRequestItem,
   type FilterStaffOption,
 } from '@/services/adminRequestFiltering'
@@ -20,9 +22,11 @@ import { formatRequestStatus } from '@/utils/requestStatus'
 
 const loading = ref(true)
 const errorMessage = ref('')
+const successMessage = ref('')
 const requests = ref<FilteredRequestItem[]>([])
 const pagination = ref<PaginationMeta>({ ...DEFAULT_PAGINATION, per_page: 15 })
 const stages = ref<Array<{ value: string; label: string }>>([])
+const clientOptions = ref<FilterClientOption[]>([])
 const staffOptions = ref<FilterStaffOption[]>([])
 const bankOptions = ref<FilterBankOption[]>([])
 const agentOptions = ref<FilterAgentOption[]>([])
@@ -30,10 +34,13 @@ const bankBreakdown = ref<FilterBreakdownBank[]>([])
 const agentBreakdown = ref<FilterBreakdownAgent[]>([])
 const summary = ref({ total_requests: 0, unique_clients: 0, unique_staff: 0, unique_agents: 0, total_emails: 0 })
 
+const requestNumber = ref('')
+const selectedClientId = ref<number | ''>('')
 const selectedStage = ref('')
 const selectedStaffId = ref<number | ''>('')
 const selectedBankId = ref<number | ''>('')
 const selectedAgentId = ref<number | ''>('')
+const deletingRequestIds = ref<Record<number, boolean>>({})
 const { t, locale } = useI18n()
 const router = useRouter()
 
@@ -92,6 +99,8 @@ async function load(page = pagination.value.current_page) {
 
   try {
     const data = await getAdminRequestFilterData({
+      request_number: requestNumber.value.trim() || undefined,
+      client_id: selectedClientId.value === '' ? undefined : Number(selectedClientId.value),
       stage: selectedStage.value || undefined,
       staff_id: selectedStaffId.value === '' ? undefined : Number(selectedStaffId.value),
       bank_id: selectedBankId.value === '' ? undefined : Number(selectedBankId.value),
@@ -101,6 +110,7 @@ async function load(page = pagination.value.current_page) {
     })
 
     stages.value = data.filters?.stages ?? []
+    clientOptions.value = data.filters?.clients ?? []
     staffOptions.value = data.filters?.staff ?? []
     bankOptions.value = data.filters?.banks ?? []
     agentOptions.value = data.filters?.agents ?? []
@@ -117,6 +127,7 @@ async function load(page = pagination.value.current_page) {
 }
 
 function applyFilters() {
+  successMessage.value = ''
   load(1)
 }
 
@@ -145,11 +156,47 @@ function goToRequestDetail(id: number) {
   router.push({ name: 'admin-request-details', params: { id: String(id) } })
 }
 
+async function deleteRequest(item: FilteredRequestItem) {
+  const reference = item.reference_number || String(item.id)
+  const confirmed = window.confirm(uiText(
+    `Delete request ${reference}? This cannot be undone.`,
+    `هل تريد حذف الطلب ${reference}؟ لا يمكن التراجع عن ذلك.`,
+  ))
+
+  if (!confirmed || deletingRequestIds.value[item.id]) return
+
+  deletingRequestIds.value = {
+    ...deletingRequestIds.value,
+    [item.id]: true,
+  }
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await deleteAdminFilteredRequest(item.id)
+    successMessage.value = data.message || uiText('Request deleted successfully.', 'تم حذف الطلب بنجاح.')
+    const nextPage = requests.value.length === 1 && pagination.value.current_page > 1
+      ? pagination.value.current_page - 1
+      : pagination.value.current_page
+    await load(nextPage)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to delete this request.', 'تعذر حذف هذا الطلب.')
+  } finally {
+    deletingRequestIds.value = {
+      ...deletingRequestIds.value,
+      [item.id]: false,
+    }
+  }
+}
+
 function resetFilters() {
+  requestNumber.value = ''
+  selectedClientId.value = ''
   selectedStage.value = ''
   selectedStaffId.value = ''
   selectedBankId.value = ''
   selectedAgentId.value = ''
+  successMessage.value = ''
   load(1)
 }
 
@@ -216,6 +263,27 @@ onMounted(load)
       </div>
 
       <div class="filter-bar filter-bar--dense">
+        <div class="field-block field-block--grow">
+          <span>{{ uiText('Request number', 'رقم الطلب') }}</span>
+          <input
+            v-model="requestNumber"
+            class="admin-input"
+            type="search"
+            :placeholder="uiText('Search request or approval number', 'ابحث برقم الطلب أو رقم الاعتماد')"
+            @keyup.enter="applyFilters"
+          >
+        </div>
+
+        <div class="field-block field-block--grow">
+          <span>{{ uiText('Client', 'العميل') }}</span>
+          <select v-model="selectedClientId" class="admin-select">
+            <option value="">{{ uiText('All clients', 'كل العملاء') }}</option>
+            <option v-for="client in clientOptions" :key="client.id" :value="client.id">
+              {{ client.name }}{{ client.email ? ` - ${client.email}` : '' }}
+            </option>
+          </select>
+        </div>
+
         <div class="field-block">
           <span>{{ t('adminRequestFiltering.filters.stage') }}</span>
           <select v-model="selectedStage" class="admin-select">
@@ -265,7 +333,7 @@ onMounted(load)
       </div>
     </article>
 
-    <div class="admin-dashboard-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+    <div class="admin-dashboard-grid admin-dashboard-grid--main">
       <article class="panel-card">
         <div class="panel-head">
           <h2>{{ uiText('Bank traffic breakdown', 'تفصيل حركة البنوك') }}</h2>
@@ -355,6 +423,7 @@ onMounted(load)
         <span class="count-pill">{{ t('adminRequestFiltering.table.count', { count: pagination.total }) }}</span>
       </div>
 
+      <p v-if="successMessage" class="success-state">{{ successMessage }}</p>
       <p v-if="loading" class="empty-state">{{ t('adminRequestFiltering.states.loading') }}</p>
       <p v-else-if="errorMessage" class="error-state">{{ errorMessage }}</p>
       <p v-else-if="!requests.length" class="empty-state">{{ t('adminRequestFiltering.states.empty') }}</p>
@@ -412,7 +481,17 @@ onMounted(load)
                 <div class="muted-small">{{ stageMeta(item.workflow_stage).label }}</div>
               </td>
               <td @click.stop>
-                <RouterLink :to="{ name: 'admin-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('adminRequestFiltering.actions.view') }}</RouterLink>
+                <div class="approve-actions">
+                  <RouterLink :to="{ name: 'admin-request-details', params: { id: item.id } }" class="primary-btn small-btn">{{ t('adminRequestFiltering.actions.view') }}</RouterLink>
+                  <button
+                    type="button"
+                    class="admin-logout-btn small-btn"
+                    :disabled="Boolean(deletingRequestIds[item.id])"
+                    @click="deleteRequest(item)"
+                  >
+                    {{ deletingRequestIds[item.id] ? uiText('Deleting...', 'جارٍ الحذف...') : uiText('Delete', 'حذف') }}
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>

@@ -15,7 +15,7 @@ class ReviewFinanceRequestStaffQuestionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'action' => ['required', 'string', Rule::in(['close', 'reopen'])],
+            'action' => ['required', 'string', Rule::in(['reopen'])],
             'review_note' => ['nullable', 'string', 'max:4000'],
         ];
     }

@@ -15,6 +15,7 @@ use App\Http\Requests\Admin\ReviewFinanceRequestStaffQuestionRequest;
 use App\Http\Requests\Admin\UpdateFinanceRequestWorkflowStageRequest;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestStaffQuestion;
+use App\Models\RequestAttachment;
 use App\Services\FinanceRequestDocumentChecklistService;
 use App\Services\FinanceRequestStaffQuestionService;
 use App\Services\FinanceRequestWorkflowService;
@@ -218,6 +219,26 @@ class AdminFinanceRequestController extends Controller
         DB::transaction(function () use ($financeRequest, $admin, $request) {
             $this->workflowService->markCompleted($financeRequest);
 
+            $finalApprovalAttachmentIds = [];
+
+            foreach ($request->file('final_approval_attachments', []) as $file) {
+                $path = $file->store('request-attachments/final-approval', 'public');
+
+                $attachment = RequestAttachment::create([
+                    'finance_request_id' => $financeRequest->id,
+                    'category' => 'final_approval',
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_path' => $path,
+                    'disk' => 'public',
+                    'mime_type' => $file->getClientMimeType() ?: $file->getMimeType(),
+                    'file_extension' => $file->getClientOriginalExtension() ?: $file->extension(),
+                    'file_size' => $file->getSize(),
+                    'uploaded_by' => $admin->id,
+                ]);
+
+                $finalApprovalAttachmentIds[] = $attachment->id;
+            }
+
             RequestTimelineLogger::log(
                 $financeRequest,
                 'request.final_approved',
@@ -230,6 +251,7 @@ class AdminFinanceRequestController extends Controller
                     'status' => FinanceRequestStatus::COMPLETED->value,
                     'workflow_stage' => FinanceRequestWorkflowStage::COMPLETED->value,
                     'completed_at' => optional($financeRequest->completed_at)->toISOString(),
+                    'final_approval_attachment_ids' => $finalApprovalAttachmentIds,
                 ],
             );
         });
@@ -452,12 +474,16 @@ class AdminFinanceRequestController extends Controller
             'currentContract',
             'contracts',
             'shareholders',
-            'documentUploads.step:id,code,name,description,is_required,is_multiple,allowed_file_types_json,max_file_size_mb',
+                'documentUploads.step:id,code,name,description,is_required,is_multiple,allowed_file_types_json,max_file_size_mb,max_file_size_kb',
             'documentUploads.uploader:id,name,email',
             'documentUploads.reviewer:id,name,email',
             'additionalDocuments.requester:id,name,email',
             'additionalDocuments.uploader:id,name,email',
-            'assignments' => fn ($query) => $query->with(['staff:id,name,email,phone', 'assignedBy:id,name,email'])->orderByDesc('is_primary')->orderBy('assigned_at'),
+            'assignments' => fn ($query) => $query
+                ->where('is_active', true)
+                ->with(['staff:id,name,email,phone', 'assignedBy:id,name,email'])
+                ->orderByDesc('is_primary')
+                ->orderBy('assigned_at'),
             'comments' => fn ($query) => $query->with('user:id,name,email')->latest('created_at'),
             'emails' => fn ($query) => $query->with([
                 'sender:id,name,email',

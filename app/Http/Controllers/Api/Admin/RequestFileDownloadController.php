@@ -161,6 +161,12 @@ class RequestFileDownloadController extends Controller
             return;
         }
 
+        if ($user->hasRole('client')) {
+            abort_unless((int) $financeRequest->user_id === (int) $user->id, 403, 'You cannot access files for this request.');
+
+            return;
+        }
+
         abort_unless($user->hasRole('staff') && $user->can('view assigned requests'), 403);
 
         $isAssigned = (int) $financeRequest->primary_staff_id === (int) $user->id

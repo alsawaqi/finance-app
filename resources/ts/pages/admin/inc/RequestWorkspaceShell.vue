@@ -25,6 +25,7 @@ const showInlineError = computed(() => Boolean(props.errorMessage) && props.hasR
 const slots = useSlots()
 const hasSummarySlot = computed(() => Boolean(slots.summary))
 const hasWorkflowSlot = computed(() => Boolean(slots.workflow))
+const hasSupportSlot = computed(() => Boolean(slots.support))
 const hasSideSlot = computed(() => Boolean(slots.side))
 const { locale } = useI18n()
 const loadingFallback = computed(() => (locale.value === 'ar' ? 'جارٍ التحميل...' : 'Loading...'))
@@ -64,6 +65,10 @@ const loadingFallback = computed(() => (locale.value === 'ar' ? 'جارٍ الت
         <aside v-if="hasSummarySlot" class="request-command-snapshot">
           <slot name="summary" />
         </aside>
+
+        <section v-if="hasSupportSlot" class="request-command-support">
+          <slot name="support" />
+        </section>
 
         <div class="admin-workspace-main request-command-main">
           <slot name="main" />

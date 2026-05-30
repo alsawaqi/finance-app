@@ -69,7 +69,8 @@ class FinanceRequestDocumentChecklistService
                     ->filter(fn (string $type) => $type !== '')
                     ->values()
                     ->all(),
-                'max_file_size_mb' => $step->max_file_size_mb !== null ? (int) $step->max_file_size_mb : null,
+                'max_file_size_mb' => $this->maxFileSizeKb($step) !== null ? round($this->maxFileSizeKb($step) / 1024, 3) : null,
+                'max_file_size_kb' => $this->maxFileSizeKb($step),
                 'status' => $status,
                 'is_uploaded' => $isSatisfied,
                 'can_client_upload' => $isMultiple || $latestUpload === null || $isRejected,
@@ -93,6 +94,17 @@ class FinanceRequestDocumentChecklistService
         return in_array($applicantType, ['individual', 'company'], true)
             ? $applicantType
             : 'individual';
+    }
+
+    private function maxFileSizeKb(DocumentUploadStep $step): ?int
+    {
+        if ($step->max_file_size_kb !== null) {
+            return (int) $step->max_file_size_kb;
+        }
+
+        return $step->max_file_size_mb !== null
+            ? (int) $step->max_file_size_mb * 1024
+            : null;
     }
 
     public function isStepApplicableForRequest(FinanceRequest $financeRequest, ?DocumentUploadStep $documentUploadStep): bool

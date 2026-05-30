@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/AppPagination.vue'
 import {
+  deleteAdminClient,
   getAdminClientRequests,
   getAdminClientsOverview,
   toggleAdminClientActive,
@@ -26,7 +27,7 @@ function goToRequestDetail(id: number) {
 
 const loading = ref(true)
 const detailLoading = ref(false)
-const actionLoadingId = ref<number | null>(null)
+const actionLoading = ref<{ clientId: number; action: 'toggle' | 'delete' } | null>(null)
 const errorMessage = ref('')
 const detailErrorMessage = ref('')
 const actionMessage = ref('')
@@ -53,6 +54,11 @@ const statCards = computed(() => [
   { label: t('adminClientsOverview.stats.withActiveRequests'), value: summary.value.clients_with_active_requests, tone: 'violet' },
   { label: t('adminClientsOverview.stats.selectedClientRequests'), value: requestsPagination.value.total, tone: 'amber' },
 ])
+
+function isClientActionLoading(clientId: number, action?: 'toggle' | 'delete') {
+  if (actionLoading.value?.clientId !== clientId) return false
+  return action ? actionLoading.value.action === action : true
+}
 
 async function loadClients(page = clientsPagination.value.current_page) {
   loading.value = true
@@ -110,7 +116,7 @@ async function loadClientRequests(client: ClientOverviewItem | null = selectedCl
 }
 
 async function toggleClient(client: ClientOverviewItem) {
-  actionLoadingId.value = client.id
+  actionLoading.value = { clientId: client.id, action: 'toggle' }
   actionMessage.value = ''
   errorMessage.value = ''
 
@@ -132,7 +138,37 @@ async function toggleClient(client: ClientOverviewItem) {
   } catch (error: any) {
     errorMessage.value = error?.response?.data?.message || t('adminClientsOverview.errors.toggleClientFailed')
   } finally {
-    actionLoadingId.value = null
+    actionLoading.value = null
+  }
+}
+
+async function deleteClient(client: ClientOverviewItem) {
+  const confirmed = window.confirm(t('adminClientsOverview.confirm.deleteClient', { name: client.name }))
+  if (!confirmed) return
+
+  actionLoading.value = { clientId: client.id, action: 'delete' }
+  actionMessage.value = ''
+  errorMessage.value = ''
+  detailErrorMessage.value = ''
+
+  try {
+    const data = await deleteAdminClient(client.id)
+    actionMessage.value = data.message
+
+    if (selectedClient.value?.id === client.id) {
+      selectedClient.value = null
+      selectedClientRequests.value = []
+      requestsPagination.value = { ...DEFAULT_PAGINATION, per_page: requestsPagination.value.per_page }
+    }
+
+    const nextPage = clients.value.length === 1 && clientsPagination.value.current_page > 1
+      ? clientsPagination.value.current_page - 1
+      : clientsPagination.value.current_page
+    await loadClients(nextPage)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || t('adminClientsOverview.errors.deleteClientFailed')
+  } finally {
+    actionLoading.value = null
   }
 }
 
@@ -268,13 +304,20 @@ watch(
               <td @click.stop>
                 <div class="actions-row">
                   <button class="primary-btn small-btn" type="button" @click="loadClientRequests(client, 1)">{{ t('adminClientsOverview.actions.viewRequests') }}</button>
-                  <button class="ghost-btn small-btn" type="button" :disabled="actionLoadingId === client.id" @click="toggleClient(client)">
+                  <button class="ghost-btn small-btn" type="button" :disabled="isClientActionLoading(client.id)" @click="toggleClient(client)">
                     {{
-                      actionLoadingId === client.id
+                      isClientActionLoading(client.id, 'toggle')
                         ? t('adminClientsOverview.actions.processing')
                         : client.is_active
-                          ? t('adminClientsOverview.actions.deactivate')
-                          : t('adminClientsOverview.actions.activate')
+                          ? t('adminClientsOverview.actions.block')
+                          : t('adminClientsOverview.actions.unblock')
+                    }}
+                  </button>
+                  <button class="ghost-btn small-btn client-danger-btn" type="button" :disabled="isClientActionLoading(client.id)" @click="deleteClient(client)">
+                    {{
+                      isClientActionLoading(client.id, 'delete')
+                        ? t('adminClientsOverview.actions.deleting')
+                        : t('adminClientsOverview.actions.delete')
                     }}
                   </button>
                 </div>
@@ -350,3 +393,16 @@ watch(
     </article>
   </section>
 </template>
+
+<style scoped>
+.client-danger-btn {
+  border-color: rgba(220, 38, 38, 0.22);
+  color: #b91c1c;
+}
+
+.client-danger-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: rgba(220, 38, 38, 0.32);
+  color: #991b1b;
+}
+</style>

@@ -93,6 +93,7 @@ export type FinanceRequestDetail = AdminRequestListItem & {
     assignment_role?: string | null
     notes?: string | null
     is_primary: boolean
+    is_active?: boolean
     assigned_at?: string | null
     staff?: { id: number; name: string; email?: string | null } | null
     assignedBy?: { id: number; name: string; email?: string | null } | null
@@ -212,8 +213,20 @@ export async function approveAdminRequest(id: number | string, payload: { approv
   return data
 }
 
-export async function finalizeAdminRequest(id: number | string, payload: { final_approval_notes?: string }) {
-  const { data } = await api.post(`/api/admin/requests/${id}/final-approve`, payload)
+export async function finalizeAdminRequest(
+  id: number | string,
+  payload: { final_approval_notes?: string; final_approval_attachments?: File[] },
+) {
+  const formData = new FormData()
+  if (payload.final_approval_notes) formData.append('final_approval_notes', payload.final_approval_notes)
+  const finalApprovalAttachments = payload.final_approval_attachments ?? []
+  finalApprovalAttachments.forEach((file) => {
+    formData.append('final_approval_attachments[]', file)
+  })
+
+  const { data } = await api.post(`/api/admin/requests/${id}/final-approve`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
   return data
 }
 
@@ -330,6 +343,7 @@ export type AssignmentReadyRequest = AdminRequestListItem & {
     staff_id: number
     assignment_role?: string | null
     is_primary: boolean
+    is_active?: boolean
     assigned_at?: string | null
     staff?: { id: number; name: string; email?: string | null } | null
   }>
@@ -418,7 +432,7 @@ export async function reviewAdminUnderstudy(
 export async function reviewAdminStaffQuestion(
   id: number | string,
   staffQuestionId: number | string,
-  payload: { action: 'close' | 'reopen'; review_note?: string },
+  payload: { action: 'reopen'; review_note?: string },
 ) {
   const { data } = await api.patch(`/api/admin/requests/${id}/staff-questions/${staffQuestionId}/review`, payload)
   return data

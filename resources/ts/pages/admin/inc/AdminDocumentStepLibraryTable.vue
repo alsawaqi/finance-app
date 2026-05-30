@@ -111,7 +111,7 @@ function financeTypeLabel(financeType: DocumentUploadStepItem['finance_type']) {
                 <span v-if="row.allowed_file_types_json.length > 3" class="document-step-chip is-muted">+{{ row.allowed_file_types_json.length - 3 }}</span>
               </div>
             </td>
-            <td>{{ row.max_file_size_mb ? `${row.max_file_size_mb} MB` : t('adminDocumentStepLibrary.states.default') }}</td>
+            <td>{{ row.max_file_size_label || t('adminDocumentStepLibrary.states.default') }}</td>
             <td>
               <span class="document-step-pill" :class="row.is_required ? 'is-required' : 'is-optional'">
                 {{ row.is_required ? t('adminDocumentStepLibrary.states.required') : t('adminDocumentStepLibrary.states.optional') }}

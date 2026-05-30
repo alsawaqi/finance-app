@@ -14,6 +14,12 @@ export type FilterStaffOption = {
   email?: string | null
 }
 
+export type FilterClientOption = {
+  id: number
+  name: string
+  email?: string | null
+}
+
 export type FilterBankOption = {
   id: number
   name: string
@@ -130,6 +136,8 @@ export type ClientOverviewRequest = {
 }
 
 export async function getAdminRequestFilterData(params?: {
+  request_number?: string
+  client_id?: number | null
   stage?: string
   status?: string
   staff_id?: number | null
@@ -144,6 +152,7 @@ export async function getAdminRequestFilterData(params?: {
       stages: FilterStageOption[]
       statuses: FilterStatusOption[]
       staff: FilterStaffOption[]
+      clients: FilterClientOption[]
       banks: FilterBankOption[]
       agents: FilterAgentOption[]
     }
@@ -161,9 +170,17 @@ export async function getAdminRequestFilterData(params?: {
   }
 }
 
+export async function deleteAdminFilteredRequest(requestId: number | string) {
+  const { data } = await api.delete(`/api/admin/request-filters/${requestId}`)
+  return data as {
+    message: string
+  }
+}
+
 export async function getAdminClientsOverview(params?: {
   search?: string
   state?: 'active' | 'inactive' | 'all'
+  with_requests?: boolean
   page?: number
   per_page?: number
 }) {
@@ -201,5 +218,12 @@ export async function toggleAdminClientActive(clientId: number | string) {
   return data as {
     message: string
     client: ClientOverviewItem
+  }
+}
+
+export async function deleteAdminClient(clientId: number | string) {
+  const { data } = await api.delete(`/api/admin/clients-overview/${clientId}`)
+  return data as {
+    message: string
   }
 }

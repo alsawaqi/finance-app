@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -30,17 +31,21 @@ class AdminRequestFilteringController extends Controller
             ],
             'status' => ['nullable', 'string'],
             'staff_id' => ['nullable', 'integer', 'exists:users,id'],
+            'client_id' => ['nullable', 'integer', 'exists:users,id'],
             'bank_id' => ['nullable', 'integer', 'exists:banks,id'],
             'agent_id' => ['nullable', 'integer', 'exists:agents,id'],
+            'request_number' => ['nullable', 'string', 'max:255'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
         ]);
 
         $staffId = isset($validated['staff_id']) ? (int) $validated['staff_id'] : null;
+        $clientId = isset($validated['client_id']) ? (int) $validated['client_id'] : null;
         $bankId = isset($validated['bank_id']) ? (int) $validated['bank_id'] : null;
         $agentId = isset($validated['agent_id']) ? (int) $validated['agent_id'] : null;
         $stage = $validated['stage'] ?? null;
         $status = $validated['status'] ?? null;
+        $requestNumber = trim((string) ($validated['request_number'] ?? ''));
         $perPage = (int) ($validated['per_page'] ?? 15);
 
         if ($staffId && ($bankId || $agentId)) {
@@ -68,6 +73,14 @@ class AdminRequestFilteringController extends Controller
             ->withCount('emails')
             ->when($stage, fn (Builder $query) => $query->where('workflow_stage', $stage))
             ->when($status, fn (Builder $query) => $query->where('status', $status))
+            ->when($clientId, fn (Builder $query) => $query->where('user_id', $clientId))
+            ->when($requestNumber !== '', function (Builder $query) use ($requestNumber) {
+                $query->where(function (Builder $numberQuery) use ($requestNumber) {
+                    $numberQuery
+                        ->where('reference_number', 'like', "%{$requestNumber}%")
+                        ->orWhere('approval_reference_number', 'like', "%{$requestNumber}%");
+                });
+            })
             ->when($staffId, function (Builder $query) use ($staffId) {
                 $query->where(function (Builder $staffQuery) use ($staffId) {
                     $staffQuery
@@ -113,14 +126,24 @@ class AdminRequestFilteringController extends Controller
                     ->map(fn (FinanceRequestStatus $case) => ['value' => $case->value, 'label' => str_replace('_', ' ', $case->value)])
                     ->values(),
                 'staff' => $this->staffOptions(),
+                'clients' => $this->clientOptions(),
                 'banks' => $this->bankOptions(),
                 'agents' => $this->agentOptions(),
             ],
             'summary' => [
-                'total_requests' => $requests->count(),
-                'unique_clients' => $requests->pluck('client.id')->filter()->unique()->count(),
-                'unique_staff' => $requests->flatMap(fn (array $item) => $item['active_staff'] ?? [])->pluck('id')->filter()->unique()->count(),
-                'unique_agents' => $requests->flatMap(fn (array $item) => $item['agents'] ?? [])->pluck('id')->filter()->unique()->count(),
+                'total_requests' => $requestsPaginator->total(),
+                'unique_clients' => $requestCollection->pluck('user_id')->filter()->unique()->count(),
+                'unique_staff' => $requestCollection
+                    ->flatMap(fn (FinanceRequest $financeRequest) => $financeRequest->assignments->pluck('staff_id'))
+                    ->merge($requestCollection->pluck('primary_staff_id'))
+                    ->filter()
+                    ->unique()
+                    ->count(),
+                'unique_agents' => $requestCollection
+                    ->flatMap(fn (FinanceRequest $financeRequest) => $financeRequest->emails->flatMap(fn ($email) => $email->agents->pluck('id')))
+                    ->filter()
+                    ->unique()
+                    ->count(),
                 'total_emails' => $requestCollection->sum('emails_count'),
             ],
             'bank_breakdown' => $bankBreakdown,
@@ -130,17 +153,28 @@ class AdminRequestFilteringController extends Controller
         ]);
     }
 
+    public function destroy(FinanceRequest $financeRequest): JsonResponse
+    {
+        $financeRequest->delete();
+
+        return response()->json([
+            'message' => 'Request deleted successfully.',
+        ]);
+    }
+
     public function clients(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'state' => ['nullable', Rule::in(['active', 'inactive', 'all'])],
+            'with_requests' => ['nullable', Rule::in([true, false, 1, 0, '1', '0', 'true', 'false'])],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
         ]);
 
         $search = trim((string) ($validated['search'] ?? ''));
         $state = (string) ($validated['state'] ?? 'active');
+        $withRequests = filter_var($validated['with_requests'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $perPage = (int) ($validated['per_page'] ?? 15);
 
         $clientsQuery = $this->clientsBaseQuery()
@@ -159,7 +193,8 @@ class AdminRequestFilteringController extends Controller
                         ->orWhere('email', 'like', "%{$search}%")
                         ->orWhere('phone', 'like', "%{$search}%");
                 });
-            });
+            })
+            ->when($withRequests, fn (Builder $query) => $query->whereHas('financeRequests'));
 
         if ($state === 'active') {
             $clientsQuery->where('is_active', true);
@@ -284,6 +319,23 @@ class AdminRequestFilteringController extends Controller
                 ? 'Client account activated successfully.'
                 : 'Client account deactivated successfully.',
             'client' => $this->serializeClient($freshClient),
+        ]);
+    }
+
+    public function destroyClient(User $client): JsonResponse
+    {
+        abort_unless($this->isClient($client), 404, 'Client not found.');
+
+        DB::transaction(function () use ($client): void {
+            DB::table('sessions')->where('user_id', $client->id)->delete();
+            DB::table('password_reset_tokens')->where('email', $client->email)->delete();
+            $client->tokens()->delete();
+            $client->syncRoles([]);
+            $client->delete();
+        });
+
+        return response()->json([
+            'message' => 'Client deleted successfully.',
         ]);
     }
 
@@ -476,6 +528,19 @@ class AdminRequestFilteringController extends Controller
                 $query->where('account_type', UserAccountType::CLIENT->value)
                     ->orWhereHas('roles', fn (Builder $roleQuery) => $roleQuery->where('name', 'client'));
             });
+    }
+
+    private function clientOptions()
+    {
+        return $this->clientsBaseQuery()
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ])
+            ->values();
     }
 
     private function isClient(User $user): bool

@@ -718,6 +718,7 @@ class ClientRequestController extends Controller
                 'file_extension' => $attachment->file_extension,
                 'file_size' => $attachment->file_size,
                 'uploaded_at' => optional($attachment->created_at)->toISOString(),
+                'download_url' => "/api/client/requests/{$financeRequest->id}/attachments/{$attachment->id}/download",
             ])->values(),
            'shareholders' => $financeRequest->shareholders->map(fn (FinanceRequestShareholder $shareholder) => [
                         'id' => $shareholder->id,
@@ -753,7 +754,8 @@ class ClientRequestController extends Controller
                         fn ($type) => strtolower(trim((string) $type)),
                         (array) ($item['allowed_file_types'] ?? [])
                     ))),
-                    'max_file_size_mb' => isset($item['max_file_size_mb']) ? (int) $item['max_file_size_mb'] : null,
+                    'max_file_size_mb' => isset($item['max_file_size_mb']) ? (float) $item['max_file_size_mb'] : null,
+                    'max_file_size_kb' => isset($item['max_file_size_kb']) ? (int) $item['max_file_size_kb'] : null,
                     'is_uploaded' => $item['is_uploaded'],
                     'can_client_upload' => $item['can_client_upload'],
                     'is_change_requested' => $item['is_change_requested'],

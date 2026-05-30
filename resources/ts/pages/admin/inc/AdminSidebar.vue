@@ -136,6 +136,15 @@ const menuItems = computed(() => {
     },
     {
       group: 'setup',
+      label: t('adminSidebar.menu.clientRequests'),
+      icon: 'fas fa-user-group',
+      to: { name: 'admin-client-requests' },
+      active: route.name === 'admin-client-requests',
+      badge: t('adminSidebar.badges.clients'),
+      show: auth.isAdmin,
+    },
+    {
+      group: 'setup',
       label: t('adminSidebar.menu.clientsDirectory'),
       icon: 'fas fa-users',
       to: { name: 'admin-clients-overview' },

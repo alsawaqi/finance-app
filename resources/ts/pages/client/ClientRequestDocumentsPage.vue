@@ -12,6 +12,11 @@ import {
 } from '@/services/clientPortal'
 import { getClientWorkflowStageMeta } from '@/utils/clientRequestStage'
 import { formatDateTime } from '@/utils/dateTime'
+import {
+  formatUploadBytes,
+  optimizeClientUploadFile,
+  type UploadCompressionResult,
+} from '@/utils/uploadCompression'
 
 const route = useRoute()
 const requestId = computed(() => route.params.id as string)
@@ -42,6 +47,12 @@ type PendingUpload = {
   id: number
   file: File
   title: string
+  compression?: UploadCompressionResult
+}
+
+type PreparedUploadFile = {
+  file: File
+  compression?: UploadCompressionResult
 }
 
 type UploadExecutionResult = {
@@ -102,22 +113,46 @@ function acceptFromExtensions(extensions: string[]) {
   return extensions.map((ext) => `.${ext}`).join(',')
 }
 
-function validateSelectedFile(file: File, options?: { allowedExtensions?: unknown; maxMb?: number | null }): string | null {
+function formatMaxFileSizeLimit(kilobytes: number) {
+  if (kilobytes < 1024) {
+    return `${kilobytes} KB`
+  }
+
+  return `${Number((kilobytes / 1024).toFixed(2))} MB`
+}
+
+function isExtensionAllowed(ext: string, allowedExtensions: string[]) {
+  if (allowedExtensions.includes(ext)) return true
+  return (ext === 'jpg' && allowedExtensions.includes('jpeg'))
+    || (ext === 'jpeg' && allowedExtensions.includes('jpg'))
+}
+
+function validateSelectedFile(
+  file: File,
+  options?: { allowedExtensions?: unknown; maxMb?: number | null; maxKb?: number | null },
+  validationOptions?: { skipSize?: boolean },
+): string | null {
   const allowedExtensions = normalizeAllowedExtensions(options?.allowedExtensions)
   const ext = fileExtension(file)
-  if (!ext || !allowedExtensions.includes(ext)) {
+  if (!ext || !isExtensionAllowed(ext, allowedExtensions)) {
     return uiText(
       `Invalid file format. Allowed: ${formatExtensionList(allowedExtensions)}.`,
       `صيغة الملف غير مسموحة. الصيغ المسموحة: ${formatExtensionList(allowedExtensions)}.`,
     )
   }
 
-  const maxMb = Number(options?.maxMb || DEFAULT_MAX_FILE_SIZE_MB)
-  const maxBytes = maxMb * 1024 * 1024
+  if (validationOptions?.skipSize) {
+    return null
+  }
+
+  const maxKb = Number(options?.maxKb || (Number(options?.maxMb || DEFAULT_MAX_FILE_SIZE_MB) * 1024))
+  const maxBytes = maxKb * 1024
   if (Number.isFinite(maxBytes) && maxBytes > 0 && file.size > maxBytes) {
+    const maxSizeLabel = formatMaxFileSizeLimit(maxKb)
+
     return uiText(
-      `File is too large. Maximum size is ${maxMb} MB.`,
-      `حجم الملف كبير جداً. الحد الأقصى هو ${maxMb} ميجابايت.`,
+      `File is too large. Maximum size is ${maxSizeLabel}.`,
+      `حجم الملف كبير جداً. الحد الأقصى هو ${maxSizeLabel}.`,
     )
   }
 
@@ -291,10 +326,51 @@ function hasPending(kind: PendingUpload['kind'], id: number) {
   return pendingUploads.value.some((item) => item.kind === kind && item.id === id)
 }
 
-function enqueueUploads(base: Omit<PendingUpload, 'file'>, files: File[], options?: { replaceForKey?: boolean }) {
+async function prepareFileForUpload(file: File, options?: { allowedExtensions?: unknown }): Promise<PreparedUploadFile> {
+  const allowedExtensions = normalizeAllowedExtensions(options?.allowedExtensions)
+  const compression = await optimizeClientUploadFile(file, { allowedExtensions })
+
+  return {
+    file: compression.file,
+    compression,
+  }
+}
+
+function pendingFileSizeLabel(item: PendingUpload) {
+  if (item.compression?.wasCompressed) {
+    return `${formatUploadBytes(item.compression.originalSize)} -> ${formatUploadBytes(item.compression.compressedSize)}`
+  }
+
+  return formatUploadBytes(item.file.size)
+}
+
+function pendingCompressionLabel(item: PendingUpload) {
+  if (!item.compression?.wasCompressed) return ''
+
+  return uiText(
+    `Optimized ${item.compression.savingsPercent}% smaller before upload`,
+    `تم تحسين الملف ليصبح أصغر بنسبة ${item.compression.savingsPercent}% قبل الرفع`,
+  )
+}
+
+function optimizedSelectionMessage(items: PreparedUploadFile[]) {
+  const optimizedItems = items.filter((item) => item.compression?.wasCompressed)
+  if (!optimizedItems.length) return ''
+
+  const originalBytes = optimizedItems.reduce((sum, item) => sum + (item.compression?.originalSize ?? item.file.size), 0)
+  const compressedBytes = optimizedItems.reduce((sum, item) => sum + item.file.size, 0)
+  const savedPercent = Math.max(0, Math.round(((originalBytes - compressedBytes) / originalBytes) * 100))
+
+  return uiText(
+    `${optimizedItems.length} image file(s) optimized before upload (${savedPercent}% smaller).`,
+    `تم تحسين ${optimizedItems.length} ملف/ملفات صورة قبل الرفع (${savedPercent}% أصغر).`,
+  )
+}
+
+function enqueueUploads(base: Omit<PendingUpload, 'file' | 'compression'>, files: PreparedUploadFile[], options?: { replaceForKey?: boolean }) {
   const replaceForKey = options?.replaceForKey ?? false
 
-  const incoming = files.map((file) => ({ ...base, file }))
+  const incoming = files.map((prepared) => ({ ...base, file: prepared.file, compression: prepared.compression }))
 
   pendingUploads.value = pendingUploads.value.filter((item) => {
     if (!replaceForKey) return true
@@ -529,19 +605,28 @@ async function onRequiredFileChange(item: any, event: Event) {
 
   if (!selectedFiles.length || !stepId) return
   const filesToUpload = item?.is_multiple ? selectedFiles : selectedFiles.slice(0, 1)
-  const validFiles: File[] = []
+  const validFiles: PreparedUploadFile[] = []
   const validationErrors: string[] = []
 
   for (const file of filesToUpload) {
-    const fileError = validateSelectedFile(file, {
+    const fileOptions = {
       allowedExtensions: item?.allowed_file_types,
       maxMb: item?.max_file_size_mb,
-    })
+      maxKb: item?.max_file_size_kb,
+    }
+    const fileFormatError = validateSelectedFile(file, fileOptions, { skipSize: true })
+    if (fileFormatError) {
+      validationErrors.push(`${file.name}: ${fileFormatError}`)
+      continue
+    }
+
+    const preparedFile = await prepareFileForUpload(file, { allowedExtensions: item?.allowed_file_types })
+    const fileError = validateSelectedFile(preparedFile.file, fileOptions)
     if (fileError) {
       validationErrors.push(`${file.name}: ${fileError}`)
       continue
     }
-    validFiles.push(file)
+    validFiles.push(preparedFile)
   }
 
   errorMessage.value = ''
@@ -551,6 +636,8 @@ async function onRequiredFileChange(item: any, event: Event) {
     errorMessage.value = validationErrors[0] || uiText('No valid files selected.', 'لم يتم اختيار ملفات صالحة.')
     input.value = ''
     return
+  } else {
+    successMessage.value = optimizedSelectionMessage(validFiles)
   }
 
   if (validationErrors.length > 0) {
@@ -566,7 +653,13 @@ async function onRequiredFileChange(item: any, event: Event) {
     { replaceForKey: !item?.is_multiple },
   )
 
-  pendingUpload.value = { kind: 'required', id: stepId, file: validFiles[0], title: t('clientDocuments.sections.requiredTitle') }
+  pendingUpload.value = {
+    kind: 'required',
+    id: stepId,
+    file: validFiles[0].file,
+    compression: validFiles[0].compression,
+    title: t('clientDocuments.sections.requiredTitle'),
+  }
   uploadPreviewOpen.value = true
   input.value = ''
 }
@@ -579,19 +672,36 @@ async function onAdditionalFileChange(documentId: number, event: Event) {
 
   errorMessage.value = ''
   successMessage.value = ''
-  const fileError = validateSelectedFile(file)
+
+  const fileFormatError = validateSelectedFile(file, undefined, { skipSize: true })
+  if (fileFormatError) {
+    errorMessage.value = `${file.name}: ${fileFormatError}`
+    input.value = ''
+    return
+  }
+
+  const preparedFile = await prepareFileForUpload(file)
+  const fileError = validateSelectedFile(preparedFile.file)
   if (fileError) {
     errorMessage.value = `${file.name}: ${fileError}`
     input.value = ''
     return
   }
+
+  successMessage.value = optimizedSelectionMessage([preparedFile])
   enqueueUploads(
     { kind: 'additional', id: documentId, title: t('clientDocuments.sections.additionalTitle') },
-    [file],
+    [preparedFile],
     { replaceForKey: true },
   )
 
-  pendingUpload.value = { kind: 'additional', id: documentId, file, title: t('clientDocuments.sections.additionalTitle') }
+  pendingUpload.value = {
+    kind: 'additional',
+    id: documentId,
+    file: preparedFile.file,
+    compression: preparedFile.compression,
+    title: t('clientDocuments.sections.additionalTitle'),
+  }
   uploadPreviewOpen.value = true
   input.value = ''
 }
@@ -604,19 +714,37 @@ async function onUpdateFileChange(itemId: number, event: Event) {
 
   errorMessage.value = ''
   successMessage.value = ''
-  const fileError = validateSelectedFile(file)
+
+  const title = uiText('Requested file replacement', 'استبدال ملف مطلوب')
+  const fileFormatError = validateSelectedFile(file, undefined, { skipSize: true })
+  if (fileFormatError) {
+    errorMessage.value = `${file.name}: ${fileFormatError}`
+    input.value = ''
+    return
+  }
+
+  const preparedFile = await prepareFileForUpload(file)
+  const fileError = validateSelectedFile(preparedFile.file)
   if (fileError) {
     errorMessage.value = `${file.name}: ${fileError}`
     input.value = ''
     return
   }
+
+  successMessage.value = optimizedSelectionMessage([preparedFile])
   enqueueUploads(
-    { kind: 'update', id: itemId, title: uiText('Requested file replacement', 'استبدال ملف مطلوب') },
-    [file],
+    { kind: 'update', id: itemId, title },
+    [preparedFile],
     { replaceForKey: true },
   )
 
-  pendingUpload.value = { kind: 'update', id: itemId, file, title: uiText('Requested file replacement', 'استبدال ملف مطلوب') }
+  pendingUpload.value = {
+    kind: 'update',
+    id: itemId,
+    file: preparedFile.file,
+    compression: preparedFile.compression,
+    title,
+  }
   uploadPreviewOpen.value = true
   input.value = ''
 }
@@ -906,6 +1034,19 @@ onMounted(load)
                 : item.kind === 'additional' ? t('clientDocuments.sections.additionalTitle')
                   : uiText('Requested file replacement', 'استبدال ملف مطلوب') }}
             </p>
+            <p class="client-subtext" style="margin-top: 0.15rem;">
+              {{ pendingFileSizeLabel(item) }}
+            </p>
+            <p
+              v-if="item.compression?.wasCompressed && item.compression.originalName !== item.file.name"
+              class="client-subtext"
+              style="margin-top: 0.15rem;"
+            >
+              {{ uiText('Original file', 'الملف الأصلي') }}: {{ item.compression.originalName }}
+            </p>
+            <p v-if="pendingCompressionLabel(item)" class="client-upload-optimized-note">
+              {{ pendingCompressionLabel(item) }}
+            </p>
           </div>
           <div class="client-inline-actions" style="gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
             <button type="button" class="ghost-btn" @click="openPendingPreview(item)">
@@ -1024,6 +1165,20 @@ onMounted(load)
 
 .client-required-upload-row .client-subtext {
   margin: 0.2rem 0 0;
+}
+
+.client-upload-optimized-note {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.35rem 0 0;
+  padding: 0.28rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f766e;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 @media (max-width: 640px) {

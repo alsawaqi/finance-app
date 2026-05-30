@@ -22,12 +22,20 @@ class AdminCategorizationController extends Controller
     {
         $validated = $request->validate([
             'tab' => ['nullable', 'in:agents,staff,clients'],
+            'bank_id' => ['nullable', 'integer', 'exists:banks,id'],
+            'agent_id' => ['nullable', 'integer', 'exists:agents,id'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+            'request_page' => ['nullable', 'integer', 'min:1'],
+            'request_per_page' => ['nullable', 'integer', 'min:5', 'max:50'],
         ]);
 
         $tab = (string) ($validated['tab'] ?? 'agents');
         $perPage = (int) ($validated['per_page'] ?? 12);
+        $bankId = isset($validated['bank_id']) ? (int) $validated['bank_id'] : null;
+        $agentId = isset($validated['agent_id']) ? (int) $validated['agent_id'] : null;
+        $requestPage = (int) ($validated['request_page'] ?? 1);
+        $requestPerPage = (int) ($validated['request_per_page'] ?? 8);
 
         $requestStatusCounts = FinanceRequest::query()
             ->select('status', DB::raw('count(*) as total'))
@@ -185,11 +193,12 @@ class AdminCategorizationController extends Controller
                 'banks.id',
                 'banks.name',
                 'banks.short_name',
+                'banks.code',
                 DB::raw('COUNT(DISTINCT agents.id) as agents_count'),
                 DB::raw('COUNT(DISTINCT request_emails.id) as emails_count'),
                 DB::raw('COUNT(DISTINCT request_emails.finance_request_id) as requests_count'),
             ])
-            ->groupBy('banks.id', 'banks.name', 'banks.short_name')
+            ->groupBy('banks.id', 'banks.name', 'banks.short_name', 'banks.code')
             ->orderByDesc('emails_count')
             ->orderBy('banks.name')
             ->get()
@@ -197,10 +206,18 @@ class AdminCategorizationController extends Controller
                 'id' => (int) $bank->id,
                 'name' => $bank->name,
                 'short_name' => $bank->short_name,
+                'code' => $bank->code,
                 'agents_count' => (int) $bank->agents_count,
                 'emails_count' => (int) $bank->emails_count,
                 'requests_count' => (int) $bank->requests_count,
             ])
+            ->values();
+
+        $explorerAgents = $this->explorerAgents($bankId);
+        $relatedRequestsPaginator = $this->relatedRequests($bankId, $agentId, $requestPage, $requestPerPage);
+        $filteredSummary = $this->filteredSummary($bankId, $agentId);
+        $relatedRequests = collect($relatedRequestsPaginator->items())
+            ->map(fn (FinanceRequest $financeRequest) => $this->serializeRelatedRequest($financeRequest, $bankId, $agentId))
             ->values();
 
         $pendingQueueCount = FinanceRequest::query()
@@ -286,11 +303,168 @@ class AdminCategorizationController extends Controller
                 ],
             ],
             'bank_breakdown' => $bankBreakdown,
+            'explorer_agents' => $explorerAgents,
+            'filtered_summary' => $filteredSummary,
+            'related_requests' => $relatedRequests,
+            'request_pagination' => $this->paginationMeta($relatedRequestsPaginator),
             'agents' => $agents,
             'staff' => $staff,
             'clients' => $clients,
             'pagination' => $tabPagination,
         ]);
+    }
+
+    private function explorerAgents(?int $bankId)
+    {
+        return Agent::query()
+            ->leftJoin('banks', 'banks.id', '=', 'agents.bank_id')
+            ->leftJoin('request_email_agents', 'request_email_agents.agent_id', '=', 'agents.id')
+            ->leftJoin('request_emails', 'request_emails.id', '=', 'request_email_agents.request_email_id')
+            ->when($bankId, fn ($query) => $query->where('agents.bank_id', $bankId))
+            ->select([
+                'agents.id',
+                'agents.name',
+                'agents.email',
+                'agents.phone',
+                'agents.is_active',
+                'agents.bank_id',
+                'banks.name as bank_name',
+                'banks.short_name as bank_short_name',
+                DB::raw('COUNT(DISTINCT request_email_agents.request_email_id) as emails_count'),
+                DB::raw('COUNT(DISTINCT request_emails.finance_request_id) as requests_count'),
+                DB::raw('MAX(COALESCE(request_emails.sent_at, request_emails.created_at)) as last_contact_at'),
+            ])
+            ->groupBy('agents.id', 'agents.name', 'agents.email', 'agents.phone', 'agents.is_active', 'agents.bank_id', 'banks.name', 'banks.short_name')
+            ->orderByDesc('emails_count')
+            ->orderBy('agents.name')
+            ->limit(48)
+            ->get()
+            ->map(fn ($agent) => [
+                'id' => (int) $agent->id,
+                'name' => $agent->name,
+                'email' => $agent->email,
+                'phone' => $agent->phone,
+                'is_active' => (bool) $agent->is_active,
+                'bank_id' => $agent->bank_id ? (int) $agent->bank_id : null,
+                'bank_name' => $agent->bank_name,
+                'bank_short_name' => $agent->bank_short_name,
+                'emails_count' => (int) $agent->emails_count,
+                'requests_count' => (int) $agent->requests_count,
+                'last_contact_at' => $this->iso($agent->last_contact_at),
+            ])
+            ->values();
+    }
+
+    private function relatedRequests(?int $bankId, ?int $agentId, int $requestPage, int $requestPerPage): LengthAwarePaginator
+    {
+        return FinanceRequest::query()
+            ->with([
+                'client:id,name,email',
+                'emails' => function ($query) use ($bankId, $agentId) {
+                    $query
+                        ->select('id', 'finance_request_id', 'subject', 'sent_at', 'created_at')
+                        ->whereHas('agents', function ($agentQuery) use ($bankId, $agentId) {
+                            $this->applyAgentFilters($agentQuery, $bankId, $agentId);
+                        })
+                        ->with(['agents' => function ($agentQuery) use ($bankId, $agentId) {
+                            $this->applyAgentFilters($agentQuery, $bankId, $agentId);
+                            $agentQuery
+                                ->select('agents.id', 'agents.name', 'agents.email', 'agents.bank_id')
+                                ->with('bank:id,name,short_name');
+                        }]);
+                },
+            ])
+            ->withCount('emails')
+            ->whereHas('emails.agents', function ($agentQuery) use ($bankId, $agentId) {
+                $this->applyAgentFilters($agentQuery, $bankId, $agentId);
+            })
+            ->orderByDesc('latest_activity_at')
+            ->orderByDesc('submitted_at')
+            ->orderByDesc('id')
+            ->paginate($requestPerPage, ['*'], 'request_page', $requestPage);
+    }
+
+    private function filteredSummary(?int $bankId, ?int $agentId): array
+    {
+        $base = DB::table('request_emails')
+            ->join('request_email_agents', 'request_email_agents.request_email_id', '=', 'request_emails.id')
+            ->join('agents', 'agents.id', '=', 'request_email_agents.agent_id')
+            ->when($bankId, fn ($query) => $query->where('agents.bank_id', $bankId))
+            ->when($agentId, fn ($query) => $query->where('agents.id', $agentId));
+
+        return [
+            'total_requests' => (int) (clone $base)->distinct('request_emails.finance_request_id')->count('request_emails.finance_request_id'),
+            'total_emails' => (int) (clone $base)->distinct('request_emails.id')->count('request_emails.id'),
+            'unique_agents' => (int) (clone $base)->distinct('agents.id')->count('agents.id'),
+            'unique_banks' => (int) (clone $base)->whereNotNull('agents.bank_id')->distinct('agents.bank_id')->count('agents.bank_id'),
+            'latest_email_at' => $this->iso((clone $base)->max(DB::raw('COALESCE(request_emails.sent_at, request_emails.created_at)'))),
+        ];
+    }
+
+    private function serializeRelatedRequest(FinanceRequest $financeRequest, ?int $bankId, ?int $agentId): array
+    {
+        $matchedEmails = $financeRequest->emails;
+        $matchedAgents = $matchedEmails
+            ->flatMap(fn ($email) => $email->agents)
+            ->filter(function ($agent) use ($bankId, $agentId) {
+                if ($bankId && (int) $agent->bank_id !== $bankId) {
+                    return false;
+                }
+
+                if ($agentId && (int) $agent->id !== $agentId) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->unique('id')
+            ->sortBy('name')
+            ->values();
+
+        $latestEmailAt = $matchedEmails
+            ->map(fn ($email) => $email->sent_at ?? $email->created_at)
+            ->filter()
+            ->max();
+
+        return [
+            'id' => $financeRequest->id,
+            'reference_number' => $financeRequest->reference_number,
+            'approval_reference_number' => $financeRequest->approval_reference_number,
+            'company_name' => $financeRequest->company_name ?? data_get($financeRequest->intake_details_json, 'company_name'),
+            'status' => $financeRequest->status?->value ?? $financeRequest->status,
+            'workflow_stage' => $financeRequest->workflow_stage?->value ?? $financeRequest->workflow_stage,
+            'submitted_at' => optional($financeRequest->submitted_at)?->toISOString(),
+            'latest_activity_at' => optional($financeRequest->latest_activity_at)?->toISOString(),
+            'latest_email_at' => $this->iso($latestEmailAt),
+            'emails_count' => (int) $financeRequest->emails_count,
+            'matched_emails_count' => $matchedEmails->pluck('id')->unique()->count(),
+            'client' => $financeRequest->client ? [
+                'id' => $financeRequest->client->id,
+                'name' => $financeRequest->client->name,
+                'email' => $financeRequest->client->email,
+            ] : null,
+            'agents' => $matchedAgents
+                ->map(fn ($agent) => [
+                    'id' => $agent->id,
+                    'name' => $agent->name,
+                    'email' => $agent->email,
+                    'bank_id' => $agent->bank_id ? (int) $agent->bank_id : null,
+                    'bank_name' => $agent->bank?->name,
+                    'bank_short_name' => $agent->bank?->short_name,
+                ])
+                ->values(),
+        ];
+    }
+
+    private function applyAgentFilters($query, ?int $bankId, ?int $agentId): void
+    {
+        if ($bankId) {
+            $query->where('agents.bank_id', $bankId);
+        }
+
+        if ($agentId) {
+            $query->where('agents.id', $agentId);
+        }
     }
 
     private function requestTrend(): array
@@ -332,5 +506,18 @@ class AdminCategorizationController extends Controller
             'from' => $paginator->firstItem(),
             'to' => $paginator->lastItem(),
         ];
+    }
+
+    private function iso(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value instanceof Carbon) {
+            return $value->toISOString();
+        }
+
+        return Carbon::parse($value)->toISOString();
     }
 }

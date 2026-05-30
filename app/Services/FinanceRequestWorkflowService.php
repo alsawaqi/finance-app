@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\FinanceRequestStatus;
+use App\Enums\FinanceRequestStaffQuestionStatus;
 use App\Enums\FinanceRequestUnderstudyStatus;
 use App\Enums\FinanceRequestWorkflowStage;
 use App\Models\FinanceRequest;
@@ -142,11 +143,11 @@ class FinanceRequestWorkflowService
     ): FinanceRequest {
         $financeRequest = $this->syncStaffQuestionStage($financeRequest, $actorUserId);
 
-        $pendingRequiredReview = $this->staffQuestionService->pendingRequiredReviewCount($financeRequest);
+        $pendingRequired = $this->staffQuestionService->pendingRequiredCount($financeRequest);
 
-        if ($pendingRequiredReview > 0) {
+        if ($pendingRequired > 0) {
             throw ValidationException::withMessages([
-                'staff_questions' => 'All required staff study questions must be reviewed before moving this request forward.',
+                'staff_questions' => 'All required staff study questions must be answered before moving this request forward.',
             ]);
         }
 
@@ -162,6 +163,14 @@ class FinanceRequestWorkflowService
         $financeRequest->workflow_stage = FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT;
         $financeRequest->latest_activity_at = now();
         $financeRequest->save();
+
+        $financeRequest->staffQuestions()
+            ->where('status', FinanceRequestStaffQuestionStatus::ANSWERED->value)
+            ->update([
+                'status' => FinanceRequestStaffQuestionStatus::CLOSED->value,
+                'closed_at' => now(),
+                'updated_at' => now(),
+            ]);
 
         RequestTimelineLogger::log(
             $financeRequest,

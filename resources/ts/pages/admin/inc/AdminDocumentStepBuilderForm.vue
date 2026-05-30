@@ -10,7 +10,8 @@ type StepForm = {
   finance_type: DocumentStepFinanceType
   description: string
   allowed_file_types_text: string
-  max_file_size_mb: number | null
+  max_file_size_value: number | null
+  max_file_size_unit: 'mb' | 'kb'
   sort_order: number
   is_required: boolean
   is_multiple: boolean
@@ -132,16 +133,30 @@ function firstError(field: string) {
 
       <label class="document-step-field">
         <span>{{ t('adminDocumentStepBuilder.fields.maxFileSizeMb') }}</span>
-        <input
-          :value="form.max_file_size_mb ?? ''"
-          type="number"
-          min="1"
-          class="document-step-input"
-          :class="{ 'has-error': firstError('max_file_size_mb') }"
-          :placeholder="t('adminDocumentStepBuilder.placeholders.maxFileSizeMb')"
-          @input="updateField('max_file_size_mb', ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null)"
-        />
-        <small v-if="firstError('max_file_size_mb')" class="document-step-error">{{ firstError('max_file_size_mb') }}</small>
+        <div class="document-step-size-control">
+          <input
+            :value="form.max_file_size_value ?? ''"
+            type="number"
+            :min="form.max_file_size_unit === 'kb' ? 1 : 0.01"
+            :step="form.max_file_size_unit === 'kb' ? 1 : 0.01"
+            class="document-step-input"
+            :class="{ 'has-error': firstError('max_file_size_kb') || firstError('max_file_size_mb') }"
+            :placeholder="form.max_file_size_unit === 'kb' ? '300' : t('adminDocumentStepBuilder.placeholders.maxFileSizeMb')"
+            @input="updateField('max_file_size_value', ($event.target as HTMLInputElement).value ? Number(($event.target as HTMLInputElement).value) : null)"
+          />
+          <select
+            :value="form.max_file_size_unit"
+            class="document-step-input document-step-size-unit"
+            @change="updateField('max_file_size_unit', ($event.target as HTMLSelectElement).value as 'mb' | 'kb')"
+          >
+            <option value="mb">MB</option>
+            <option value="kb">KB</option>
+          </select>
+        </div>
+        <small class="document-step-help">{{ t('adminDocumentStepBuilder.help.fileSize') }}</small>
+        <small v-if="firstError('max_file_size_kb') || firstError('max_file_size_mb')" class="document-step-error">
+          {{ firstError('max_file_size_kb') || firstError('max_file_size_mb') }}
+        </small>
       </label>
 
       <label class="document-step-field">

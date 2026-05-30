@@ -85,7 +85,7 @@ function formatDate(value: unknown) {
 </script>
 
 <template>
-  <article class="panel-card">
+  <article class="panel-card request-core-card">
     <div class="panel-head">
       <div>
         <h2>{{ t('adminRequestDetails.core.title') }}</h2>
@@ -128,9 +128,13 @@ function formatDate(value: unknown) {
 </template>
 
 <style scoped>
+.request-core-card {
+  container-type: inline-size;
+}
+
 .request-core-layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 1rem;
 }
 
@@ -140,7 +144,7 @@ function formatDate(value: unknown) {
   min-width: 0;
   padding: 1rem;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 20px;
+  border-radius: 8px;
   background: rgba(244, 247, 255, 0.72);
 }
 
@@ -151,26 +155,45 @@ function formatDate(value: unknown) {
 }
 
 .request-core-section .summary-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 0.7rem;
 }
 
 .request-core-section .summary-grid > div {
+  display: grid;
+  gap: 0.35rem;
   min-height: 74px;
   align-content: center;
+  min-width: 0;
+  overflow: hidden;
 }
 
-@media (max-width: 1280px) {
-  .request-core-layout {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.request-core-section .summary-grid span,
+.request-core-section .summary-grid strong {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  text-align: inherit;
 }
 
-@media (max-width: 820px) {
+.request-core-section .summary-grid span {
+  line-height: 1.35;
+}
+
+.request-core-section .summary-grid strong {
+  line-height: 1.45;
+}
+
+@container (max-width: 980px) {
   .request-core-layout {
     grid-template-columns: 1fr;
   }
+}
 
+@container (max-width: 520px) {
   .request-core-section .summary-grid {
     grid-template-columns: 1fr;
   }

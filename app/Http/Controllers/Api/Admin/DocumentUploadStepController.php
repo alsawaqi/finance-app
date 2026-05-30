@@ -140,6 +140,9 @@ class DocumentUploadStepController extends Controller
     private function serializeStep(DocumentUploadStep $step): array
     {
         $allowedFileTypes = $step->allowed_file_types_json ?? [];
+        $maxFileSizeKb = $step->max_file_size_kb !== null
+            ? (int) $step->max_file_size_kb
+            : ($step->max_file_size_mb !== null ? (int) $step->max_file_size_mb * 1024 : null);
 
         return [
             'id' => $step->id,
@@ -151,13 +154,31 @@ class DocumentUploadStepController extends Controller
             'is_multiple' => (bool) $step->is_multiple,
             'allowed_file_types_json' => $allowedFileTypes,
             'allowed_file_types_count' => count($allowedFileTypes),
-            'max_file_size_mb' => $step->max_file_size_mb !== null ? (int) $step->max_file_size_mb : null,
+            'max_file_size_mb' => $maxFileSizeKb !== null ? round($maxFileSizeKb / 1024, 3) : null,
+            'max_file_size_kb' => $maxFileSizeKb,
+            'max_file_size_label' => $this->formatFileSizeLimit($maxFileSizeKb),
             'sort_order' => (int) $step->sort_order,
             'is_active' => (bool) $step->is_active,
             'request_document_uploads_count' => (int) ($step->request_document_uploads_count ?? 0),
             'created_at' => optional($step->created_at)?->toISOString(),
             'updated_at' => optional($step->updated_at)?->toISOString(),
         ];
+    }
+
+    private function formatFileSizeLimit(?int $kilobytes): ?string
+    {
+        if ($kilobytes === null || $kilobytes <= 0) {
+            return null;
+        }
+
+        if ($kilobytes < 1024) {
+            return $kilobytes . ' KB';
+        }
+
+        $megabytes = $kilobytes / 1024;
+        $formatted = rtrim(rtrim(number_format($megabytes, 2, '.', ''), '0'), '.');
+
+        return $formatted . ' MB';
     }
 
     private function paginationMeta(LengthAwarePaginator $paginator): array
