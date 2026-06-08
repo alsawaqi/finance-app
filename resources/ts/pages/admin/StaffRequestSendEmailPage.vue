@@ -12,6 +12,8 @@ import {
   type AllowedEmailDocument,
   type BankOption,
   type RequestEmailOptionsPayload,
+  type RequestEmailTemplateField,
+  type RequestEmailTemplateOption,
 } from '@/services/staffWorkspace'
 import { intakeFullName } from '@/utils/requestIntake'
 import { getRequestWorkflowStageMeta } from '@/utils/requestWorkflowStage'
@@ -34,6 +36,7 @@ const requestItem = ref<any | null>(null)
 const banks = ref<BankOption[]>([])
 const agents = ref<AgentOption[]>([])
 const allowedEmailDocuments = ref<AllowedEmailDocument[]>([])
+const emailTemplates = ref<RequestEmailTemplateOption[]>([])
 const hasEmailAssignments = ref(false)
 const canEmailAssignedAgents = ref(false)
 const loadingEmailOptions = ref(false)
@@ -42,6 +45,8 @@ let emailOptionsRequestToken = 0
 
 const selectedBankId = ref<number | null>(null)
 const selectedAgentId = ref<number | null>(null)
+const selectedTemplateId = ref<number | null>(null)
+const templateValues = ref<Record<string, string>>({})
 const emailSubject = ref('')
 const emailBody = ref('')
 const selectedEmailDocumentKeys = ref<string[]>([])
@@ -61,6 +66,8 @@ const mailboxReady = computed(() => Boolean(
 ))
 const selectedAgentOption = computed(() => agents.value.find((agent) => agent.id === selectedAgentId.value) ?? null)
 const selectedBankOption = computed(() => banks.value.find((bank) => bank.id === selectedBankId.value) ?? null)
+const selectedTemplateOption = computed(() => emailTemplates.value.find((template) => template.id === selectedTemplateId.value) ?? null)
+const selectedTemplateFields = computed(() => selectedTemplateOption.value?.fields_json ?? [])
 const canComposeEmail = computed(() => Boolean(mailboxReady.value && canEmailAssignedAgents.value && selectedAgentId.value))
 const selectedEmailAttachments = computed(() =>
   (allowedEmailDocuments.value ?? []).filter((document) => selectedEmailDocumentKeys.value.includes(document.key)),
@@ -68,10 +75,22 @@ const selectedEmailAttachments = computed(() =>
 const loadingAllowedEmailDocuments = computed(() => loadingEmailOptions.value && Boolean(selectedAgentId.value))
 const sentEmailsCount = computed(() => (Array.isArray(requestItem.value?.emails) ? requestItem.value.emails.length : 0))
 const emailBodyTextLength = computed(() => stripHtml(normalizeEditorHtml(emailBody.value)).trim().length)
+const templateRequiredFieldsFilled = computed(() =>
+  selectedTemplateFields.value.every((field) => !field.required || String(templateValues.value[field.key] || '').trim() !== ''),
+)
+const renderedTemplateSubject = computed(() =>
+  selectedTemplateOption.value ? renderTemplateSubject(selectedTemplateOption.value.subject, templateValues.value) : '',
+)
+const renderedTemplateBody = computed(() =>
+  selectedTemplateOption.value ? renderTemplateBody(selectedTemplateOption.value.body, templateValues.value) : '',
+)
 const canSendEmail = computed(() => Boolean(
   canComposeEmail.value
-  && emailSubject.value.trim()
-  && emailBodyTextLength.value > 0,
+  && (
+    selectedTemplateOption.value
+      ? renderedTemplateSubject.value.trim() && stripHtml(renderedTemplateBody.value).trim() && templateRequiredFieldsFilled.value
+      : emailSubject.value.trim() && emailBodyTextLength.value > 0
+  ),
 ))
 
 const summaryItems = computed(() => [
@@ -126,6 +145,8 @@ function normalizeEditorHtml(value: string) {
 function clearEmailComposer() {
   emailSubject.value = ''
   emailBody.value = ''
+  selectedTemplateId.value = null
+  templateValues.value = {}
   selectedEmailDocumentKeys.value = []
 }
 
@@ -157,8 +178,59 @@ function applyEmailOptions(response: RequestEmailOptionsPayload) {
   banks.value = response.banks ?? []
   agents.value = response.agents ?? []
   allowedEmailDocuments.value = response.allowed_documents ?? []
+  emailTemplates.value = response.email_templates ?? []
   hasEmailAssignments.value = Boolean(response.has_assignments)
   canEmailAssignedAgents.value = Boolean(response.can_email)
+
+  if (selectedTemplateId.value && !emailTemplates.value.some((template) => template.id === selectedTemplateId.value)) {
+    selectedTemplateId.value = null
+    templateValues.value = {}
+  }
+}
+
+function resetTemplateValues(template: RequestEmailTemplateOption | null) {
+  if (!template) {
+    templateValues.value = {}
+    return
+  }
+
+  const next: Record<string, string> = {}
+  ;(template.fields_json ?? []).forEach((field) => {
+    next[field.key] = templateValues.value[field.key] ?? ''
+  })
+  templateValues.value = next
+}
+
+function fieldInputType(field: RequestEmailTemplateField) {
+  if (field.type === 'email') return 'email'
+  if (field.type === 'number') return 'number'
+  if (field.type === 'date') return 'date'
+  if (field.type === 'phone') return 'tel'
+  return 'text'
+}
+
+function renderTemplateSubject(subject: string, values: Record<string, string>) {
+  return replaceTemplateTokens(subject, values, false).replace(/\s+/g, ' ').trim()
+}
+
+function renderTemplateBody(body: string, values: Record<string, string>) {
+  return replaceTemplateTokens(body || '', values, true)
+}
+
+function replaceTemplateTokens(template: string, values: Record<string, string>, html: boolean) {
+  return String(template || '').replace(/{{\s*([A-Za-z][A-Za-z0-9_]*)\s*}}/g, (_match, key: string) => {
+    const value = values[key] ?? ''
+    return html ? escapeHtml(value).replace(/\n/g, '<br>') : value.replace(/\s+/g, ' ')
+  })
+}
+
+function escapeHtml(value: string) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 function openFilePreview(fileName: string | null | undefined, downloadUrl: string, mimeType?: string | null) {
@@ -183,8 +255,15 @@ async function sendEmailToAssignedAgent() {
       bank_id: selectedBankId.value,
       agent_id: selectedAgentId.value,
       document_keys: selectedEmailDocumentKeys.value,
-      subject: emailSubject.value.trim(),
-      body: normalizeEditorHtml(emailBody.value) || null,
+      ...(selectedTemplateOption.value
+        ? {
+            email_template_id: selectedTemplateOption.value.id,
+            template_values: templateValues.value,
+          }
+        : {
+            subject: emailSubject.value.trim(),
+            body: normalizeEditorHtml(emailBody.value) || null,
+          }),
     })
 
     requestItem.value = data.request
@@ -192,6 +271,7 @@ async function sendEmailToAssignedAgent() {
       banks: data.banks ?? banks.value,
       agents: data.agents ?? agents.value,
       allowed_documents: data.allowed_documents ?? allowedEmailDocuments.value,
+      email_templates: data.email_templates ?? emailTemplates.value,
       has_assignments: Boolean(data.has_assignments),
       can_email: Boolean(data.can_email),
     }
@@ -276,6 +356,10 @@ watch(selectedAgentId, async () => {
   await loadEmailOptions()
 })
 
+watch(selectedTemplateId, () => {
+  resetTemplateValues(selectedTemplateOption.value)
+})
+
 watch(requestId, () => {
   clearEmailComposer()
   emailOptionsCache.clear()
@@ -354,23 +438,78 @@ onMounted(load)
 
         <div class="staff-email-input-stack">
           <label class="client-form-group">
-            <span class="client-form-label">{{ t('staffRequestDetails.placeholders.emailSubject') }}</span>
-            <input
-              v-model="emailSubject"
-              type="text"
-              class="admin-input"
-              :placeholder="t('staffRequestDetails.placeholders.emailSubject')"
-              :disabled="!canComposeEmail"
-            />
+            <span class="client-form-label">{{ uiText('Email template', 'قالب البريد') }}</span>
+            <select v-model="selectedTemplateId" class="admin-select" :disabled="!canComposeEmail">
+              <option :value="null">{{ uiText('Free compose', 'كتابة حرة') }}</option>
+              <option v-for="template in emailTemplates" :key="template.id" :value="template.id">
+                {{ template.name }}
+              </option>
+            </select>
           </label>
 
-          <Editor
-            v-model="emailBody"
-            class="staff-prime-editor"
-            :readonly="!canComposeEmail"
-            :placeholder="t('staffRequestDetails.placeholders.emailBody')"
-            editor-style="height: 320px;"
-          />
+          <div v-if="selectedTemplateOption" class="staff-template-composer">
+            <div class="staff-template-composer__head">
+              <div>
+                <span class="client-form-label">{{ selectedTemplateOption.name }}</span>
+                <p class="client-subtext">{{ uiText('Fill the editable slots approved by admin.', 'املأ الحقول التي سمحت بها الإدارة.') }}</p>
+              </div>
+              <span class="count-pill">{{ selectedTemplateFields.length }} {{ uiText('slot(s)', 'حقل') }}</span>
+            </div>
+
+            <div v-if="selectedTemplateFields.length" class="staff-template-fields">
+              <label v-for="field in selectedTemplateFields" :key="field.key" class="client-form-group">
+                <span class="client-form-label">
+                  {{ field.label }}
+                  <template v-if="field.required">*</template>
+                </span>
+                <textarea
+                  v-if="field.type === 'textarea'"
+                  v-model="templateValues[field.key]"
+                  rows="4"
+                  class="admin-textarea"
+                  :placeholder="field.placeholder || field.label"
+                  :disabled="!canComposeEmail"
+                ></textarea>
+                <input
+                  v-else
+                  v-model="templateValues[field.key]"
+                  :type="fieldInputType(field)"
+                  class="admin-input"
+                  :placeholder="field.placeholder || field.label"
+                  :disabled="!canComposeEmail"
+                />
+                <small v-if="field.help_text" class="client-subtext">{{ field.help_text }}</small>
+              </label>
+            </div>
+
+            <div class="staff-template-preview">
+              <span class="client-form-label">{{ t('staffRequestDetails.placeholders.emailSubject') }}</span>
+              <strong>{{ renderedTemplateSubject || uiText('Subject preview', 'معاينة العنوان') }}</strong>
+              <span class="client-form-label">{{ t('staffRequestDetails.sections.emailBody') }}</span>
+              <div class="staff-template-preview__body" v-html="renderedTemplateBody || '<p></p>'"></div>
+            </div>
+          </div>
+
+          <template v-else>
+            <label class="client-form-group">
+              <span class="client-form-label">{{ t('staffRequestDetails.placeholders.emailSubject') }}</span>
+              <input
+                v-model="emailSubject"
+                type="text"
+                class="admin-input"
+                :placeholder="t('staffRequestDetails.placeholders.emailSubject')"
+                :disabled="!canComposeEmail"
+              />
+            </label>
+
+            <Editor
+              v-model="emailBody"
+              class="staff-prime-editor"
+              :readonly="!canComposeEmail"
+              :placeholder="t('staffRequestDetails.placeholders.emailBody')"
+              editor-style="height: 320px;"
+            />
+          </template>
 
           <div class="staff-email-attachments-meta">
             <span class="count-pill">{{ selectedEmailAttachments.length }} {{ uiText('selected', 'محدد') }}</span>
@@ -538,6 +677,57 @@ onMounted(load)
   gap: 0.85rem;
 }
 
+.staff-template-composer {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.7);
+}
+
+.staff-template-composer__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.staff-template-composer__head p {
+  margin: 0.25rem 0 0;
+}
+
+.staff-template-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.staff-template-preview {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.staff-template-preview > strong {
+  display: block;
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: var(--admin-text);
+}
+
+.staff-template-preview__body {
+  min-height: 180px;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: var(--admin-text);
+  line-height: 1.65;
+}
+
 .staff-prime-editor {
   border-radius: 16px;
   overflow: hidden;
@@ -638,6 +828,10 @@ onMounted(load)
 
   .staff-email-composer-actions .ghost-btn {
     width: 100%;
+  }
+
+  .staff-template-fields {
+    grid-template-columns: 1fr;
   }
 }
 </style>

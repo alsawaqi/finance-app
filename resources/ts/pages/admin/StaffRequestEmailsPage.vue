@@ -173,7 +173,7 @@ onMounted(load)
                 <strong>{{ email.subject || t('staffRequestDetails.states.emptyValue') }}</strong>
                 <p>{{ uiText('From', 'من') }}: {{ email.sender?.name || t('staffRequestDetails.states.system') }} · {{ email.from_email || email.sender?.email || t('staffRequestDetails.states.emptyValue') }}</p>
                 <p>{{ uiText('To', 'إلى') }}: {{ recipientsText(email) }}</p>
-                <p v-if="email.body" class="request-prewrap-text">{{ email.body }}</p>
+                <div v-if="email.body" class="request-prewrap-text" v-html="email.body"></div>
                 <span>{{ formatDate(email.sent_at || email.created_at) }} · {{ email.attachments?.length || 0 }} {{ uiText('attachment(s)', 'مرفق') }}</span>
               </div>
               <span :class="emailStatusClass(email.delivery_status)">{{ formatEmailDeliveryStatus(email.delivery_status, locale, uiText('queued', 'قيد الانتظار')) }}</span>

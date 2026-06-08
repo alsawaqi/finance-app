@@ -141,6 +141,17 @@ class FinanceRequestWorkflowService
         ?int $actorUserId = null,
         ?string $reviewNote = null,
     ): FinanceRequest {
+        $currentStage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+
+        if (! in_array($currentStage, [
+            FinanceRequestWorkflowStage::UNDERSTUDY->value,
+            FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW->value,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'workflow_stage' => 'The request must finish document collection and reach the understudy stage before it can move to agent assignment.',
+            ]);
+        }
+
         $financeRequest = $this->syncStaffQuestionStage($financeRequest, $actorUserId);
 
         $pendingRequired = $this->staffQuestionService->pendingRequiredCount($financeRequest);

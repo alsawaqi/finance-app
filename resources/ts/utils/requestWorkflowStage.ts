@@ -6,34 +6,29 @@ export type RequestWorkflowStageTone = 'slate' | 'blue' | 'amber' | 'purple' | '
 export const FINANCE_REQUEST_WORKFLOW_STAGES: string[] = [
   'questionnaire',
   'review',
-  'contract',
-  'document_collection',
-  'awaiting_additional_documents',
-  'ready_for_processing',
-  'assigned_to_staff',
-  'processing',
-  'completed',
   'submitted_for_review',
   'admin_contract_preparation',
+  'contract',
   'awaiting_client_signature',
   'awaiting_client_commercial_registration_upload',
   'awaiting_admin_commercial_registration_upload',
   'awaiting_staff_assignment',
+  'document_collection',
   'awaiting_client_documents',
+  'awaiting_additional_documents',
   'client_update_requested',
   'understudy',
   'awaiting_staff_answers',
   'awaiting_understudy_review',
   'awaiting_agent_assignment',
+  'assigned_to_staff',
+  'processing',
+  'ready_for_processing',
   'accepted',
+  'completed',
   'rejected',
   'blocked',
 ]
-
-const MANUAL_WORKFLOW_STAGE_TRANSITIONS: Record<string, string[]> = {
-  processing: ['ready_for_processing'],
-  ready_for_processing: ['processing'],
-}
 
 const STAGE_META: Record<string, { en: string; ar: string; tone: RequestWorkflowStageTone }> = {
   questionnaire: { en: 'Questionnaire', ar: '\u0627\u0644\u0627\u0633\u062a\u0628\u064a\u0627\u0646', tone: 'slate' },
@@ -97,15 +92,15 @@ export function getRequestWorkflowStageMeta(stage: string | null | undefined) {
 
 export function getManualWorkflowStageOptions(stage: string | null | undefined) {
   const key = String(stage || '').trim().toLowerCase()
-  const values = new Set<string>()
+  const orderedStages = [...FINANCE_REQUEST_WORKFLOW_STAGES]
+
+  if (key && !orderedStages.includes(key)) {
+    return [key, ...orderedStages]
+  }
 
   if (key) {
-    values.add(key)
+    return [key, ...orderedStages.filter((stageValue) => stageValue !== key)]
   }
 
-  for (const nextStage of MANUAL_WORKFLOW_STAGE_TRANSITIONS[key] ?? []) {
-    values.add(nextStage)
-  }
-
-  return [...values]
+  return orderedStages
 }

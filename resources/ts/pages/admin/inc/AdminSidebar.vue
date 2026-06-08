@@ -82,6 +82,15 @@ const menuItems = computed(() => {
     },
     {
       group: 'setup',
+      label: t('adminSidebar.menu.emailTemplates'),
+      icon: 'fas fa-envelope-open-text',
+      to: { name: 'admin-request-email-templates' },
+      active: route.name === 'admin-request-email-templates',
+      badge: t('adminSidebar.badges.setup'),
+      show: auth.isAdmin,
+    },
+    {
+      group: 'setup',
       label: t('adminSidebar.menu.financeRequestTypes'),
       icon: 'fas fa-tags',
       to: { name: 'admin-finance-request-types' },

@@ -24,11 +24,10 @@
               <div class="footer_widget page_widget aos-init" data-aos="fade-up" data-aos-easing="linear" data-aos-duration="550">
                 <h4 class="footer_widget_title">{{ t('publicFooter.pagesTitle') }}</h4>
                 <ul class="page_list">
+                  <li><RouterLink to="/">{{ t('publicFooter.pages.home') }}</RouterLink></li>
                   <li><RouterLink to="/about">{{ t('publicFooter.pages.aboutUs') }}</RouterLink></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.pages.blogs') }}</a></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.pages.faq') }}</a></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.pages.contact') }}</a></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.pages.support') }}</a></li>
+                  <li><RouterLink to="/services">{{ t('publicFooter.pages.services') }}</RouterLink></li>
+                  <li><RouterLink to="/contact">{{ t('publicFooter.pages.contact') }}</RouterLink></li>
                 </ul>
               </div>
             </div>
@@ -37,11 +36,10 @@
               <div class="footer_widget primary_page_widget aos-init" data-aos="fade-down" data-aos-easing="linear" data-aos-duration="600">
                 <h4 class="footer_widget_title">{{ t('publicFooter.primaryTitle') }}</h4>
                 <ul class="primary_page_list">
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.primary.services') }}</a></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.primary.careers') }}</a></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.primary.pricingPlans') }}</a></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.primary.portfolio') }}</a></li>
-                  <li><a href="#" @click.prevent>{{ t('publicFooter.primary.news') }}</a></li>
+                  <li><RouterLink to="/services">{{ t('publicFooter.primary.financing') }}</RouterLink></li>
+                  <li><RouterLink to="/services">{{ t('publicFooter.primary.accounting') }}</RouterLink></li>
+                  <li><RouterLink to="/services">{{ t('publicFooter.primary.tax') }}</RouterLink></li>
+                  <li><RouterLink to="/services">{{ t('publicFooter.primary.investment') }}</RouterLink></li>
                 </ul>
               </div>
             </div>
@@ -67,7 +65,7 @@
       <div class="footer_bottom">
         <div class="container">
           <div class="copyright">
-            {{ t('publicFooter.copyrightPrefix') }} &copy; 2024 &nbsp;<RouterLink to="/">Financer</RouterLink>{{ t('publicFooter.copyrightSuffix') }}
+            {{ t('publicFooter.copyrightPrefix') }} &copy; 2024 &nbsp;<RouterLink to="/">NofaCast</RouterLink>{{ t('publicFooter.copyrightSuffix') }}
           </div>
         </div>
       </div>

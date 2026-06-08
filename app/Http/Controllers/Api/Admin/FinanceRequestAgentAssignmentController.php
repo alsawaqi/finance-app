@@ -48,7 +48,7 @@ class FinanceRequestAgentAssignmentController extends Controller
             'staffQuestions.asker:id,name,email',
             'staffQuestions.assignedStaff:id,name,email',
             'staffQuestions.answerer:id,name,email',
-            'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
+            'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,finance_type,is_required,is_active,sort_order',
             'updateBatches.requester:id,name,email',
             'updateBatches.items.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',
             'updateItems.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',

@@ -15,6 +15,7 @@ class FinanceStaffQuestionTemplate extends Model
         'question_text_en',
         'question_text_ar',
         'question_type',
+        'finance_type',
         'options_json',
         'placeholder_en',
         'placeholder_ar',

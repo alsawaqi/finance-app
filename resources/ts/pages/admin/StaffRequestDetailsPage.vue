@@ -10,9 +10,13 @@ import {
 import {
   addStaffComment,
   answerStaffQuestion,
+  createStaffUpdateBatch,
+  deleteStaffAdditionalDocumentFile,
+  deleteStaffRequiredDocumentUpload,
   getStaffRequest,
   getStaffRequestEmailOptions,
   requestAdditionalDocument,
+  requestAdditionalDocumentChange,
   requestRequiredDocumentChange,
   saveUnderstudyDraft,
   sendStaffRequestEmail,
@@ -21,6 +25,7 @@ import {
   staffRequiredDocumentStepBundleDownloadUrl,
   staffShareholderIdDownloadUrl,
   submitUnderstudy,
+  uploadStaffAdditionalDocument,
   uploadStaffRequiredDocument,
   type AgentOption,
   type AllowedEmailDocument,
@@ -29,6 +34,7 @@ import {
   type RequiredDocumentChecklistItem,
   type StaffQuestionSummary,
   type StaffStudyQuestion,
+  type StaffUpdateBatchDraftItem,
 } from '@/services/staffWorkspace'
 import {
   applicantTypeLabel,
@@ -59,10 +65,17 @@ const requestId = computed(() => route.params.id as string)
 const loading = ref(true)
 const savingComment = ref(false)
 const savingAdditionalDocument = ref(false)
+const creatingUpdateBatch = ref(false)
 const savingRequiredDocumentChange = ref<Record<number, boolean>>({})
 const requiredDocumentChangeReason = ref<Record<number, string>>({})
+const savingAdditionalDocumentChange = ref<Record<number, boolean>>({})
+const additionalDocumentChangeReasons = ref<Record<number, string>>({})
 const uploadingRequiredDocument = ref<Record<number, boolean>>({})
 const selectedRequiredDocumentFiles = ref<Record<number, File | null>>({})
+const deletingRequiredDocumentUpload = ref<Record<number, boolean>>({})
+const uploadingAdditionalDocument = ref<Record<number, boolean>>({})
+const selectedAdditionalDocumentFiles = ref<Record<number, File | null>>({})
+const deletingAdditionalDocumentFile = ref<Record<number, boolean>>({})
 const errorMessage = ref('')
 const successMessage = ref('')
 
@@ -90,6 +103,8 @@ const commentText = ref('')
 const commentVisibility = ref<'internal' | 'admin_only' | 'client_visible'>('internal')
 const additionalDocumentTitle = ref('')
 const additionalDocumentReason = ref('')
+const updateBatchReason = ref('')
+const updateDraftItems = ref<Array<StaffUpdateBatchDraftItem & { local_id: string }>>([])
 
 const selectedBankId = ref<number | null>(null)
 const selectedAgentId = ref<number | null>(null)
@@ -102,7 +117,7 @@ const attachmentPickerOpen = ref(false)
 const emailEditorRef = ref<HTMLElement | null>(null)
 const emailEditorFocused = ref(false)
 const quickView = ref<'updateBatch' | 'attachments' | 'shareholders' | 'answers' | 'comments' | 'additionalDocuments' | null>(null)
-const actionDialog = ref<'comment' | 'additionalDocument' | null>(null)
+const actionDialog = ref<'comment' | 'additionalDocument' | 'updateBatch' | null>(null)
 const { t, locale } = useI18n()
 const filePreviewOpen = ref(false)
 const filePreviewName = ref('')
@@ -123,6 +138,13 @@ function openFilePreview(fileName: string | null | undefined, downloadUrl: strin
 const uploadedRequiredCount = computed(() => requiredDocuments.value.filter((item) => item.is_uploaded).length)
 const pendingRequiredCount = computed(() => requiredDocuments.value.filter((item) => !item.is_uploaded).length)
 const activeUpdateBatch = computed(() => (requestItem.value?.update_batches ?? []).find((batch: any) => ['open', 'partially_completed'].includes(String(batch.status || ''))))
+const currentStaffAssignment = computed(() =>
+  (requestItem.value?.assignments ?? []).find((assignment: any) =>
+    assignment?.is_active !== false && Number(assignment?.staff_id) === Number(auth.user?.id),
+  ),
+)
+const canRequestClientUpdates = computed(() => auth.isAdmin || Boolean(currentStaffAssignment.value?.can_request_client_updates))
+const canOpenClientUpdateBatch = computed(() => canRequestClientUpdates.value && !activeUpdateBatch.value)
 const staffQuestions = computed<StaffStudyQuestion[]>(() => {
   const rows = Array.isArray(requestItem.value?.staff_questions) ? requestItem.value.staff_questions : []
   return [...rows].sort((a, b) => {
@@ -279,9 +301,68 @@ const actionDialogTitle = computed(() => {
       return t('staffRequestDetails.sections.addInternalComment')
     case 'additionalDocument':
       return t('staffRequestDetails.sections.requestAdditionalDocument')
+    case 'updateBatch':
+      return uiText('Request client update', 'طلب تحديث من العميل')
     default:
       return t('staffRequestDetails.sections.followUpTitle')
   }
+})
+
+const draftItemTypeOptions = computed(() => [
+  { value: 'intake_field', label: uiText('Basic request information', 'بيانات الطلب الأساسية') },
+  { value: 'request_answer', label: uiText('Questionnaire answer', 'إجابة من نموذج الطلب') },
+  { value: 'attachment', label: uiText('Initial request file', 'ملف من الطلب الأولي') },
+])
+
+const intakeFieldOptions = computed(() => [
+  { value: 'requested_amount', label: uiText('Requested amount', 'المبلغ المطلوب') },
+  { value: 'company_name', label: uiText('Company name', 'اسم الشركة') },
+  { value: 'company_cr_number', label: uiText('Commercial registration number', 'رقم السجل التجاري') },
+  { value: 'email', label: uiText('Email', 'البريد الإلكتروني') },
+  { value: 'phone_country_code', label: uiText('Phone country code', 'رمز الدولة للهاتف') },
+  { value: 'phone_number', label: uiText('Phone number', 'رقم الهاتف') },
+  { value: 'unified_number', label: uiText('Unified number', 'الرقم الموحد') },
+  { value: 'national_address_number', label: uiText('National address number', 'رقم العنوان الوطني') },
+  { value: 'address', label: uiText('Address', 'العنوان') },
+  { value: 'notes', label: uiText('Notes', 'ملاحظات') },
+  { value: 'finance_request_type_id', label: uiText('Finance request type', 'نوع طلب التمويل') },
+])
+
+const attachmentFieldOptions = computed(() => [
+  { value: 'national_address_attachment', label: uiText('National address attachment', 'مرفق العنوان الوطني') },
+  { value: 'company_cr', label: uiText('Commercial registration attachment', 'مرفق السجل التجاري') },
+  { value: 'initial_submission', label: uiText('Initial submission file', 'ملف الطلب الأولي') },
+])
+
+const questionOptions = computed(() => {
+  const answers = requestItem.value?.answers ?? []
+  const seen = new Set<number>()
+
+  return answers
+    .map((answer: any) => answer.question)
+    .filter((question: any) => question?.id)
+    .filter((question: any) => {
+      if (seen.has(question.id)) return false
+      seen.add(question.id)
+      return true
+    })
+})
+
+function isDraftItemComplete(item: StaffUpdateBatchDraftItem) {
+  const itemType = String(item?.item_type || '').trim()
+
+  if (!itemType) return false
+  if (itemType === 'request_answer') return Number.isInteger(Number(item.question_id)) && Number(item.question_id) > 0
+  if (itemType === 'intake_field' || itemType === 'attachment') return Boolean(String(item.field_key || '').trim())
+
+  return false
+}
+
+const canSubmitUpdateBatch = computed(() => {
+  if (!canOpenClientUpdateBatch.value || creatingUpdateBatch.value) return false
+  if (!updateDraftItems.value.length) return false
+
+  return updateDraftItems.value.every((item) => isDraftItemComplete(item))
 })
 
 function localizedModelValue(entity: any, base: string, fallback = t('staffRequestDetails.states.emptyValue')) {
@@ -480,6 +561,73 @@ function updateStatusClass(status: string | null | undefined) {
   if (key === 'updated') return 'client-badge client-badge--blue'
   if (key === 'rejected') return 'client-badge client-badge--rose'
   return 'client-badge client-badge--amber'
+}
+
+function addUpdateDraftItem() {
+  updateDraftItems.value.push({
+    local_id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    item_type: 'intake_field',
+    field_key: 'company_name',
+    question_id: null,
+    label_en: '',
+    instruction_en: '',
+    editable_by: 'client',
+    is_required: true,
+  })
+}
+
+function removeUpdateDraftItem(localId: string) {
+  updateDraftItems.value = updateDraftItems.value.filter((item) => item.local_id !== localId)
+}
+
+function onDraftTypeChange(item: StaffUpdateBatchDraftItem) {
+  if (item.item_type === 'intake_field') {
+    item.field_key = 'company_name'
+    item.question_id = null
+    return
+  }
+
+  if (item.item_type === 'attachment') {
+    item.field_key = 'initial_submission'
+    item.question_id = null
+    return
+  }
+
+  if (item.item_type === 'request_answer') {
+    item.field_key = null
+    item.question_id = questionOptions.value[0]?.id ?? null
+  }
+}
+
+function selectedUpdateItemLabel(item: StaffUpdateBatchDraftItem) {
+  if (item.item_type === 'request_answer') {
+    const question = questionOptions.value.find((entry: any) => Number(entry.id) === Number(item.question_id))
+    return question?.question_text || uiText('Questionnaire answer', 'إجابة من نموذج الطلب')
+  }
+
+  if (item.item_type === 'attachment') {
+    return attachmentFieldOptions.value.find((entry) => entry.value === item.field_key)?.label || uiText('Initial request file', 'ملف من الطلب الأولي')
+  }
+
+  return intakeFieldOptions.value.find((entry) => entry.value === item.field_key)?.label || uiText('Basic request information', 'بيانات الطلب الأساسية')
+}
+
+function resetUpdateBatchForm() {
+  updateBatchReason.value = ''
+  updateDraftItems.value = []
+}
+
+function openUpdateBatchDialog() {
+  if (!updateDraftItems.value.length) {
+    addUpdateDraftItem()
+  }
+
+  actionDialog.value = 'updateBatch'
+}
+
+function canRequestAdditionalDocumentReplacement(item: any) {
+  const status = String(item?.status || '').toLowerCase()
+  return Boolean(canRequestClientUpdates.value && item?.id && item?.file_name && ['uploaded', 'approved'].includes(status))
 }
 
 function readableCommentVisibility(value: string | null | undefined) {
@@ -922,9 +1070,79 @@ async function submitAdditionalDocumentRequest() {
   }
 }
 
+async function submitUpdateBatch() {
+  if (!requestItem.value || !canSubmitUpdateBatch.value) return
+
+  creatingUpdateBatch.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const payload: { reason_en?: string; reason_ar?: string; items: StaffUpdateBatchDraftItem[] } = {
+      reason_en: updateBatchReason.value.trim() || undefined,
+      reason_ar: updateBatchReason.value.trim() || undefined,
+      items: updateDraftItems.value.map((item) => ({
+        item_type: item.item_type,
+        field_key: item.item_type === 'request_answer' ? null : item.field_key,
+        question_id: item.item_type === 'request_answer' ? Number(item.question_id) : null,
+        label_en: item.label_en?.trim() || selectedUpdateItemLabel(item),
+        instruction_en: item.instruction_en?.trim() || null,
+        editable_by: 'client',
+        is_required: item.is_required !== false,
+      })),
+    }
+
+    const data = await createStaffUpdateBatch(requestItem.value.id, payload)
+    requestItem.value = data.request
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    resetUpdateBatchForm()
+    actionDialog.value = null
+    quickView.value = 'updateBatch'
+    successMessage.value = data.message || uiText('Client update request created successfully.', 'تم إنشاء طلب تحديث العميل بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to create the client update request.', 'تعذر إنشاء طلب تحديث العميل.')
+  } finally {
+    creatingUpdateBatch.value = false
+  }
+}
+
+async function submitAdditionalDocumentChange(item: any) {
+  if (!requestItem.value || !item?.id || !canRequestAdditionalDocumentReplacement(item)) return
+
+  const reason = String(additionalDocumentChangeReasons.value[item.id] || '').trim()
+  if (!reason) return
+
+  savingAdditionalDocumentChange.value = {
+    ...savingAdditionalDocumentChange.value,
+    [item.id]: true,
+  }
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await requestAdditionalDocumentChange(requestItem.value.id, item.id, { reason })
+    requestItem.value = data.request
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    additionalDocumentChangeReasons.value = {
+      ...additionalDocumentChangeReasons.value,
+      [item.id]: '',
+    }
+    successMessage.value = data.message || uiText('Replacement request sent to the client.', 'تم إرسال طلب الاستبدال إلى العميل.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to request a replacement for this document.', 'تعذر طلب استبدال هذا المستند.')
+  } finally {
+    savingAdditionalDocumentChange.value = {
+      ...savingAdditionalDocumentChange.value,
+      [item.id]: false,
+    }
+  }
+}
+
 
 async function submitRequiredDocumentChange(stepId: number) {
-  if (!requestItem.value) return
+  if (!requestItem.value || !canRequestClientUpdates.value) return
 
   const reason = (requiredDocumentChangeReason.value[stepId] || '').trim()
   if (!reason) return
@@ -960,7 +1178,7 @@ function onRequiredDocumentFileChange(stepId: number, event: Event) {
 }
 
 async function uploadRequiredDocumentForClient(stepId: number) {
-  if (!requestItem.value) return
+  if (!requestItem.value || !canRequestClientUpdates.value) return
 
   const file = selectedRequiredDocumentFiles.value[stepId]
   if (!file) return
@@ -987,6 +1205,108 @@ async function uploadRequiredDocumentForClient(stepId: number) {
     errorMessage.value = error?.response?.data?.message || uiText('Failed to upload the required document.', 'تعذر رفع المستند المطلوب.')
   } finally {
     uploadingRequiredDocument.value[stepId] = false
+  }
+}
+
+async function deleteRequiredDocumentUploadForClient(upload: any) {
+  if (!requestItem.value || !canRequestClientUpdates.value || !upload?.id) return
+  const confirmed = window.confirm(uiText('Remove this uploaded required document?', 'هل تريد إزالة هذا المستند المطلوب المرفوع؟'))
+  if (!confirmed) return
+
+  deletingRequiredDocumentUpload.value = {
+    ...deletingRequiredDocumentUpload.value,
+    [Number(upload.id)]: true,
+  }
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await deleteStaffRequiredDocumentUpload(requestItem.value.id, upload.id)
+    requestItem.value = data.request
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    successMessage.value = data.message || uiText('Required document removed successfully.', 'تمت إزالة المستند المطلوب بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to remove this required document.', 'تعذرت إزالة هذا المستند المطلوب.')
+  } finally {
+    deletingRequiredDocumentUpload.value = {
+      ...deletingRequiredDocumentUpload.value,
+      [Number(upload.id)]: false,
+    }
+  }
+}
+
+function additionalDocumentFileName(additionalDocumentId: number) {
+  return selectedAdditionalDocumentFiles.value[additionalDocumentId]?.name || ''
+}
+
+function onAdditionalDocumentFileChange(additionalDocumentId: number, event: Event) {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  selectedAdditionalDocumentFiles.value = {
+    ...selectedAdditionalDocumentFiles.value,
+    [additionalDocumentId]: file,
+  }
+}
+
+async function uploadAdditionalDocumentForClient(item: any) {
+  if (!requestItem.value || !canRequestClientUpdates.value || !item?.id) return
+
+  const file = selectedAdditionalDocumentFiles.value[Number(item.id)]
+  if (!file) return
+
+  uploadingAdditionalDocument.value = {
+    ...uploadingAdditionalDocument.value,
+    [Number(item.id)]: true,
+  }
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await uploadStaffAdditionalDocument(requestItem.value.id, item.id, { file })
+    requestItem.value = data.request
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    selectedAdditionalDocumentFiles.value = {
+      ...selectedAdditionalDocumentFiles.value,
+      [Number(item.id)]: null,
+    }
+    successMessage.value = data.message || uiText('Additional document uploaded successfully.', 'تم رفع المستند الإضافي بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to upload this additional document.', 'تعذر رفع هذا المستند الإضافي.')
+  } finally {
+    uploadingAdditionalDocument.value = {
+      ...uploadingAdditionalDocument.value,
+      [Number(item.id)]: false,
+    }
+  }
+}
+
+async function deleteAdditionalDocumentFileForClient(item: any) {
+  if (!requestItem.value || !canRequestClientUpdates.value || !item?.id || !item?.file_name) return
+  const confirmed = window.confirm(uiText('Remove this uploaded additional document file?', 'هل تريد إزالة ملف المستند الإضافي المرفوع؟'))
+  if (!confirmed) return
+
+  deletingAdditionalDocumentFile.value = {
+    ...deletingAdditionalDocumentFile.value,
+    [Number(item.id)]: true,
+  }
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await deleteStaffAdditionalDocumentFile(requestItem.value.id, item.id)
+    requestItem.value = data.request
+    requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+    staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+    successMessage.value = data.message || uiText('Additional document file removed successfully.', 'تمت إزالة ملف المستند الإضافي بنجاح.')
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Unable to remove this additional document file.', 'تعذرت إزالة ملف المستند الإضافي.')
+  } finally {
+    deletingAdditionalDocumentFile.value = {
+      ...deletingAdditionalDocumentFile.value,
+      [Number(item.id)]: false,
+    }
   }
 }
 
@@ -1084,6 +1404,12 @@ onMounted(load)
   >
     <template #topbar-actions>
       <RouterLink :to="{ name: 'staff-requests' }" class="ghost-btn">{{ t('staffRequestDetails.hero.backToAssignedRequests') }}</RouterLink>
+      <button v-if="canOpenClientUpdateBatch" type="button" class="ghost-btn" @click="openUpdateBatchDialog">
+        {{ uiText('Request client update', 'طلب تحديث من العميل') }}
+      </button>
+      <button v-else-if="activeUpdateBatch" type="button" class="ghost-btn" @click="quickView = 'updateBatch'">
+        {{ uiText('View update request', 'عرض طلب التحديث') }}
+      </button>
       <RouterLink :to="{ name: 'staff-request-send-email', params: { id: requestId } }" class="primary-btn">{{ uiText('Send email', 'إرسال بريد') }}</RouterLink>
     </template>
 
@@ -1146,6 +1472,12 @@ onMounted(load)
               <button type="button" class="ghost-btn" @click="actionDialog = 'additionalDocument'">
                 {{ t('staffRequestDetails.sections.requestAdditionalDocument') }}
               </button>
+              <button v-if="canOpenClientUpdateBatch" type="button" class="ghost-btn" @click="openUpdateBatchDialog">
+                {{ uiText('Request client update', 'طلب تحديث من العميل') }}
+              </button>
+              <button v-else-if="activeUpdateBatch" type="button" class="ghost-btn" @click="quickView = 'updateBatch'">
+                {{ uiText('View update request', 'عرض طلب التحديث') }}
+              </button>
               <RouterLink :to="{ name: 'staff-request-send-email', params: { id: requestId } }" class="primary-btn">
                 {{ uiText('Send email', 'إرسال بريد') }}
               </RouterLink>
@@ -1169,6 +1501,12 @@ onMounted(load)
           </button>
           <button type="button" class="ghost-btn" @click="actionDialog = 'additionalDocument'">
             {{ t('staffRequestDetails.sections.requestAdditionalDocument') }}
+          </button>
+          <button v-if="canOpenClientUpdateBatch" type="button" class="ghost-btn" @click="openUpdateBatchDialog">
+            {{ uiText('Request client update', 'طلب تحديث من العميل') }}
+          </button>
+          <button v-else-if="activeUpdateBatch" type="button" class="ghost-btn" @click="quickView = 'updateBatch'">
+            {{ uiText('View update request', 'عرض طلب التحديث') }}
           </button>
           <button v-if="canSubmitUnderstudyPackage && understudySectionVisible" type="button" class="primary-btn" :disabled="submittingUnderstudyState || understudyLocked" @click="submitStudyToAdmin">
             {{ submittingUnderstudyState ? uiText('Submitting...', 'جارٍ الإرسال...') : uiText('Submit to admin', 'إرسال إلى الإدارة') }}
@@ -1337,6 +1675,15 @@ onMounted(load)
                           {{ uiText('Preview', 'معاينة') }}
                         </button>
                         <a :href="requiredDocumentDownloadUrl(upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.download') }}</a>
+                        <button
+                          v-if="canRequestClientUpdates"
+                          type="button"
+                          class="ghost-btn ghost-btn--danger"
+                          :disabled="deletingRequiredDocumentUpload[Number(upload.id)]"
+                          @click="deleteRequiredDocumentUploadForClient(upload)"
+                        >
+                          {{ deletingRequiredDocumentUpload[Number(upload.id)] ? uiText('Removing...', 'جاري الإزالة...') : uiText('Remove', 'إزالة') }}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1352,7 +1699,7 @@ onMounted(load)
                   </div>
                   <p v-if="item.rejection_reason" class="form-help form-help--error">{{ t('staffRequestDetails.states.reasonLabel') }}: {{ item.rejection_reason }}</p>
 
-                  <div class="field-stack">
+                  <div v-if="canRequestClientUpdates" class="field-stack">
                     <label class="client-form-group">
                       <span class="client-form-label">{{ uiText('Upload on behalf of client', 'رفع نيابةً عن العميل') }}</span>
                       <input
@@ -1376,7 +1723,7 @@ onMounted(load)
                     </div>
                   </div>
 
-                  <div v-if="item.is_uploaded && !item.is_change_requested" class="field-stack">
+                  <div v-if="canRequestClientUpdates && item.is_uploaded && !item.is_change_requested" class="field-stack">
                     <textarea
                       v-model="requiredDocumentChangeReason[item.document_upload_step_id]"
                       rows="3"
@@ -2033,6 +2380,80 @@ onMounted(load)
             </button>
           </div>
         </div>
+
+        <div v-else-if="actionDialog === 'updateBatch'" class="request-dialog-stack">
+          <div v-if="activeUpdateBatch" class="notes-box">
+            <span>{{ uiText('Already open', 'طلب مفتوح بالفعل') }}</span>
+            <p>{{ uiText('There is already an active client update request. Open it from quick view instead of creating another one.', 'يوجد طلب تحديث نشط من العميل بالفعل. افتحه من العرض السريع بدلا من إنشاء طلب جديد.') }}</p>
+          </div>
+          <template v-else>
+            <textarea
+              v-model="updateBatchReason"
+              rows="3"
+              class="admin-textarea"
+              :placeholder="uiText('Tell the client what needs to be corrected.', 'اكتب للعميل ما الذي يحتاج إلى تصحيح.')"
+            ></textarea>
+
+            <div v-for="item in updateDraftItems" :key="item.local_id" class="panel-card slim-card staff-update-draft-item">
+              <div class="field-block field-block--grow">
+                <span>{{ uiText('What should the client update?', 'ما الذي يجب على العميل تحديثه؟') }}</span>
+                <select v-model="item.item_type" class="admin-select" @change="onDraftTypeChange(item)">
+                  <option v-for="type in draftItemTypeOptions" :key="type.value" :value="type.value">{{ type.label }}</option>
+                </select>
+              </div>
+
+              <div v-if="item.item_type === 'intake_field'" class="field-block field-block--grow">
+                <span>{{ uiText('Field', 'الحقل') }}</span>
+                <select v-model="item.field_key" class="admin-select">
+                  <option v-for="field in intakeFieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                </select>
+              </div>
+
+              <div v-else-if="item.item_type === 'request_answer'" class="field-block field-block--grow">
+                <span>{{ uiText('Question', 'السؤال') }}</span>
+                <select v-model.number="item.question_id" class="admin-select">
+                  <option :value="null">{{ uiText('Select a question', 'اختر سؤالا') }}</option>
+                  <option v-for="question in questionOptions" :key="question.id" :value="question.id">{{ question.question_text }}</option>
+                </select>
+              </div>
+
+              <div v-else class="field-block field-block--grow">
+                <span>{{ uiText('File', 'الملف') }}</span>
+                <select v-model="item.field_key" class="admin-select">
+                  <option v-for="field in attachmentFieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                </select>
+              </div>
+
+              <input
+                v-model="item.label_en"
+                type="text"
+                class="admin-input"
+                :placeholder="uiText('Optional display label', 'عنوان اختياري يظهر للعميل')"
+              />
+              <textarea
+                v-model="item.instruction_en"
+                rows="3"
+                class="admin-textarea"
+                :placeholder="uiText('Short instruction for the client', 'تعليمات قصيرة للعميل')"
+              ></textarea>
+
+              <div class="approve-actions">
+                <button type="button" class="ghost-btn" @click="removeUpdateDraftItem(item.local_id)">
+                  {{ uiText('Remove item', 'إزالة العنصر') }}
+                </button>
+              </div>
+            </div>
+
+            <div class="approve-actions">
+              <button type="button" class="ghost-btn" @click="addUpdateDraftItem">
+                {{ updateDraftItems.length ? uiText('Add another item', 'إضافة عنصر آخر') : uiText('Add item', 'إضافة عنصر') }}
+              </button>
+              <button type="button" class="primary-btn" :disabled="!canSubmitUpdateBatch" @click="submitUpdateBatch">
+                {{ creatingUpdateBatch ? uiText('Creating...', 'جاري الإنشاء...') : uiText('Send update request', 'إرسال طلب التحديث') }}
+              </button>
+            </div>
+          </template>
+        </div>
       </AdminQuickViewModal>
 
       <AdminQuickViewModal
@@ -2129,6 +2550,7 @@ onMounted(load)
           <div v-if="requestItem.additional_documents?.length" v-for="item in requestItem.additional_documents" :key="item.id" class="timeline-item">
             <strong>{{ item.title }}</strong>
             <p>{{ item.reason || t('staffRequestDetails.states.noReasonAdded') }}</p>
+            <p v-if="item.rejection_reason" class="client-subtext">{{ uiText('Change reason', 'سبب طلب التغيير') }}: {{ item.rejection_reason }}</p>
             <span>{{ readableAdditionalDocumentStatus(item.status) }}<template v-if="item.file_name"> · {{ item.file_name }}</template></span>
             <div v-if="item.file_name" class="approve-actions">
               <button
@@ -2139,6 +2561,54 @@ onMounted(load)
                 Preview
               </button>
               <a :href="additionalDocumentDownloadUrl(item.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('staffRequestDetails.actions.downloadFile') }}</a>
+              <button
+                v-if="canRequestClientUpdates"
+                type="button"
+                class="ghost-btn ghost-btn--danger"
+                :disabled="deletingAdditionalDocumentFile[Number(item.id)]"
+                @click="deleteAdditionalDocumentFileForClient(item)"
+              >
+                {{ deletingAdditionalDocumentFile[Number(item.id)] ? uiText('Removing...', 'جاري الإزالة...') : uiText('Remove file', 'إزالة الملف') }}
+              </button>
+            </div>
+            <div v-if="canRequestClientUpdates" class="staff-document-change-box">
+              <label class="client-form-group">
+                <span class="client-form-label">{{ item.file_name ? uiText('Replace additional document', 'استبدال المستند الإضافي') : uiText('Upload additional document', 'رفع المستند الإضافي') }}</span>
+                <input
+                  type="file"
+                  class="admin-input"
+                  @change="onAdditionalDocumentFileChange(Number(item.id), $event)"
+                />
+              </label>
+              <div class="approve-actions">
+                <button
+                  type="button"
+                  class="ghost-btn"
+                  :disabled="uploadingAdditionalDocument[Number(item.id)] || !selectedAdditionalDocumentFiles[Number(item.id)]"
+                  @click="uploadAdditionalDocumentForClient(item)"
+                >
+                  {{ uploadingAdditionalDocument[Number(item.id)] ? uiText('Uploading...', 'جاري الرفع...') : item.file_name ? uiText('Upload replacement', 'رفع البديل') : uiText('Upload file', 'رفع الملف') }}
+                </button>
+                <span v-if="additionalDocumentFileName(Number(item.id))" class="client-subtext">
+                  {{ additionalDocumentFileName(Number(item.id)) }}
+                </span>
+              </div>
+            </div>
+            <div v-if="canRequestAdditionalDocumentReplacement(item)" class="staff-document-change-box">
+              <textarea
+                v-model="additionalDocumentChangeReasons[item.id]"
+                rows="2"
+                class="admin-textarea"
+                :placeholder="uiText('Why should the client upload a replacement?', 'لماذا يجب على العميل رفع نسخة بديلة؟')"
+              ></textarea>
+              <button
+                type="button"
+                class="ghost-btn"
+                :disabled="savingAdditionalDocumentChange[item.id] || !String(additionalDocumentChangeReasons[item.id] || '').trim()"
+                @click="submitAdditionalDocumentChange(item)"
+              >
+                {{ savingAdditionalDocumentChange[item.id] ? uiText('Sending...', 'جاري الإرسال...') : uiText('Request replacement', 'طلب استبدال الملف') }}
+              </button>
             </div>
           </div>
           <p v-else class="empty-state">{{ t('staffRequestDetails.states.noAdditionalDocumentsRequested') }}</p>
@@ -2182,6 +2652,35 @@ onMounted(load)
 .followup-card {
   display: grid;
   gap: 0.85rem;
+}
+
+.staff-update-draft-item,
+.staff-document-change-box {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.staff-update-draft-item {
+  padding: 1rem;
+}
+
+.staff-document-change-box {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px dashed rgba(148, 163, 184, 0.38);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.ghost-btn--danger {
+  border-color: rgba(239, 68, 68, 0.26);
+  color: #b91c1c;
+  background: rgba(254, 242, 242, 0.86);
+}
+
+.ghost-btn--danger:hover:not(:disabled) {
+  border-color: rgba(220, 38, 38, 0.42);
+  background: rgba(254, 226, 226, 0.92);
 }
 
 .staff-email-composer-card {

@@ -9,6 +9,7 @@ use App\Models\FinanceRequestStaffQuestion;
 use App\Models\FinanceStaffQuestionTemplate;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class FinanceRequestStaffQuestionTemplateService
@@ -20,8 +21,15 @@ class FinanceRequestStaffQuestionTemplateService
      */
     public function ensureForRequest(FinanceRequest $financeRequest, ?int $actorUserId = null): Collection
     {
+        $requestFinanceType = $this->resolveRequestFinanceType($financeRequest);
         $templates = FinanceStaffQuestionTemplate::query()
             ->where('is_active', true)
+            ->where(function ($query) use ($requestFinanceType): void {
+                $query
+                    ->whereNull('finance_type')
+                    ->orWhere('finance_type', 'all')
+                    ->orWhere('finance_type', $requestFinanceType);
+            })
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -65,6 +73,7 @@ class FinanceRequestStaffQuestionTemplateService
                     'metadata_json' => [
                         'template_id' => $template->id,
                         'template_code' => $template->code,
+                        'template_finance_type' => $template->finance_type ?: 'all',
                         'instantiated_from_template' => true,
                     ],
                     'asked_at' => now(),
@@ -120,5 +129,15 @@ class FinanceRequestStaffQuestionTemplateService
             ->first();
 
         return $latestAssignment ? (int) $latestAssignment->staff_id : null;
+    }
+
+    private function resolveRequestFinanceType(FinanceRequest $financeRequest): string
+    {
+        $financeType = strtolower(trim((string) (
+            $financeRequest->applicant_type
+            ?: Arr::get($financeRequest->intake_details_json ?? [], 'finance_type', 'individual')
+        )));
+
+        return in_array($financeType, ['individual', 'company'], true) ? $financeType : 'individual';
     }
 }

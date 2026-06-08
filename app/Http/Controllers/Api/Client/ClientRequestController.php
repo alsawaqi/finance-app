@@ -102,7 +102,7 @@ class ClientRequestController extends Controller
             ->with([
                 'currentContract:id,finance_request_id,version_no,status,admin_signed_at,client_signed_at,contract_pdf_path',
                 'financeRequestType:id,slug,name_en,name_ar,description_en,description_ar,is_active,sort_order',
-                'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
+                'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,finance_type,is_required,is_active,sort_order',
             ])
             ->withCount(['answers', 'attachments'])
             ->where('user_id', $request->user()->id)
@@ -359,6 +359,7 @@ class ClientRequestController extends Controller
             FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
             FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
             FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
+            FinanceRequestWorkflowStage::CLIENT_UPDATE_REQUESTED->value,
         ], true), 422, 'This request is not currently accepting document uploads.');
 
         $step = $this->documentChecklistService->findRequiredStepForRequest(
@@ -646,6 +647,7 @@ class ClientRequestController extends Controller
                 FinanceRequestWorkflowStage::DOCUMENT_COLLECTION->value,
                 FinanceRequestWorkflowStage::AWAITING_ADDITIONAL_DOCUMENTS->value,
                 FinanceRequestWorkflowStage::AWAITING_CLIENT_DOCUMENTS->value,
+                FinanceRequestWorkflowStage::CLIENT_UPDATE_REQUESTED->value,
             ], true),
             'can_submit_client_updates' => $stage === FinanceRequestWorkflowStage::CLIENT_UPDATE_REQUESTED->value,
             'active_update_batch' => ($activeBatch = $this->updateService->getActiveClientBatch($financeRequest)) ? [

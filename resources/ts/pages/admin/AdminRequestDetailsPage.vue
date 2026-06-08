@@ -15,6 +15,10 @@ import {
   approveAdminRequest,
   cancelAdminUpdateBatch,
   createAdminUpdateBatch,
+  deleteAdminAdditionalDocumentFile,
+  deleteAdminRequestAttachment,
+  deleteAdminRequiredDocumentUpload,
+  directEditAdminRequest,
   finalizeAdminRequest,
   getAdminRequestAgentAssignmentOptions,
   getAdminRequestDetails,
@@ -25,6 +29,9 @@ import {
   reviewAdminUnderstudy,
   storeAdminRequestAgentAssignments,
   type AdminUpdateBatchDraftItem,
+  uploadAdminAdditionalDocument,
+  uploadAdminRequestAttachment,
+  uploadAdminRequiredDocument,
 } from '@/services/adminRequests'
 import {
   applicantTypeLabel,
@@ -90,7 +97,7 @@ const quickView = ref<
   | 'timeline'
   | null
 >(null)
-const actionDialog = ref<'comment' | 'reject' | 'approve' | 'finalApprove' | 'updateBatch' | 'agentAccess' | null>(null)
+const actionDialog = ref<'comment' | 'reject' | 'approve' | 'finalApprove' | 'updateBatch' | 'agentAccess' | 'directEdit' | null>(null)
 const staffQuestionSummary = ref<any | null>(null)
 const emailBankOptions = ref<any[]>([])
 const emailAgentOptions = ref<any[]>([])
@@ -102,6 +109,20 @@ const savingAgentAssignments = ref(false)
 const agentAssignmentReviewNote = ref('')
 const workflowStageDraft = ref('')
 const savingWorkflowStage = ref(false)
+const savingDirectEdit = ref(false)
+const uploadingDirectAttachment = ref(false)
+const deletingDirectAttachmentId = ref<number | null>(null)
+const directEditNote = ref('')
+const directEditFields = ref<Record<string, string>>({})
+const directEditAnswers = ref<Record<number, string>>({})
+const directAttachmentCategory = ref('initial_submission')
+const directAttachmentFile = ref<File | null>(null)
+const directRequiredDocumentStepId = ref<number | null>(null)
+const directRequiredDocumentFile = ref<File | null>(null)
+const directAdditionalDocumentId = ref<number | null>(null)
+const directAdditionalDocumentFile = ref<File | null>(null)
+const deletingDirectRequiredUploadId = ref<number | null>(null)
+const deletingDirectAdditionalDocumentId = ref<number | null>(null)
 const { t, locale } = useI18n()
 
 const requestId = computed(() => route.params.id as string)
@@ -269,6 +290,8 @@ const actionDialogTitle = computed(() => {
       return t('adminRequestDetails.updateBatch.title')
     case 'agentAccess':
       return t('adminRequestDetails.agentAssignments.manageAccess')
+    case 'directEdit':
+      return uiText('Edit request directly', '\u062a\u0639\u062f\u064a\u0644 \u0627\u0644\u0637\u0644\u0628 \u0645\u0628\u0627\u0634\u0631\u0629')
     default:
       return uiText('Request action', 'إجراء الطلب')
   }
@@ -293,6 +316,53 @@ const attachmentFieldOptions = computed(() => [
   { value: 'company_cr', label: t('adminRequestDetails.updateBatch.fields.companyCrAttachment') },
   { value: 'initial_submission', label: t('adminRequestDetails.updateBatch.fields.initialSubmissionAttachment') },
 ])
+
+const directEditFieldOptions = computed(() => [
+  { value: 'finance_type', label: uiText('Applicant type', '\u0646\u0648\u0639 \u0645\u0642\u062f\u0645 \u0627\u0644\u0637\u0644\u0628') },
+  { value: 'requested_amount', label: t('adminRequestDetails.updateBatch.fields.requestedAmount') },
+  { value: 'company_name', label: t('adminRequestDetails.updateBatch.fields.companyName') },
+  { value: 'company_cr_number', label: t('adminRequestDetails.updateBatch.fields.companyCrNumber') },
+  { value: 'email', label: t('adminRequestDetails.updateBatch.fields.email') },
+  { value: 'phone_country_code', label: t('adminRequestDetails.updateBatch.fields.phoneCountryCode') },
+  { value: 'phone_number', label: t('adminRequestDetails.updateBatch.fields.phoneNumber') },
+  { value: 'unified_number', label: t('adminRequestDetails.updateBatch.fields.unifiedNumber') },
+  { value: 'national_address_number', label: t('adminRequestDetails.updateBatch.fields.nationalAddressNumber') },
+  { value: 'country_code', label: uiText('Country code', '\u0631\u0645\u0632 \u0627\u0644\u062f\u0648\u0644\u0629') },
+  { value: 'address', label: t('adminRequestDetails.updateBatch.fields.address'), multiline: true },
+  { value: 'notes', label: t('adminRequestDetails.updateBatch.fields.notes'), multiline: true },
+])
+
+const directEditableAnswers = computed(() =>
+  (requestItem.value?.answers ?? [])
+    .map((answer: any) => {
+      const questionId = Number(answer?.question?.id ?? answer?.question_id ?? 0)
+      const label = answer?.question?.question_text
+        || answer?.question?.question_text_en
+        || answer?.question?.question_text_ar
+        || t('adminRequestDetails.states.questionFallback')
+
+      return {
+        id: questionId,
+        label,
+        value: answerText(answer),
+      }
+    })
+    .filter((answer: any) => answer.id > 0),
+)
+
+const directRequiredDocumentOptions = computed(() =>
+  (requiredDocuments.value ?? []).map((item: any) => ({
+    id: Number(item.document_upload_step_id ?? 0),
+    label: item.name || item.code || uiText('Required document', '\u0645\u0633\u062a\u0646\u062f \u0645\u0637\u0644\u0648\u0628'),
+  })).filter((item: any) => item.id > 0),
+)
+
+const directAdditionalDocumentOptions = computed(() =>
+  (requestItem.value?.additional_documents ?? []).map((item: any) => ({
+    id: Number(item.id ?? 0),
+    label: item.title || uiText('Additional document', '\u0645\u0633\u062a\u0646\u062f \u0625\u0636\u0627\u0641\u064a'),
+  })).filter((item: any) => item.id > 0),
+)
 
 const questionOptions = computed(() => {
   const answers = requestItem.value?.answers ?? []
@@ -604,6 +674,214 @@ function answerText(answer: any) {
   if (value && typeof value === 'object') return JSON.stringify(value)
   if (value === null || value === undefined || value === '') return t('adminRequestDetails.states.emptyValue')
   return String(value)
+}
+
+function applyDirectEditResponse(data: any) {
+  requestItem.value = data.request ?? requestItem.value
+  requiredDocuments.value = data.required_documents ?? requiredDocuments.value
+  staffQuestionSummary.value = data.staff_question_summary ?? staffQuestionSummary.value
+  successMessage.value = data.message || uiText('Request updated successfully.', '\u062a\u0645 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0637\u0644\u0628 \u0628\u0646\u062c\u0627\u062d.')
+}
+
+function currentIntakeValue(field: string): string {
+  const request = requestItem.value ?? {}
+  const details = request?.intake_details_json ?? {}
+  let value: unknown = details[field]
+
+  if (field === 'finance_type') {
+    value = request?.applicant_type ?? details.finance_type
+  } else if (field === 'company_name') {
+    value = request?.company_name ?? details.company_name
+  } else if (field === 'country_code') {
+    value = request?.country_code ?? details.country_code ?? details.country
+  }
+
+  if (value === null || value === undefined) return ''
+  return String(value)
+}
+
+function directFieldInputType(field: string): string {
+  if (field === 'email') return 'email'
+  if (field === 'requested_amount') return 'number'
+  return 'text'
+}
+
+function resetDirectEditForm() {
+  directEditNote.value = ''
+  directEditFields.value = Object.fromEntries(
+    directEditFieldOptions.value.map((field) => [field.value, currentIntakeValue(field.value)]),
+  )
+  directEditAnswers.value = Object.fromEntries(
+    directEditableAnswers.value.map((answer) => [answer.id, answer.value]),
+  )
+  directAttachmentCategory.value = 'initial_submission'
+  directAttachmentFile.value = null
+  directRequiredDocumentStepId.value = directRequiredDocumentOptions.value[0]?.id ?? null
+  directRequiredDocumentFile.value = null
+  directAdditionalDocumentId.value = directAdditionalDocumentOptions.value[0]?.id ?? null
+  directAdditionalDocumentFile.value = null
+}
+
+function openDirectEditDialog() {
+  resetDirectEditForm()
+  actionDialog.value = 'directEdit'
+}
+
+function onDirectAttachmentSelected(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  directAttachmentFile.value = input?.files?.[0] ?? null
+}
+
+function onDirectRequiredDocumentSelected(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  directRequiredDocumentFile.value = input?.files?.[0] ?? null
+}
+
+function onDirectAdditionalDocumentSelected(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  directAdditionalDocumentFile.value = input?.files?.[0] ?? null
+}
+
+async function saveDirectEdit() {
+  if (!requestItem.value || savingDirectEdit.value) return
+
+  savingDirectEdit.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const answers = directEditableAnswers.value.map((answer) => ({
+      question_id: answer.id,
+      value: directEditAnswers.value[answer.id] ?? '',
+    }))
+    const data = await directEditAdminRequest(requestItem.value.id, {
+      intake_details: { ...directEditFields.value },
+      answers,
+      note: directEditNote.value || undefined,
+    })
+    applyDirectEditResponse(data)
+    resetDirectEditForm()
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to update the request directly.', '\u062a\u0639\u0630\u0631 \u062a\u062d\u062f\u064a\u062b \u0627\u0644\u0637\u0644\u0628 \u0645\u0628\u0627\u0634\u0631\u0629.')
+  } finally {
+    savingDirectEdit.value = false
+  }
+}
+
+async function uploadDirectAttachment() {
+  if (!requestItem.value || !directAttachmentFile.value || uploadingDirectAttachment.value) return
+
+  uploadingDirectAttachment.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await uploadAdminRequestAttachment(requestItem.value.id, {
+      category: directAttachmentCategory.value,
+      file: directAttachmentFile.value,
+    })
+    applyDirectEditResponse(data)
+    directAttachmentFile.value = null
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to upload the attachment.', '\u062a\u0639\u0630\u0631 \u0631\u0641\u0639 \u0627\u0644\u0645\u0631\u0641\u0642.')
+  } finally {
+    uploadingDirectAttachment.value = false
+  }
+}
+
+async function uploadDirectRequiredDocument() {
+  if (!requestItem.value || !directRequiredDocumentStepId.value || !directRequiredDocumentFile.value || uploadingDirectAttachment.value) return
+
+  uploadingDirectAttachment.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await uploadAdminRequiredDocument(requestItem.value.id, {
+      document_upload_step_id: directRequiredDocumentStepId.value,
+      file: directRequiredDocumentFile.value,
+    })
+    applyDirectEditResponse(data)
+    directRequiredDocumentFile.value = null
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to upload the required document.', '\u062a\u0639\u0630\u0631 \u0631\u0641\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0645\u0637\u0644\u0648\u0628.')
+  } finally {
+    uploadingDirectAttachment.value = false
+  }
+}
+
+async function uploadDirectAdditionalDocument() {
+  if (!requestItem.value || !directAdditionalDocumentId.value || !directAdditionalDocumentFile.value || uploadingDirectAttachment.value) return
+
+  uploadingDirectAttachment.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await uploadAdminAdditionalDocument(requestItem.value.id, directAdditionalDocumentId.value, {
+      file: directAdditionalDocumentFile.value,
+    })
+    applyDirectEditResponse(data)
+    directAdditionalDocumentFile.value = null
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to upload the additional document.', '\u062a\u0639\u0630\u0631 \u0631\u0641\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0625\u0636\u0627\u0641\u064a.')
+  } finally {
+    uploadingDirectAttachment.value = false
+  }
+}
+
+async function deleteDirectAttachment(attachment: any) {
+  if (!requestItem.value || !attachment?.id || deletingDirectAttachmentId.value) return
+  if (!window.confirm(uiText('Remove this request attachment?', '\u0647\u0644 \u062a\u0631\u064a\u062f \u0625\u0632\u0627\u0644\u0629 \u0647\u0630\u0627 \u0627\u0644\u0645\u0631\u0641\u0642\u061f'))) return
+
+  deletingDirectAttachmentId.value = Number(attachment.id)
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await deleteAdminRequestAttachment(requestItem.value.id, attachment.id)
+    applyDirectEditResponse(data)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to remove the attachment.', '\u062a\u0639\u0630\u0631 \u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0645\u0631\u0641\u0642.')
+  } finally {
+    deletingDirectAttachmentId.value = null
+  }
+}
+
+async function deleteDirectRequiredUpload(upload: any) {
+  if (!requestItem.value || !upload?.id || deletingDirectRequiredUploadId.value) return
+  if (!window.confirm(uiText('Remove this required document upload?', '\u0647\u0644 \u062a\u0631\u064a\u062f \u0625\u0632\u0627\u0644\u0629 \u0631\u0641\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u061f'))) return
+
+  deletingDirectRequiredUploadId.value = Number(upload.id)
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await deleteAdminRequiredDocumentUpload(requestItem.value.id, upload.id)
+    applyDirectEditResponse(data)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to remove the required document.', '\u062a\u0639\u0630\u0631 \u0625\u0632\u0627\u0644\u0629 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0645\u0637\u0644\u0648\u0628.')
+  } finally {
+    deletingDirectRequiredUploadId.value = null
+  }
+}
+
+async function deleteDirectAdditionalDocument(document: any) {
+  if (!requestItem.value || !document?.id || deletingDirectAdditionalDocumentId.value) return
+  if (!window.confirm(uiText('Remove this additional document file?', '\u0647\u0644 \u062a\u0631\u064a\u062f \u0625\u0632\u0627\u0644\u0629 \u0645\u0644\u0641 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0625\u0636\u0627\u0641\u064a\u061f'))) return
+
+  deletingDirectAdditionalDocumentId.value = Number(document.id)
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const data = await deleteAdminAdditionalDocumentFile(requestItem.value.id, document.id)
+    applyDirectEditResponse(data)
+  } catch (error: any) {
+    errorMessage.value = error?.response?.data?.message || uiText('Failed to remove the additional document file.', '\u062a\u0639\u0630\u0631 \u0625\u0632\u0627\u0644\u0629 \u0645\u0644\u0641 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0625\u0636\u0627\u0641\u064a.')
+  } finally {
+    deletingDirectAdditionalDocumentId.value = null
+  }
 }
 
 function formatUpdateValue(item: any, mode: 'old' | 'new') {
@@ -1363,6 +1641,9 @@ onMounted(() => {
               <button type="button" class="ghost-btn" @click="actionDialog = 'updateBatch'">
                 {{ t('adminRequestDetails.updateBatch.title') }}
               </button>
+              <button type="button" class="ghost-btn" @click="openDirectEditDialog">
+                {{ uiText('Edit directly', '\u062a\u0639\u062f\u064a\u0644 \u0645\u0628\u0627\u0634\u0631') }}
+              </button>
               <button v-if="agentAssignmentVisible" type="button" class="ghost-btn" @click="actionDialog = 'agentAccess'">
                 {{ t('adminRequestDetails.agentAssignments.manageAccess') }}
               </button>
@@ -1429,6 +1710,9 @@ onMounted(() => {
           </button>
           <button type="button" class="ghost-btn" @click="actionDialog = 'updateBatch'">
             {{ t('adminRequestDetails.updateBatch.title') }}
+          </button>
+          <button type="button" class="ghost-btn" @click="openDirectEditDialog">
+            {{ uiText('Edit directly', '\u062a\u0639\u062f\u064a\u0644 \u0645\u0628\u0627\u0634\u0631') }}
           </button>
           <button v-if="agentAssignmentVisible" type="button" class="ghost-btn" @click="actionDialog = 'agentAccess'">
             {{ t('adminRequestDetails.agentAssignments.manageAccess') }}
@@ -2067,7 +2351,7 @@ onMounted(() => {
         @update:model-value="(value) => { if (!value) actionDialog = null }"
         :title="actionDialogTitle"
         :subtitle="uiText('Complete the action without losing your place in the request details.', 'أنجز الإجراء بدون فقدان مكانك في تفاصيل الطلب.')"
-        :wide="actionDialog === 'updateBatch' || actionDialog === 'comment' || actionDialog === 'agentAccess'"
+        :wide="actionDialog === 'updateBatch' || actionDialog === 'comment' || actionDialog === 'agentAccess' || actionDialog === 'directEdit'"
       >
         <div v-if="actionDialog === 'comment'" class="request-dialog-stack">
           <div class="admin-inline-block-grid">
@@ -2295,6 +2579,257 @@ onMounted(() => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div v-else-if="actionDialog === 'directEdit'" class="request-dialog-stack">
+          <div class="catalog-mini-stats request-kpi-grid request-kpi-grid--two">
+            <div><span>{{ uiText('Current stage', '\u0627\u0644\u0645\u0631\u062d\u0644\u0629 \u0627\u0644\u062d\u0627\u0644\u064a\u0629') }}</span><strong>{{ stageMeta(requestItem?.workflow_stage).label }}</strong></div>
+            <div><span>{{ uiText('Client updates', '\u062a\u062d\u062f\u064a\u062b\u0627\u062a \u0627\u0644\u0639\u0645\u064a\u0644') }}</span><strong>{{ activityCounts.updateBatches }}</strong></div>
+          </div>
+
+          <div class="request-dialog-grid">
+            <div
+              v-for="field in directEditFieldOptions"
+              :key="field.value"
+              class="client-form-group"
+            >
+              <label class="client-form-label">{{ field.label }}</label>
+              <select
+                v-if="field.value === 'finance_type'"
+                v-model="directEditFields[field.value]"
+                class="client-form-control"
+              >
+                <option value="individual">{{ uiText('Individual', '\u0641\u0631\u062f') }}</option>
+                <option value="company">{{ uiText('Company', '\u0634\u0631\u0643\u0629') }}</option>
+              </select>
+              <textarea
+                v-else-if="field.multiline"
+                v-model="directEditFields[field.value]"
+                rows="3"
+                class="client-form-control client-form-control--textarea"
+              />
+              <input
+                v-else
+                v-model="directEditFields[field.value]"
+                :type="directFieldInputType(field.value)"
+                class="client-form-control"
+              />
+            </div>
+          </div>
+
+          <div v-if="directEditableAnswers.length" class="request-dialog-stack">
+            <div class="panel-head">
+              <h2>{{ uiText('Question answers', '\u0625\u062c\u0627\u0628\u0627\u062a \u0627\u0644\u0623\u0633\u0626\u0644\u0629') }}</h2>
+            </div>
+            <div class="request-dialog-grid">
+              <div v-for="answer in directEditableAnswers" :key="`direct-answer-${answer.id}`" class="client-form-group">
+                <label class="client-form-label">{{ answer.label }}</label>
+                <textarea
+                  v-model="directEditAnswers[answer.id]"
+                  rows="3"
+                  class="client-form-control client-form-control--textarea"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="client-form-group">
+            <label class="client-form-label">{{ uiText('Admin note', '\u0645\u0644\u0627\u062d\u0638\u0629 \u0627\u0644\u0625\u062f\u0627\u0631\u0629') }}</label>
+            <textarea
+              v-model="directEditNote"
+              rows="3"
+              class="client-form-control client-form-control--textarea"
+            />
+          </div>
+
+          <div class="approve-actions">
+            <button type="button" class="primary-btn" :disabled="savingDirectEdit" @click="saveDirectEdit">
+              {{ savingDirectEdit ? t('adminRequestDetails.actions.saving') : uiText('Save information', '\u062d\u0641\u0638 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a') }}
+            </button>
+          </div>
+
+          <div class="request-dialog-stack">
+            <div class="panel-head">
+              <h2>{{ t('adminRequestDetails.requiredDocuments.title') }}</h2>
+            </div>
+            <div class="request-dialog-grid">
+              <div class="client-form-group">
+                <label class="client-form-label">{{ uiText('Required document', '\u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0645\u0637\u0644\u0648\u0628') }}</label>
+                <select v-model="directRequiredDocumentStepId" class="client-form-control" :disabled="!directRequiredDocumentOptions.length">
+                  <option v-for="option in directRequiredDocumentOptions" :key="option.id" :value="option.id">{{ option.label }}</option>
+                </select>
+              </div>
+              <div class="client-form-group">
+                <label class="client-form-label">{{ uiText('Upload file', '\u0631\u0641\u0639 \u0645\u0644\u0641') }}</label>
+                <input
+                  type="file"
+                  class="client-form-control"
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  @change="onDirectRequiredDocumentSelected"
+                />
+              </div>
+            </div>
+            <div class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                :disabled="!directRequiredDocumentStepId || !directRequiredDocumentFile || uploadingDirectAttachment"
+                @click="uploadDirectRequiredDocument"
+              >
+                {{ uploadingDirectAttachment ? t('adminRequestDetails.actions.saving') : uiText('Upload required document', '\u0631\u0641\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0645\u0637\u0644\u0648\u0628') }}
+              </button>
+            </div>
+
+            <div v-if="requiredDocuments.length" class="file-list compact-list">
+              <template v-for="item in requiredDocuments" :key="`direct-required-${item.document_upload_step_id}`">
+                <div
+                  v-for="upload in normalizedRequiredUploads(item)"
+                  :key="`direct-required-upload-${upload.id}`"
+                  class="file-item"
+                >
+                  <div>
+                    <strong>{{ item.name }}</strong>
+                    <span>{{ upload.file_name || t('adminRequestDetails.requiredDocuments.uploadedFileFallback') }}</span>
+                  </div>
+                  <div class="approve-actions">
+                    <button type="button" class="ghost-btn" @click="openFilePreview(upload.file_name, requiredDocumentDownloadUrl(upload.id), upload.mime_type || upload.file_extension)">
+                      {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+                    </button>
+                    <a :href="requiredDocumentDownloadUrl(upload.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+                    <button
+                      type="button"
+                      class="ghost-btn"
+                      :disabled="deletingDirectRequiredUploadId === Number(upload.id)"
+                      @click="deleteDirectRequiredUpload(upload)"
+                    >
+                      {{ deletingDirectRequiredUploadId === Number(upload.id) ? t('adminRequestDetails.actions.saving') : uiText('Remove', '\u0625\u0632\u0627\u0644\u0629') }}
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div class="request-dialog-stack">
+            <div class="panel-head">
+              <h2>{{ t('adminRequestDetails.additionalDocuments.title') }}</h2>
+            </div>
+            <div class="request-dialog-grid">
+              <div class="client-form-group">
+                <label class="client-form-label">{{ uiText('Additional document', '\u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0625\u0636\u0627\u0641\u064a') }}</label>
+                <select v-model="directAdditionalDocumentId" class="client-form-control" :disabled="!directAdditionalDocumentOptions.length">
+                  <option v-for="option in directAdditionalDocumentOptions" :key="option.id" :value="option.id">{{ option.label }}</option>
+                </select>
+              </div>
+              <div class="client-form-group">
+                <label class="client-form-label">{{ uiText('Upload file', '\u0631\u0641\u0639 \u0645\u0644\u0641') }}</label>
+                <input
+                  type="file"
+                  class="client-form-control"
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  :disabled="!directAdditionalDocumentOptions.length"
+                  @change="onDirectAdditionalDocumentSelected"
+                />
+              </div>
+            </div>
+            <div class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                :disabled="!directAdditionalDocumentId || !directAdditionalDocumentFile || uploadingDirectAttachment"
+                @click="uploadDirectAdditionalDocument"
+              >
+                {{ uploadingDirectAttachment ? t('adminRequestDetails.actions.saving') : uiText('Upload additional document', '\u0631\u0641\u0639 \u0627\u0644\u0645\u0633\u062a\u0646\u062f \u0627\u0644\u0625\u0636\u0627\u0641\u064a') }}
+              </button>
+            </div>
+
+            <div v-if="requestItem?.additional_documents?.length" class="file-list compact-list">
+              <div v-for="item in requestItem.additional_documents" :key="`direct-additional-${item.id}`" class="file-item">
+                <div>
+                  <strong>{{ item.title || t('adminRequestDetails.additionalDocuments.fallbackTitle') }}</strong>
+                  <span>{{ item.file_name || readableAdditionalDocumentStatus(item.status) }}</span>
+                </div>
+                <div class="approve-actions">
+                  <button
+                    v-if="item.file_name"
+                    type="button"
+                    class="ghost-btn"
+                    @click="openFilePreview(item.file_name, additionalDocumentDownloadUrl(item.id))"
+                  >
+                    {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+                  </button>
+                  <a v-if="item.file_name" :href="additionalDocumentDownloadUrl(item.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.additionalDocuments.downloadFile') }}</a>
+                  <button
+                    v-if="item.file_name"
+                    type="button"
+                    class="ghost-btn"
+                    :disabled="deletingDirectAdditionalDocumentId === Number(item.id)"
+                    @click="deleteDirectAdditionalDocument(item)"
+                  >
+                    {{ deletingDirectAdditionalDocumentId === Number(item.id) ? t('adminRequestDetails.actions.saving') : uiText('Remove', '\u0625\u0632\u0627\u0644\u0629') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p v-else class="empty-state">{{ t('adminRequestDetails.additionalDocuments.empty') }}</p>
+          </div>
+
+          <div class="request-dialog-stack">
+            <div class="panel-head">
+              <h2>{{ t('adminRequestDetails.modal.uploadedFiles') }}</h2>
+            </div>
+            <div class="request-dialog-grid">
+              <div class="client-form-group">
+                <label class="client-form-label">{{ t('adminRequestDetails.updateBatch.attachment') }}</label>
+                <select v-model="directAttachmentCategory" class="client-form-control">
+                  <option v-for="field in attachmentFieldOptions" :key="field.value" :value="field.value">{{ field.label }}</option>
+                </select>
+              </div>
+              <div class="client-form-group">
+                <label class="client-form-label">{{ uiText('Upload file', '\u0631\u0641\u0639 \u0645\u0644\u0641') }}</label>
+                <input
+                  type="file"
+                  class="client-form-control"
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  @change="onDirectAttachmentSelected"
+                />
+              </div>
+            </div>
+            <div class="approve-actions">
+              <button
+                type="button"
+                class="ghost-btn"
+                :disabled="!directAttachmentFile || uploadingDirectAttachment"
+                @click="uploadDirectAttachment"
+              >
+                {{ uploadingDirectAttachment ? t('adminRequestDetails.actions.saving') : uiText('Upload attachment', '\u0631\u0641\u0639 \u0645\u0631\u0641\u0642') }}
+              </button>
+            </div>
+
+            <div v-if="requestItem?.attachments?.length" class="file-list compact-list">
+              <div v-for="file in requestItem.attachments" :key="`direct-attachment-${file.id}`" class="file-item">
+                <div>
+                  <strong>{{ file.file_name }}</strong>
+                  <span>{{ file.category }}</span>
+                </div>
+                <div class="approve-actions">
+                  <button type="button" class="ghost-btn" @click="openFilePreview(file.file_name, attachmentDownloadUrl(file.id))">
+                    {{ t('adminRequestDetails.agentAssignments.previewFile') }}
+                  </button>
+                  <a :href="attachmentDownloadUrl(file.id)" target="_blank" rel="noopener" class="ghost-btn">{{ t('adminRequestDetails.actions.download') }}</a>
+                  <button
+                    type="button"
+                    class="ghost-btn"
+                    :disabled="deletingDirectAttachmentId === Number(file.id)"
+                    @click="deleteDirectAttachment(file)"
+                  >
+                    {{ deletingDirectAttachmentId === Number(file.id) ? t('adminRequestDetails.actions.saving') : uiText('Remove', '\u0625\u0632\u0627\u0644\u0629') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p v-else class="empty-state">{{ t('adminRequestDetails.states.noInitialAttachments') }}</p>
           </div>
         </div>
 

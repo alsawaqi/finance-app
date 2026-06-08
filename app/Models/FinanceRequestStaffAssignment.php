@@ -19,6 +19,7 @@ class FinanceRequestStaffAssignment extends Model
         'notes',
         'is_primary',
         'is_active',
+        'can_request_client_updates',
         'assigned_at',
         'unassigned_at',
     ];
@@ -28,6 +29,7 @@ class FinanceRequestStaffAssignment extends Model
         return [
             'is_primary'    => 'boolean',
             'is_active'     => 'boolean',
+            'can_request_client_updates' => 'boolean',
             'assigned_at'   => 'datetime',
             'unassigned_at' => 'datetime',
         ];

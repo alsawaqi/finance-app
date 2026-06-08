@@ -184,7 +184,7 @@ onMounted(load)
                 <strong>{{ email.subject || t('adminRequestDetails.states.emptyValue') }}</strong>
                 <p>{{ t('adminRequestDetails.emailActivity.fromLabel') }} {{ email.sender?.name || t('adminRequestDetails.states.system') }} · {{ email.from_email || email.sender?.email || t('adminRequestDetails.states.emptyValue') }}</p>
                 <p>{{ t('adminRequestDetails.emailActivity.toLabel') }} {{ emailRecipients(email) }}</p>
-                <p v-if="email.body" class="request-prewrap-text">{{ email.body }}</p>
+                <div v-if="email.body" class="request-prewrap-text" v-html="email.body"></div>
                 <span>{{ formatDate(email.sent_at || email.created_at) }} · {{ t('adminRequestDetails.emailActivity.attachmentsCount', { count: email.attachments?.length || 0 }) }}</span>
               </div>
               <span :class="emailStatusClass(email.delivery_status)">{{ formatEmailDeliveryStatus(email.delivery_status, locale, t('adminRequestDetails.emailActivity.queued')) }}</span>

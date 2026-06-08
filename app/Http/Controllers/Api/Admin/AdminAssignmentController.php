@@ -145,8 +145,11 @@ class AdminAssignmentController extends Controller
             ? (int) $request->input('primary_staff_id')
             : (int) $staffIds->first();
         $notes = $request->filled('notes') ? trim((string) $request->input('notes')) : null;
+        $staffEditPermissions = collect((array) $request->input('staff_edit_permissions', []))
+            ->mapWithKeys(fn ($allowed, $staffId) => [(int) $staffId => filter_var($allowed, FILTER_VALIDATE_BOOLEAN)])
+            ->all();
 
-        DB::transaction(function () use ($financeRequest, $admin, $staffIds, $primaryStaffId, $notes, $shouldMoveToDocumentCollection, $previousPrimaryStaffId) {
+        DB::transaction(function () use ($financeRequest, $admin, $staffIds, $primaryStaffId, $notes, $staffEditPermissions, $shouldMoveToDocumentCollection, $previousPrimaryStaffId) {
             $existingActiveAssignments = FinanceRequestStaffAssignment::query()
                 ->where('finance_request_id', $financeRequest->id)
                 ->where('is_active', true)
@@ -164,6 +167,7 @@ class AdminAssignmentController extends Controller
                     ->update([
                         'is_active' => false,
                         'is_primary' => false,
+                        'can_request_client_updates' => false,
                         'unassigned_by' => $admin?->id,
                         'unassigned_at' => now(),
                         'updated_at' => now(),
@@ -174,12 +178,14 @@ class AdminAssignmentController extends Controller
                 /** @var FinanceRequestStaffAssignment|null $activeAssignment */
                 $activeAssignment = $existingActiveAssignments->get($staffId);
                 $isPrimary = $staffId === $primaryStaffId;
+                $canRequestClientUpdates = (bool) ($staffEditPermissions[$staffId] ?? false);
 
                 if ($activeAssignment) {
                     $activeAssignment->update([
                         'assignment_role' => $isPrimary ? 'lead' : 'support',
                         'notes' => $notes,
                         'is_primary' => $isPrimary,
+                        'can_request_client_updates' => $canRequestClientUpdates,
                         'assigned_at' => $activeAssignment->assigned_at ?: now(),
                     ]);
 
@@ -194,6 +200,7 @@ class AdminAssignmentController extends Controller
                     'notes' => $notes,
                     'is_primary' => $isPrimary,
                     'is_active' => true,
+                    'can_request_client_updates' => $canRequestClientUpdates,
                     'assigned_at' => now(),
                 ]);
             }
@@ -221,13 +228,14 @@ class AdminAssignmentController extends Controller
             $keptStaffIds = $staffIds->intersect($existingActiveAssignments->keys())->values();
 
             $activeStaff = $staffIds
-                ->map(function (int $staffId) use ($assignedUsersById, $primaryStaffId) {
+                ->map(function (int $staffId) use ($assignedUsersById, $primaryStaffId, $staffEditPermissions) {
                     $user = $assignedUsersById->get($staffId);
 
                     return [
                         'id' => $staffId,
                         'name' => $user?->name,
                         'is_primary' => $staffId === $primaryStaffId,
+                        'can_request_client_updates' => (bool) ($staffEditPermissions[$staffId] ?? false),
                     ];
                 })
                 ->values()
@@ -252,6 +260,7 @@ class AdminAssignmentController extends Controller
                             'id' => $staffId,
                             'name' => $assignedUsersById->get($staffId)?->name,
                             'is_primary' => $staffId === $primaryStaffId,
+                            'can_request_client_updates' => (bool) ($staffEditPermissions[$staffId] ?? false),
                         ])
                         ->values()
                         ->all(),
@@ -260,6 +269,7 @@ class AdminAssignmentController extends Controller
                             'id' => $staffId,
                             'name' => $assignedUsersById->get($staffId)?->name,
                             'is_primary' => $staffId === $primaryStaffId,
+                            'can_request_client_updates' => (bool) ($staffEditPermissions[$staffId] ?? false),
                         ])
                         ->values()
                         ->all(),

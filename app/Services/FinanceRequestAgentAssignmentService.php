@@ -9,6 +9,7 @@ use App\Models\Agent;
 use App\Models\FinanceRequest;
 use App\Models\FinanceRequestAgentAssignment;
 use App\Models\FinanceRequestAgentAssignmentDocument;
+use App\Models\RequestEmailTemplate;
 use App\Models\RequestDocumentUpload;
 use App\Support\ContractAssetResolver;
 use App\Support\RequestTimelineLogger;
@@ -531,12 +532,36 @@ class FinanceRequestAgentAssignmentService
             'banks' => $banks,
             'agents' => $agents,
             'allowed_documents' => $allowedDocuments,
+            'email_templates' => $this->activeEmailTemplates(),
             'has_assignments' => $assignments->isNotEmpty(),
             'can_email' => $assignments->isNotEmpty() && in_array($financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage, [
                 FinanceRequestWorkflowStage::AWAITING_AGENT_ASSIGNMENT->value,
                 FinanceRequestWorkflowStage::PROCESSING->value,
             ], true),
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function activeEmailTemplates(): array
+    {
+        return RequestEmailTemplate::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (RequestEmailTemplate $template) => [
+                'id' => (int) $template->id,
+                'name' => $template->name,
+                'code' => $template->code,
+                'subject' => $template->subject,
+                'body' => $template->body,
+                'fields_json' => $template->fields_json ?? [],
+                'fields_count' => count($template->fields_json ?? []),
+            ])
+            ->values()
+            ->all();
     }
 
     private function documentKey(string $type, int|string|null $id): string

@@ -70,41 +70,13 @@ defineEmits<{
                     <RouterLink to="/about">{{ t('publicHeader.about') }}</RouterLink>
                   </li>
 
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.servicesTwo') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.serviceDetails') }}</a></li>
-                    </ul>
+                  <li :class="{ active: isActive('/services') }">
+                    <RouterLink to="/services">{{ t('publicHeader.services') }}</RouterLink>
                   </li>
 
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.projectDetails') }}</a></li>
-                    </ul>
+                  <li :class="{ active: isActive('/contact') }">
+                    <RouterLink to="/contact">{{ t('publicHeader.contact') }}</RouterLink>
                   </li>
-
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.faq') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.errorPage') }}</a></li>
-                    </ul>
-                  </li>
-
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogGrid') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogStandard') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogDetails') }}</a></li>
-                    </ul>
-                  </li>
-
-                  <li><a href="#" @click.prevent>{{ t('publicHeader.contact') }}</a></li>
                 </ul>
               </div>
             </nav>
@@ -174,41 +146,13 @@ defineEmits<{
                     <RouterLink to="/about">{{ t('publicHeader.about') }}</RouterLink>
                   </li>
 
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.servicesTwo') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.serviceDetails') }}</a></li>
-                    </ul>
+                  <li :class="{ active: isActive('/services') }">
+                    <RouterLink to="/services">{{ t('publicHeader.services') }}</RouterLink>
                   </li>
 
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.projectDetails') }}</a></li>
-                    </ul>
+                  <li :class="{ active: isActive('/contact') }">
+                    <RouterLink to="/contact">{{ t('publicHeader.contact') }}</RouterLink>
                   </li>
-
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.faq') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.errorPage') }}</a></li>
-                    </ul>
-                  </li>
-
-                  <li class="dropdown">
-                    <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
-                    <ul>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogGrid') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogStandard') }}</a></li>
-                      <li><a href="#" @click.prevent>{{ t('publicHeader.blogDetails') }}</a></li>
-                    </ul>
-                  </li>
-
-                  <li><a href="#" @click.prevent>{{ t('publicHeader.contact') }}</a></li>
                 </ul>
               </div>
             </nav>
@@ -319,53 +263,13 @@ defineEmits<{
               <RouterLink to="/about" @click="$emit('close-mobile-menu')">{{ t('publicHeader.about') }}</RouterLink>
             </li>
 
-            <li class="dropdown">
-              <a href="#" @click.prevent>{{ t('publicHeader.services') }}</a>
-              <div class="dropdown-btn" :class="{ open: mobileDropdowns.services }" @click="$emit('toggle-mobile-dropdown', 'services')">
-                <i class="fa fa-angle-right"></i>
-              </div>
-              <ul :style="{ display: mobileDropdowns.services ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>{{ t('publicHeader.services') }}</a></li>
-                <li><a href="#" @click.prevent>{{ t('publicHeader.servicesTwo') }}</a></li>
-                <li><a href="#" @click.prevent>{{ t('publicHeader.serviceDetails') }}</a></li>
-              </ul>
+            <li :class="{ current: isActive('/services') }">
+              <RouterLink to="/services" @click="$emit('close-mobile-menu')">{{ t('publicHeader.services') }}</RouterLink>
             </li>
 
-            <li class="dropdown">
-              <a href="#" @click.prevent>{{ t('publicHeader.project') }}</a>
-              <div class="dropdown-btn" :class="{ open: mobileDropdowns.project }" @click="$emit('toggle-mobile-dropdown', 'project')">
-                <i class="fa fa-angle-right"></i>
-              </div>
-              <ul :style="{ display: mobileDropdowns.project ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>{{ t('publicHeader.project') }}</a></li>
-                <li><a href="#" @click.prevent>{{ t('publicHeader.projectDetails') }}</a></li>
-              </ul>
+            <li :class="{ current: isActive('/contact') }">
+              <RouterLink to="/contact" @click="$emit('close-mobile-menu')">{{ t('publicHeader.contact') }}</RouterLink>
             </li>
-
-            <li class="dropdown">
-              <a href="#" @click.prevent>{{ t('publicHeader.pages') }}</a>
-              <div class="dropdown-btn" :class="{ open: mobileDropdowns.pages }" @click="$emit('toggle-mobile-dropdown', 'pages')">
-                <i class="fa fa-angle-right"></i>
-              </div>
-              <ul :style="{ display: mobileDropdowns.pages ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>{{ t('publicHeader.faq') }}</a></li>
-                <li><a href="#" @click.prevent>{{ t('publicHeader.errorPage') }}</a></li>
-              </ul>
-            </li>
-
-            <li class="dropdown">
-              <a href="#" @click.prevent>{{ t('publicHeader.news') }}</a>
-              <div class="dropdown-btn" :class="{ open: mobileDropdowns.news }" @click="$emit('toggle-mobile-dropdown', 'news')">
-                <i class="fa fa-angle-right"></i>
-              </div>
-              <ul :style="{ display: mobileDropdowns.news ? 'block' : 'none' }">
-                <li><a href="#" @click.prevent>{{ t('publicHeader.blogGrid') }}</a></li>
-                <li><a href="#" @click.prevent>{{ t('publicHeader.blogStandard') }}</a></li>
-                <li><a href="#" @click.prevent>{{ t('publicHeader.blogDetails') }}</a></li>
-              </ul>
-            </li>
-
-            <li><a href="#" @click.prevent>{{ t('publicHeader.contact') }}</a></li>
           </ul>
         </div>
 
@@ -373,8 +277,6 @@ defineEmits<{
           <h4>{{ t('publicHeader.contactInfo') }}</h4>
           <ul>
             <li>{{ t('publicHeader.officeAddress') }}</li>
-            <li><a href="tel:+8801682648101">+88 01682648101</a></li>
-            <li><a href="mailto:info@example.com">info@example.com</a></li>
           </ul>
         </div>
 

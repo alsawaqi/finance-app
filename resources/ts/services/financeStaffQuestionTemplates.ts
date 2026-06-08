@@ -13,12 +13,15 @@ export type StaffQuestionType =
   | 'phone'
   | 'currency'
 
+export type StaffQuestionFinanceType = 'all' | 'individual' | 'company'
+
 export interface FinanceStaffQuestionTemplateItem {
   id: number
   code: string | null
   question_text_en: string
   question_text_ar: string | null
   question_type: StaffQuestionType
+  finance_type: StaffQuestionFinanceType
   options_json: string[]
   options_count: number
   placeholder_en: string | null
@@ -38,6 +41,7 @@ export interface FinanceStaffQuestionTemplatePayload {
   question_text_en: string
   question_text_ar?: string | null
   question_type: StaffQuestionType
+  finance_type: StaffQuestionFinanceType
   options_json?: string[] | null
   placeholder_en?: string | null
   placeholder_ar?: string | null

@@ -4,6 +4,8 @@ import { useAppProgress } from '@/composables/useAppProgress'
 
 const HomePage = () => import('@/pages/public/HomePage.vue')
 const AboutPage = () => import('@/pages/public/AboutPage.vue')
+const ServicesPage = () => import('@/pages/public/ServicesPage.vue')
+const ContactPage = () => import('@/pages/public/ContactPage.vue')
 
 const LoginPage = () => import('@/pages/auth/LoginPage.vue')
 const RegisterPage = () => import('@/pages/auth/RegisterPage.vue')
@@ -43,6 +45,7 @@ const StaffRequestDetailsPage = () => import('@/pages/admin/StaffRequestDetailsP
 const StaffRequestSendEmailPage = () => import('@/pages/admin/StaffRequestSendEmailPage.vue')
 const StaffRequestEmailsPage = () => import('@/pages/admin/StaffRequestEmailsPage.vue')
 const AdminStaffQuestionTemplatesPage = () => import('@/pages/admin/AdminStaffQuestionTemplatesPage.vue')
+const AdminRequestEmailTemplatesPage = () => import('@/pages/admin/AdminRequestEmailTemplatesPage.vue')
 const AdminMailSettingsPage = () => import('@/pages/admin/AdminMailSettingsPage.vue')
 const AdminInboxPage = () => import('@/pages/admin/AdminInboxPage.vue')
 
@@ -62,6 +65,8 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomePage, meta: { layout: 'public' } },
     { path: '/about', name: 'about', component: AboutPage, meta: { layout: 'public' } },
+    { path: '/services', name: 'services', component: ServicesPage, meta: { layout: 'public' } },
+    { path: '/contact', name: 'contact', component: ContactPage, meta: { layout: 'public' } },
     { path: '/login', name: 'login', component: LoginPage, meta: { guestOnly: true, layout: 'auth' } },
     { path: '/register', name: 'register', component: RegisterPage, meta: { guestOnly: true, layout: 'auth' } },
     { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage, meta: { guestOnly: true, layout: 'auth' } },
@@ -113,6 +118,7 @@ const router = createRouter({
         { path: 'requests/:id/emails', name: 'admin-request-emails', component: AdminRequestEmailsPage },
         { path: 'requests/:id/contract', name: 'admin-request-contract', component: AdminContractBuilderPage },
         { path: 'staff-question-templates', name: 'admin-staff-question-templates', component: AdminStaffQuestionTemplatesPage, meta: { allowedRoles: ['admin'] } },
+        { path: 'request-email-templates', name: 'admin-request-email-templates', component: AdminRequestEmailTemplatesPage, meta: { allowedRoles: ['admin'] } },
         { path: 'mail-settings', name: 'admin-mail-settings', component: AdminMailSettingsPage, meta: { allowedRoles: ['admin'] } },
         { path: 'inbox', name: 'admin-inbox', component: AdminInboxPage },
       ],

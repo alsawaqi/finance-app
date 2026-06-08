@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AdminAssignmentController;
 use App\Http\Controllers\Api\Admin\AdminCategorizationController;
 use App\Http\Controllers\Api\Admin\AdminContractController;
+use App\Http\Controllers\Api\Admin\FinanceRequestDirectEditController;
 use App\Http\Controllers\Api\Admin\AdminFinanceRequestController;
 use App\Http\Controllers\Api\Admin\AdminRequestFilteringController;
 use App\Http\Controllers\Api\Admin\RequestFileDownloadController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Api\Admin\FinanceRequestAgentAssignmentController;
 use App\Http\Controllers\Api\Admin\FinanceRequestTypeController;
 use App\Http\Controllers\Api\Admin\FinanceStaffQuestionTemplateController;
 use App\Http\Controllers\Api\Admin\RequestQuestionController;
+use App\Http\Controllers\Api\Admin\RequestEmailTemplateController;
 use App\Http\Controllers\Api\Admin\StaffUserController;
 use App\Http\Controllers\Api\Admin\StaffMailboxSettingsController;
 use App\Http\Controllers\Api\Admin\AdminInboxController;
@@ -137,6 +139,11 @@ Route::prefix('admin')
         Route::patch('/staff-question-templates/{financeStaffQuestionTemplate}/toggle-active', [FinanceStaffQuestionTemplateController::class, 'toggleActive']);
         Route::post('/staff-question-templates/reorder', [FinanceStaffQuestionTemplateController::class, 'reorder']);
 
+        Route::get('/request-email-templates', [RequestEmailTemplateController::class, 'index']);
+        Route::post('/request-email-templates', [RequestEmailTemplateController::class, 'store']);
+        Route::put('/request-email-templates/{requestEmailTemplate}', [RequestEmailTemplateController::class, 'update']);
+        Route::patch('/request-email-templates/{requestEmailTemplate}/toggle-active', [RequestEmailTemplateController::class, 'toggleActive']);
+
         Route::post('/banks', [BankController::class, 'store']);
         Route::put('/banks/{bank}', [BankController::class, 'update']);
         Route::patch('/banks/{bank}/toggle-active', [BankController::class, 'toggleActive']);
@@ -148,6 +155,13 @@ Route::prefix('admin')
         Route::patch('/document-upload-steps/{documentUploadStep}/toggle-active', [DocumentUploadStepController::class, 'toggleActive']);
         Route::post('/document-upload-steps/reorder', [DocumentUploadStepController::class, 'reorder']);
         Route::patch('/requests/{financeRequest}/workflow-stage', [AdminFinanceRequestController::class, 'updateWorkflowStage']);
+        Route::patch('/requests/{financeRequest}/direct-edit', [FinanceRequestDirectEditController::class, 'update']);
+        Route::post('/requests/{financeRequest}/attachments', [FinanceRequestDirectEditController::class, 'uploadAttachment']);
+        Route::delete('/requests/{financeRequest}/attachments/{attachment}', [FinanceRequestDirectEditController::class, 'deleteAttachment']);
+        Route::post('/requests/{financeRequest}/required-documents/upload', [FinanceRequestDirectEditController::class, 'uploadRequiredDocument']);
+        Route::delete('/requests/{financeRequest}/required-documents/uploads/{requestDocumentUpload}', [FinanceRequestDirectEditController::class, 'deleteRequiredDocumentUpload']);
+        Route::post('/requests/{financeRequest}/additional-documents/{additionalDocument}/upload', [FinanceRequestDirectEditController::class, 'uploadAdditionalDocument']);
+        Route::delete('/requests/{financeRequest}/additional-documents/{additionalDocument}/file', [FinanceRequestDirectEditController::class, 'deleteAdditionalDocumentFile']);
         Route::patch('/requests/{financeRequest}/staff-questions/{staffQuestion}/review', [AdminFinanceRequestController::class, 'reviewStaffQuestion']);
         Route::post('/requests/{financeRequest}/understudy-review', [AdminFinanceRequestController::class, 'reviewUnderstudy']);
         Route::post('/requests/{financeRequest}/advance-understudy', [AdminFinanceRequestController::class, 'advanceFromUnderstudy']);
@@ -202,8 +216,13 @@ Route::prefix('staff')
         Route::get('/requests/{financeRequest}', [StaffRequestWorkspaceController::class, 'show']);
         Route::post('/requests/{financeRequest}/comments', [StaffRequestWorkspaceController::class, 'storeComment']);
         Route::post('/requests/{financeRequest}/required-documents/upload', [StaffRequestWorkspaceController::class, 'uploadRequiredDocumentOnBehalf']);
+        Route::delete('/requests/{financeRequest}/required-documents/uploads/{requestDocumentUpload}', [StaffRequestWorkspaceController::class, 'deleteRequiredDocumentUpload']);
         Route::post('/requests/{financeRequest}/required-documents/{documentUploadStep}/request-change', [StaffRequestWorkspaceController::class, 'requestRequiredDocumentChange']);
+        Route::post('/requests/{financeRequest}/update-batches', [StaffRequestWorkspaceController::class, 'storeUpdateBatch']);
         Route::post('/requests/{financeRequest}/additional-documents', [StaffRequestWorkspaceController::class, 'storeAdditionalDocument']);
+        Route::post('/requests/{financeRequest}/additional-documents/{additionalDocument}/upload', [StaffRequestWorkspaceController::class, 'uploadAdditionalDocumentOnBehalf']);
+        Route::delete('/requests/{financeRequest}/additional-documents/{additionalDocument}/file', [StaffRequestWorkspaceController::class, 'deleteAdditionalDocumentFile']);
+        Route::post('/requests/{financeRequest}/additional-documents/{additionalDocument}/request-change', [StaffRequestWorkspaceController::class, 'requestAdditionalDocumentChange']);
         Route::get('/agents', [StaffRequestWorkspaceController::class, 'agents']);
         Route::get('/requests/{financeRequest}/email-options', [StaffRequestWorkspaceController::class, 'emailOptions']);
         Route::post('/requests/{financeRequest}/send-email', [StaffRequestWorkspaceController::class, 'sendEmail']);

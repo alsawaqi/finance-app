@@ -10,6 +10,7 @@ use App\Models\FinanceRequest;
 use App\Models\FinanceRequestAgentAssignment;
 use App\Models\RequestEmail;
 use App\Models\RequestEmailAttachment;
+use App\Models\RequestEmailTemplate;
 use App\Models\User;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Support\Collection;
@@ -100,15 +101,18 @@ class FinanceRequestEmailService
             ->filter()
             ->values();
 
-        $sanitizedBody = $this->sanitizeEditorHtmlBody($payload['body'] ?? null);
+        $content = $this->resolveEmailContent($payload);
 
-        $requestEmail = DB::transaction(function () use ($financeRequest, $sender, $assignment, $payload, $selectedDocuments, $sanitizedBody) {
+        $requestEmail = DB::transaction(function () use ($financeRequest, $sender, $assignment, $selectedDocuments, $content) {
             $requestEmail = RequestEmail::create([
                 'finance_request_id' => $financeRequest->id,
                 'direction' => RequestEmailDirection::OUTBOUND,
                 'sent_by' => $sender->id,
-                'subject' => (string) $payload['subject'],
-                'body' => $sanitizedBody !== '' ? $sanitizedBody : null,
+                'email_template_id' => $content['email_template_id'],
+                'subject' => $content['subject'],
+                'body' => $content['body'],
+                'email_template_values_json' => $content['email_template_values_json'],
+                'email_template_snapshot_json' => $content['email_template_snapshot_json'],
                 'provider_message_id' => null,
                 'thread_key' => 'finance-request-' . $financeRequest->id,
                 'delivery_status' => RequestEmailDeliveryStatus::QUEUED,
@@ -293,6 +297,169 @@ class FinanceRequestEmailService
                 );
             }
         });
+    }
+
+    /**
+     * @return array{
+     *     subject:string,
+     *     body:?string,
+     *     email_template_id:?int,
+     *     email_template_values_json:?array<string, string>,
+     *     email_template_snapshot_json:?array<string, mixed>
+     * }
+     */
+    private function resolveEmailContent(array $payload): array
+    {
+        $templateId = $payload['email_template_id'] ?? null;
+
+        if (! $templateId) {
+            $sanitizedBody = $this->sanitizeEditorHtmlBody($payload['body'] ?? null);
+
+            return [
+                'subject' => trim((string) ($payload['subject'] ?? '')),
+                'body' => $sanitizedBody !== '' ? $sanitizedBody : null,
+                'email_template_id' => null,
+                'email_template_values_json' => null,
+                'email_template_snapshot_json' => null,
+            ];
+        }
+
+        $template = RequestEmailTemplate::query()
+            ->whereKey((int) $templateId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $template) {
+            throw ValidationException::withMessages([
+                'email_template_id' => 'The selected email template is inactive or no longer available.',
+            ]);
+        }
+
+        $values = $this->validatedTemplateValues($template, $payload['template_values'] ?? []);
+        $subject = $this->renderTemplateSubject($template->subject, $values);
+        $body = $this->sanitizeEditorHtmlBody($this->renderTemplateBody($template->body, $values));
+
+        if ($subject === '') {
+            throw ValidationException::withMessages([
+                'email_template_id' => 'The selected email template rendered an empty subject.',
+            ]);
+        }
+
+        return [
+            'subject' => $subject,
+            'body' => $body !== '' ? $body : null,
+            'email_template_id' => (int) $template->id,
+            'email_template_values_json' => $values,
+            'email_template_snapshot_json' => [
+                'id' => (int) $template->id,
+                'name' => $template->name,
+                'code' => $template->code,
+                'subject' => $template->subject,
+                'body' => $template->body,
+                'fields_json' => $template->fields_json ?? [],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function validatedTemplateValues(RequestEmailTemplate $template, mixed $rawValues): array
+    {
+        $fields = collect($template->fields_json ?? [])
+            ->filter(fn ($field) => is_array($field) && filled($field['key'] ?? null))
+            ->mapWithKeys(fn (array $field) => [(string) $field['key'] => [
+                'key' => (string) $field['key'],
+                'label' => (string) ($field['label'] ?? $field['key']),
+                'type' => (string) ($field['type'] ?? 'text'),
+                'required' => (bool) ($field['required'] ?? false),
+            ]]);
+
+        $values = is_array($rawValues)
+            ? collect($rawValues)
+                ->mapWithKeys(fn ($value, $key) => [(string) $key => trim((string) $value)])
+            : collect();
+
+        $unknownKey = $values->keys()->first(fn (string $key) => ! $fields->has($key));
+        if ($unknownKey !== null) {
+            throw ValidationException::withMessages([
+                "template_values.{$unknownKey}" => 'This template field is not allowed for the selected email template.',
+            ]);
+        }
+
+        $resolved = [];
+
+        foreach ($fields as $field) {
+            $key = $field['key'];
+            $label = $field['label'];
+            $value = trim((string) ($values->get($key, '')));
+
+            if ($field['required'] && $value === '') {
+                throw ValidationException::withMessages([
+                    "template_values.{$key}" => "The {$label} field is required.",
+                ]);
+            }
+
+            if ($value !== '') {
+                match ($field['type']) {
+                    'email' => $this->assertTemplateValue($key, filter_var($value, FILTER_VALIDATE_EMAIL) !== false, "The {$label} field must be a valid email address."),
+                    'number' => $this->assertTemplateValue($key, is_numeric($value), "The {$label} field must be a number."),
+                    'date' => $this->assertTemplateValue($key, strtotime($value) !== false, "The {$label} field must be a valid date."),
+                    default => null,
+                };
+            }
+
+            $resolved[$key] = $value;
+        }
+
+        return $resolved;
+    }
+
+    private function assertTemplateValue(string $key, bool $passes, string $message): void
+    {
+        if ($passes) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            "template_values.{$key}" => $message,
+        ]);
+    }
+
+    /**
+     * @param  array<string, string>  $values
+     */
+    private function renderTemplateSubject(string $subject, array $values): string
+    {
+        $rendered = $this->replaceTemplateTokens($subject, $values, false);
+        $rendered = strip_tags($rendered);
+        $rendered = preg_replace('/\s+/', ' ', $rendered) ?? $rendered;
+
+        return trim($rendered);
+    }
+
+    /**
+     * @param  array<string, string>  $values
+     */
+    private function renderTemplateBody(string $body, array $values): string
+    {
+        return $this->replaceTemplateTokens($body, $values, true);
+    }
+
+    /**
+     * @param  array<string, string>  $values
+     */
+    private function replaceTemplateTokens(string $template, array $values, bool $html): string
+    {
+        return preg_replace_callback('/{{\s*([A-Za-z][A-Za-z0-9_]*)\s*}}/', function (array $matches) use ($values, $html) {
+            $value = (string) ($values[$matches[1]] ?? '');
+
+            if ($html) {
+                return nl2br(e($value), false);
+            }
+
+            return str_replace(["\r", "\n"], ' ', strip_tags($value));
+        }, $template) ?? $template;
     }
 
     private function sanitizeEditorHtmlBody(?string $html): string

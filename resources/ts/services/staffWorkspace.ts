@@ -7,6 +7,7 @@ export type RequestAssignment = {
   assigned_at?: string | null
   assignment_role?: string | null
   is_primary: boolean
+  can_request_client_updates?: boolean
   notes?: string | null
   staff?: {
     id: number
@@ -84,6 +85,18 @@ export type AdditionalDocumentItem = {
   } | null
 }
 
+export type StaffUpdateBatchDraftItem = {
+  item_type: 'intake_field' | 'request_answer' | 'attachment'
+  field_key?: string | null
+  question_id?: number | null
+  label_en?: string | null
+  label_ar?: string | null
+  instruction_en?: string | null
+  instruction_ar?: string | null
+  editable_by?: 'client' | 'both'
+  is_required?: boolean
+}
+
 
 export type StaffStudyQuestion = {
   id: number
@@ -110,6 +123,7 @@ export type StaffStudyQuestion = {
     question_text_en: string
     question_text_ar?: string | null
     question_type?: string | null
+    finance_type?: 'all' | 'individual' | 'company' | null
     options_json?: string[] | null
     placeholder_en?: string | null
     placeholder_ar?: string | null
@@ -229,6 +243,8 @@ export type StaffWorkspaceRequestDetails = StaffWorkspaceRequestSummary & {
     client_signed_at?: string | null
   } | null
   additional_documents?: AdditionalDocumentItem[]
+  update_batches?: any[]
+  update_items?: any[]
   staff_questions?: StaffStudyQuestion[]
   understudy_status?: string | null
   understudy_note?: string | null
@@ -283,10 +299,31 @@ export type AllowedEmailDocument = {
   agent_names?: string[]
 }
 
+export type RequestEmailTemplateField = {
+  key: string
+  label: string
+  type: 'text' | 'textarea' | 'number' | 'date' | 'email' | 'phone'
+  required: boolean
+  placeholder?: string | null
+  help_text?: string | null
+}
+
+export type RequestEmailTemplateOption = {
+  id: number
+  name: string
+  code?: string | null
+  subject: string
+  body: string
+  fields_json: RequestEmailTemplateField[]
+  fields_count: number
+}
+
 export type RequestEmailLog = {
   id: number
   subject: string
   body?: string | null
+  email_template_id?: number | null
+  email_template_values_json?: Record<string, string> | null
   delivery_status?: string | null
   from_email?: string | null
   sent_at?: string | null
@@ -320,6 +357,7 @@ export type RequestEmailOptionsPayload = {
   banks: BankOption[]
   agents: AgentOption[]
   allowed_documents: AllowedEmailDocument[]
+  email_templates?: RequestEmailTemplateOption[]
   has_assignments: boolean
   can_email: boolean
 }
@@ -428,6 +466,19 @@ export async function uploadStaffRequiredDocument(
   }
 }
 
+export async function deleteStaffRequiredDocumentUpload(
+  id: string | number,
+  uploadId: string | number,
+) {
+  const { data } = await api.delete(`/api/staff/requests/${id}/required-documents/uploads/${uploadId}`)
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+    staff_question_summary: StaffQuestionSummary
+  }
+}
+
 export async function requestAdditionalDocument(
   id: string | number,
   payload: { title: string; reason?: string | null },
@@ -437,6 +488,68 @@ export async function requestAdditionalDocument(
     message: string
     request: StaffWorkspaceRequestDetails
     required_documents: RequiredDocumentChecklistItem[]
+  }
+}
+
+export async function uploadStaffAdditionalDocument(
+  id: string | number,
+  additionalDocumentId: string | number,
+  payload: { file: File },
+) {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/staff/requests/${id}/additional-documents/${additionalDocumentId}/upload`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+    staff_question_summary: StaffQuestionSummary
+  }
+}
+
+export async function deleteStaffAdditionalDocumentFile(
+  id: string | number,
+  additionalDocumentId: string | number,
+) {
+  const { data } = await api.delete(`/api/staff/requests/${id}/additional-documents/${additionalDocumentId}/file`)
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+    staff_question_summary: StaffQuestionSummary
+  }
+}
+
+export async function requestAdditionalDocumentChange(
+  id: string | number,
+  additionalDocumentId: string | number,
+  payload: { reason: string },
+) {
+  const { data } = await api.post(`/api/staff/requests/${id}/additional-documents/${additionalDocumentId}/request-change`, payload)
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+    staff_question_summary: StaffQuestionSummary
+  }
+}
+
+export async function createStaffUpdateBatch(
+  id: string | number,
+  payload: { reason_en?: string; reason_ar?: string; items: StaffUpdateBatchDraftItem[] },
+) {
+  const { data } = await api.post(`/api/staff/requests/${id}/update-batches`, payload)
+  return data as {
+    message: string
+    request: StaffWorkspaceRequestDetails
+    required_documents: RequiredDocumentChecklistItem[]
+    staff_question_summary: StaffQuestionSummary
   }
 }
 
@@ -459,7 +572,9 @@ export async function sendStaffRequestEmail(
     bank_id?: number | null
     agent_id: number
     document_keys?: string[]
-    subject: string
+    email_template_id?: number | null
+    template_values?: Record<string, string>
+    subject?: string
     body?: string | null
   },
 ) {
@@ -473,6 +588,7 @@ export async function sendStaffRequestEmail(
     banks: BankOption[]
     agents: AgentOption[]
     allowed_documents: AllowedEmailDocument[]
+    email_templates: RequestEmailTemplateOption[]
     has_assignments: boolean
     can_email: boolean
   }

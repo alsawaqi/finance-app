@@ -12,19 +12,9 @@
         </div>
 
         <div style="padding:24px;line-height:1.7;font-size:14px;">
-            <p style="margin-top:0;">Dear {{ $agentName }},</p>
-
             @if(filled($bodyHtml))
                 <div style="white-space:normal;">{!! $bodyHtml !!}</div>
-            @else
-                <p>No message body was provided.</p>
             @endif
-
-            <p style="margin-bottom:0;margin-top:24px;">
-                Regards,<br>
-                <strong>{{ $senderName }}</strong><br>
-                <span>{{ $senderEmail }}</span>
-            </p>
         </div>
     </div>
 </body>

@@ -36,6 +36,8 @@ class AssignStaffToFinanceRequestRequest extends FormRequest
                 }),
             ],
             'primary_staff_id' => ['nullable', 'integer'],
+            'staff_edit_permissions' => ['nullable', 'array'],
+            'staff_edit_permissions.*' => ['boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

@@ -94,6 +94,7 @@ export type FinanceRequestDetail = AdminRequestListItem & {
     notes?: string | null
     is_primary: boolean
     is_active?: boolean
+    can_request_client_updates?: boolean
     assigned_at?: string | null
     staff?: { id: number; name: string; email?: string | null } | null
     assignedBy?: { id: number; name: string; email?: string | null } | null
@@ -171,6 +172,7 @@ export type AdminRequestStaffQuestion = {
     question_text_en?: string | null
     question_text_ar?: string | null
     question_type?: string | null
+    finance_type?: 'all' | 'individual' | 'company' | null
     sort_order?: number | null
     is_required?: boolean | null
   } | null
@@ -203,6 +205,118 @@ export async function patchAdminRequestWorkflowStage(id: number | string, payloa
   return data as {
     message: string
     request: unknown
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
+export async function directEditAdminRequest(
+  id: number | string,
+  payload: {
+    intake_details?: Record<string, unknown>
+    answers?: Array<{ question_id: number; value: unknown }>
+    note?: string
+  },
+) {
+  const { data } = await api.patch(`/api/admin/requests/${id}/direct-edit`, payload)
+  return data as {
+    message: string
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
+export async function uploadAdminRequestAttachment(
+  id: number | string,
+  payload: { category: string; file: File },
+) {
+  const formData = new FormData()
+  formData.append('category', payload.category)
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/admin/requests/${id}/attachments`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data as {
+    message: string
+    attachment: unknown
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
+export async function deleteAdminRequestAttachment(id: number | string, attachmentId: number | string) {
+  const { data } = await api.delete(`/api/admin/requests/${id}/attachments/${attachmentId}`)
+  return data as {
+    message: string
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
+export async function uploadAdminRequiredDocument(
+  id: number | string,
+  payload: { document_upload_step_id: number; file: File },
+) {
+  const formData = new FormData()
+  formData.append('document_upload_step_id', String(payload.document_upload_step_id))
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/admin/requests/${id}/required-documents/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data as {
+    message: string
+    upload: unknown
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
+export async function deleteAdminRequiredDocumentUpload(
+  id: number | string,
+  uploadId: number | string,
+) {
+  const { data } = await api.delete(`/api/admin/requests/${id}/required-documents/uploads/${uploadId}`)
+  return data as {
+    message: string
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
+export async function uploadAdminAdditionalDocument(
+  id: number | string,
+  additionalDocumentId: number | string,
+  payload: { file: File },
+) {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+
+  const { data } = await api.post(`/api/admin/requests/${id}/additional-documents/${additionalDocumentId}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data as {
+    message: string
+    request: FinanceRequestDetail
+    required_documents: unknown[]
+    staff_question_summary: unknown
+  }
+}
+
+export async function deleteAdminAdditionalDocumentFile(
+  id: number | string,
+  additionalDocumentId: number | string,
+) {
+  const { data } = await api.delete(`/api/admin/requests/${id}/additional-documents/${additionalDocumentId}/file`)
+  return data as {
+    message: string
+    request: FinanceRequestDetail
     required_documents: unknown[]
     staff_question_summary: unknown
   }
@@ -344,6 +458,7 @@ export type AssignmentReadyRequest = AdminRequestListItem & {
     assignment_role?: string | null
     is_primary: boolean
     is_active?: boolean
+    can_request_client_updates?: boolean
     assigned_at?: string | null
     staff?: { id: number; name: string; email?: string | null } | null
   }>
@@ -376,7 +491,7 @@ export async function getStaffDirectory() {
 
 export async function assignRequestStaff(
   id: number | string,
-  payload: { staff_ids: number[]; primary_staff_id?: number | null; notes?: string },
+  payload: { staff_ids: number[]; primary_staff_id?: number | null; notes?: string; staff_edit_permissions?: Record<number, boolean> },
 ) {
   const { data } = await api.post(`/api/admin/requests/${id}/assign-staff`, payload)
   return data

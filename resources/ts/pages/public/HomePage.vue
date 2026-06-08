@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PublicPageShell from './inc/PublicPageShell.vue'
 
-const { t, tm } = useI18n()
+const { t, tm, locale } = useI18n()
 
 type FunFact = {
   title: string
@@ -18,6 +18,10 @@ type SimpleCard = {
   title: string
   text: string
   extraClass?: string
+}
+
+type HomeValue = {
+  label: string
 }
 
 type TeamMember = {
@@ -69,6 +73,7 @@ const funfacts = computed<FunFact[]>(() => tm('homePage.funfacts') as FunFact[])
 const chooseUs = computed<SimpleCard[]>(() => tm('homePage.chooseUs') as SimpleCard[])
 const services = computed<SimpleCard[]>(() => tm('homePage.services') as SimpleCard[])
 const processes = computed<SimpleCard[]>(() => tm('homePage.processes') as SimpleCard[])
+const homeValues = computed<HomeValue[]>(() => tm('homePage.values') as HomeValue[])
 const team = computed<TeamMember[]>(() => tm('homePage.team') as TeamMember[])
 const testimonialBase = computed<Testimonial[]>(() => tm('homePage.testimonials') as Testimonial[])
 
@@ -191,6 +196,8 @@ function animateCounter(index: number, target: number, decimals = 0, speed = 150
 
 function setupCounters() {
   const list = funfacts.value
+  countObserver?.disconnect()
+
   if (!('IntersectionObserver' in window)) {
     list.forEach((item, index) => {
       animatedCounts.value[index] = item.target
@@ -219,12 +226,22 @@ function setupCounters() {
   document.querySelectorAll('.count-box').forEach((box) => countObserver?.observe(box))
 }
 
+function shouldAnimateAosImmediately(el: Element) {
+  const rect = el.getBoundingClientRect()
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+
+  return rect.top < viewportHeight * 0.92
+}
+
 function setupAOSLikeAnimation() {
+  const elements = Array.from(document.querySelectorAll('[data-aos]'))
+
   if (!('IntersectionObserver' in window)) {
-    document.querySelectorAll('[data-aos]').forEach((el) => el.classList.add('aos-animate'))
+    elements.forEach((el) => el.classList.add('aos-animate'))
     return
   }
 
+  aosObserver?.disconnect()
   aosObserver = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
@@ -237,7 +254,27 @@ function setupAOSLikeAnimation() {
     { threshold: 0.15 }
   )
 
-  document.querySelectorAll('[data-aos]').forEach((el) => aosObserver?.observe(el))
+  elements.forEach((el) => {
+    if (el.classList.contains('aos-animate') || shouldAnimateAosImmediately(el)) {
+      el.classList.add('aos-animate')
+      return
+    }
+
+    aosObserver?.observe(el)
+  })
+}
+
+function nextAnimationFrame() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve())
+  })
+}
+
+async function refreshAnimatedSections() {
+  await nextTick()
+  await nextAnimationFrame()
+  setupCounters()
+  setupAOSLikeAnimation()
 }
 
 function startTestimonials() {
@@ -275,6 +312,10 @@ onMounted(() => {
     setupAOSLikeAnimation()
   })
   startTestimonials()
+})
+
+watch(locale, () => {
+  void refreshAnimatedSections()
 })
 
 onBeforeUnmount(() => {
@@ -345,13 +386,13 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <!-- Funfact Section -->
+    <!-- Funfact Section temporarily hidden
     <section class="funfact-section">
       <div class="bg_layer" style="background-image: url('/financer/assets/images/background/funfact_shape_bg.png');"></div>
 
       <div class="container">
         <div class="row">
-          <div v-for="(item, index) in funfacts" :key="item.title" class="col-xl-3 col-lg-3 col-md-6 col-sm-12">
+          <div v-for="(item, index) in funfacts" :key="'funfact-' + index" class="col-xl-3 col-lg-3 col-md-6 col-sm-12">
             <div class="funfact-block-one aos-init" data-aos="fade-up" data-aos-easing="linear" :data-aos-duration="500 + index * 50">
               <div class="count-outer count-box" :data-count-index="index">
                 <template v-if="item.prefix">{{ item.prefix }}</template>
@@ -366,6 +407,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </section>
+    -->
 
     <!-- Feature Section -->
     <section class="feature_section">
@@ -400,6 +442,33 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <!-- Novacast Intro -->
+    <section class="novacast-intro-section aos-init" data-aos="fade-up" data-aos-easing="linear" data-aos-duration="500">
+      <div class="container">
+        <div class="novacast-intro-grid">
+          <div class="section_title">
+            <div class="tag_text"><h6>{{ t('homePage.companyIntroTag') }}</h6></div>
+            <h2>{{ t('homePage.companyIntroTitle') }}</h2>
+          </div>
+          <div class="novacast-intro-copy">
+            <p>{{ t('homePage.companyIntroBody') }}</p>
+            <div class="novacast-value-row">
+              <span
+                v-for="(value, index) in homeValues"
+                :key="'home-value-' + index"
+                class="novacast-value-pill aos-init"
+                data-aos="fade-up"
+                data-aos-easing="linear"
+                :data-aos-duration="500 + index * 50"
+              >
+                {{ value.label }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Why Choose Us -->
     <section class="why_choose_us">
       <div class="container">
@@ -420,7 +489,7 @@ onBeforeUnmount(() => {
           <div class="col-xl-6 col-lg-6 col-md-12 col-sm-12">
             <div class="why_choose_right aos-init" data-aos="fade-left" data-aos-easing="linear" data-aos-duration="600">
               <div class="row">
-                <div v-for="(item, index) in chooseUs" :key="item.title" class="col-xl-6 col-lg-6 col-md-6 col-sm-12 colmun">
+                <div v-for="(item, index) in chooseUs" :key="'choose-us-' + index" class="col-xl-6 col-lg-6 col-md-6 col-sm-12 colmun">
                   <div
                     class="why_choose_block_one mb_40 aos-init"
                     :class="item.extraClass"
@@ -454,7 +523,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="row">
-          <div v-for="(item, index) in services" :key="item.title" class="col-xl-3 col-lg-3 col-md-6 col-sm-12">
+          <div v-for="(item, index) in services" :key="'service-' + index" class="col-xl-3 col-lg-3 col-md-6 col-sm-12">
             <div class="service_block_one aos-init" data-aos="fade-up" data-aos-easing="linear" :data-aos-duration="300 + index * 200">
               <div class="service_icon">
                 <i :class="item.icon"></i>
@@ -479,7 +548,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="row">
-          <div v-for="(item, index) in processes" :key="item.title" class="col-xl-4 col-lg-4 col-md-6 col-sm-12">
+          <div v-for="(item, index) in processes" :key="'process-' + index" class="col-xl-4 col-lg-4 col-md-6 col-sm-12">
             <div
               class="process_block_one centred aos-init"
               :class="item.extraClass"
@@ -496,52 +565,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div
-          class="video_box aos-init"
-          data-aos="fade-up"
-          data-aos-easing="linear"
-          data-aos-duration="600"
-          style="background-image: url('/financer/assets/images/background/video_box_bg.jpg');"
-        >
-          <a href="https://www.youtube.com/watch?v=nfP5N9Yc72A&t=28s" target="_blank" rel="noopener noreferrer" class="lightbox-image">
-            <div class="icon_box"><i class="icon-38"></i></div>
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Team -->
-    <section class="team_section">
-      <div class="shape_one float-bob-x" style="background-image: url('/financer/assets/images/icons/mouse-pointer.png');"></div>
-
-      <div class="container">
-        <div class="section_title centred">
-          <div class="tag_text"><h6>{{ t('homePage.teamTag') }}</h6></div>
-          <h2>{{ t('homePage.teamTitle') }}</h2>
-        </div>
-
-        <div class="row">
-          <div v-for="(member, index) in team" :key="member.name" class="col-lg-3 col-md-6 col-sm-12 team_block">
-            <div class="team_block_one aos-init" data-aos="fade-up" data-aos-easing="linear" :data-aos-duration="300 + index * 200">
-              <div class="inner_box">
-                <div class="image_box">
-                  <figure class="image">
-                    <img :src="member.image" alt="" />
-                  </figure>
-                  <ul class="team_social_links">
-                    <li><a href="#" @click.prevent><i class="fab fa-facebook-f"></i></a></li>
-                    <li><a href="#" @click.prevent><i class="fab fa-twitter"></i></a></li>
-                    <li><a href="#" @click.prevent><i class="fab fa-skype"></i></a></li>
-                  </ul>
-                </div>
-                <div class="lower_content">
-                  <h4><a href="#" @click.prevent>{{ member.name }}</a></h4>
-                  <span class="designation">{{ member.designation }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -563,58 +586,6 @@ onBeforeUnmount(() => {
           <div class="cta_shape float-bob-y">
             <img src="/financer/assets/images/icons/shape_icon_3.png" alt="" />
           </div>
-
-          <div class="cta_image">
-            <figure>
-              <img src="/financer/assets/images/resource/cta_image.png" alt="" />
-            </figure>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Testimonials -->
-    <section class="testimonial_section aos-init" data-aos="fade-up" data-aos-easing="linear" data-aos-duration="500">
-      <div class="container">
-        <div class="shape_bg"></div>
-
-        <div class="section_title centred">
-          <div class="tag_text"><h6>{{ t('homePage.testimonialsTag') }}</h6></div>
-          <h2>{{ t('homePage.testimonialsTitle') }}</h2>
-        </div>
-
-        <div class="three-item-carousel owl-carousel owl-theme owl-dots-one owl-nav-none owl-loaded">
-          <div class="home-testimonial-track">
-            <div v-for="(item, index) in visibleTestimonials" :key="item.image + '-' + index + '-' + testimonialIndex" class="testimonial_block_one">
-              <div class="inner_box">
-                <ul class="rating">
-                  <li v-for="star in 5" :key="star"><i class="icon-39"></i></li>
-                </ul>
-                <p>{{ item.text }}</p>
-                <div class="author_box">
-                  <figure class="thumb_box">
-                    <img :src="item.image" alt="" />
-                  </figure>
-                  <div class="author_info">
-                    <h5>{{ item.name }}</h5>
-                    <span class="designation">{{ item.designation }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="owl-dots custom-owl-dots">
-            <button
-              v-for="dot in testimonialDots"
-              :key="'dot-' + dot"
-              class="owl-dot"
-              :class="{ active: dot === activeDot }"
-              @click="goToDot(dot)"
-            >
-              <span></span>
-            </button>
-          </div>
         </div>
       </div>
     </section>
@@ -631,7 +602,7 @@ onBeforeUnmount(() => {
           <ul class="accordion_box">
             <li
               v-for="(item, index) in faqs"
-              :key="item.question"
+              :key="'faq-' + index"
               class="accordion block"
               :class="{ 'active-block': activeFaq === index }"
             >
@@ -692,9 +663,64 @@ onBeforeUnmount(() => {
   display: block;
 }
 
+.financer-home .novacast-intro-section {
+  padding: 110px 0 80px;
+  background: #ffffff;
+}
+
+.financer-home .novacast-intro-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 50px;
+  align-items: start;
+}
+
+.financer-home .novacast-intro-copy p {
+  margin-bottom: 24px;
+  color: #6b7280;
+  line-height: 1.85;
+}
+
+.financer-home .novacast-value-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.financer-home .novacast-value-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #f4f0ff;
+  color: #4c1d95;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.financer-home .work_process_section {
+  padding-bottom: 80px;
+}
+
+.financer-home .cta_inner {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 64px 56px;
+}
+
+.financer-home .cta_inner .subscribe-inner {
+  max-width: 520px;
+}
+
 @media (max-width: 1199px) {
   .financer-home .home-testimonial-track {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .financer-home .novacast-intro-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
   }
 
   .financer-home .banner_style_one {

@@ -125,6 +125,7 @@ class FinanceStaffQuestionTemplateController extends Controller
             'question_text_en' => $template->question_text_en,
             'question_text_ar' => $template->question_text_ar,
             'question_type' => $template->question_type,
+            'finance_type' => $template->finance_type ?? 'all',
             'options_json' => $options,
             'options_count' => count($options),
             'placeholder_en' => $template->placeholder_en,

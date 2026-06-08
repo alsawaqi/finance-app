@@ -4,6 +4,7 @@ import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/AppPagination.vue'
 import type {
+  StaffQuestionFinanceType,
   FinanceStaffQuestionTemplateItem,
   FinanceStaffQuestionTemplatePayload,
   StaffQuestionType,
@@ -23,6 +24,7 @@ type StaffQuestionForm = {
   question_text_en: string
   question_text_ar: string
   question_type: StaffQuestionType
+  finance_type: StaffQuestionFinanceType
   placeholder_en: string
   placeholder_ar: string
   help_text_en: string
@@ -47,6 +49,12 @@ const questionTypeOptions = computed<Array<{ value: StaffQuestionType; label: st
   { value: 'email', label: t('adminStaffQuestionTemplatesPage.types.email.label'), helper: t('adminStaffQuestionTemplatesPage.types.email.helper') },
   { value: 'phone', label: t('adminStaffQuestionTemplatesPage.types.phone.label'), helper: t('adminStaffQuestionTemplatesPage.types.phone.helper') },
   { value: 'currency', label: t('adminStaffQuestionTemplatesPage.types.currency.label'), helper: t('adminStaffQuestionTemplatesPage.types.currency.helper') },
+])
+
+const financeTypeOptions = computed<Array<{ value: StaffQuestionFinanceType; label: string }>>(() => [
+  { value: 'all', label: t('adminRequestQuestionsPage.financeTypes.all') },
+  { value: 'individual', label: t('adminRequestQuestionsPage.financeTypes.individual') },
+  { value: 'company', label: t('adminRequestQuestionsPage.financeTypes.company') },
 ])
 
 const optionDrivenTypes: StaffQuestionType[] = ['select', 'radio', 'checkbox']
@@ -114,6 +122,7 @@ function createDefaultForm(): StaffQuestionForm {
     question_text_en: '',
     question_text_ar: '',
     question_type: 'text',
+    finance_type: 'all',
     placeholder_en: '',
     placeholder_ar: '',
     help_text_en: '',
@@ -153,6 +162,11 @@ function questionTypeLabel(type: StaffQuestionType) {
   return matched?.label || type
 }
 
+function financeTypeLabel(financeType: StaffQuestionFinanceType) {
+  const matched = financeTypeOptions.value.find((option) => option.value === financeType)
+  return matched?.label || financeTypeOptions.value[0]?.label || financeType
+}
+
 async function fetchTemplates(page = pagination.value.current_page) {
   isLoading.value = true
   formError.value = ''
@@ -186,6 +200,7 @@ function buildPayload(): FinanceStaffQuestionTemplatePayload {
     question_text_en: form.value.question_text_en.trim(),
     question_text_ar: form.value.question_text_ar.trim() || null,
     question_type: form.value.question_type,
+    finance_type: form.value.finance_type,
     options_json: needsOptions.value ? parsedOptions.value : null,
     placeholder_en: form.value.placeholder_en.trim() || null,
     placeholder_ar: form.value.placeholder_ar.trim() || null,
@@ -233,6 +248,7 @@ function editTemplate(row: FinanceStaffQuestionTemplateItem) {
     question_text_en: row.question_text_en,
     question_text_ar: row.question_text_ar ?? '',
     question_type: row.question_type,
+    finance_type: row.finance_type || 'all',
     placeholder_en: row.placeholder_en ?? '',
     placeholder_ar: row.placeholder_ar ?? '',
     help_text_en: row.help_text_en ?? '',
@@ -380,6 +396,17 @@ function extractErrorMessage(error: unknown, fallback: string) {
             <small v-if="firstFieldError('question_type')" class="admin-form-error">{{ firstFieldError('question_type') }}</small>
           </label>
 
+          <label class="admin-form-field">
+            <span>{{ t('adminRequestQuestionsPage.financeTypeField.label') }}</span>
+            <select v-model="form.finance_type" class="admin-form-select" :class="{ 'has-error': firstFieldError('finance_type') }">
+              <option v-for="type in financeTypeOptions" :key="type.value" :value="type.value">
+                {{ type.label }}
+              </option>
+            </select>
+            <small class="admin-form-help">{{ t('adminRequestQuestionsPage.financeTypeField.help') }}</small>
+            <small v-if="firstFieldError('finance_type')" class="admin-form-error">{{ firstFieldError('finance_type') }}</small>
+          </label>
+
           <label class="admin-form-field admin-form-field--full">
             <span>{{ t('adminStaffQuestionTemplatesPage.form.questionEn') }}</span>
             <textarea v-model="form.question_text_en" rows="3" class="admin-form-textarea" :class="{ 'has-error': firstFieldError('question_text_en') }"></textarea>
@@ -494,6 +521,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
           <div class="admin-question-preview__card">
             <div class="admin-question-preview__meta">
               <span class="admin-status-pill">{{ form.question_type }}</span>
+              <span class="admin-status-pill is-muted">{{ financeTypeLabel(form.finance_type) }}</span>
               <span class="admin-question-preview__code">{{ form.code || t('adminStaffQuestionTemplatesPage.preview.autoCode') }}</span>
               <span class="admin-status-pill" :class="{ 'is-muted': !form.is_required }">
                 {{ form.is_required ? t('adminStaffQuestionTemplatesPage.preview.required') : t('adminStaffQuestionTemplatesPage.preview.optional') }}
@@ -559,6 +587,10 @@ function extractErrorMessage(error: unknown, fallback: string) {
               <strong>{{ form.sort_order }}</strong>
             </article>
             <article class="admin-question-preview__note">
+              <span>{{ t('adminRequestQuestionsPage.financeTypeField.column') }}</span>
+              <strong>{{ financeTypeLabel(form.finance_type) }}</strong>
+            </article>
+            <article class="admin-question-preview__note">
               <span>{{ t('adminStaffQuestionTemplatesPage.table.status') }}</span>
               <strong>{{ form.is_active ? t('adminStaffQuestionTemplatesPage.table.active') : t('adminStaffQuestionTemplatesPage.table.inactive') }}</strong>
             </article>
@@ -613,6 +645,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
                   <th>{{ t('adminStaffQuestionTemplatesPage.table.questionEn') }}</th>
                   <th>{{ t('adminStaffQuestionTemplatesPage.table.questionAr') }}</th>
                   <th>{{ t('adminStaffQuestionTemplatesPage.table.type') }}</th>
+                  <th>{{ t('adminRequestQuestionsPage.financeTypeField.column') }}</th>
                   <th>{{ t('adminStaffQuestionTemplatesPage.table.required') }}</th>
                   <th>{{ t('adminStaffQuestionTemplatesPage.table.status') }}</th>
                   <th>{{ t('adminStaffQuestionTemplatesPage.table.actions') }}</th>
@@ -642,6 +675,7 @@ function extractErrorMessage(error: unknown, fallback: string) {
                     </div>
                   </td>
                   <td>{{ questionTypeLabel(row.question_type) }}</td>
+                  <td><span class="admin-status-pill is-muted">{{ financeTypeLabel(row.finance_type || 'all') }}</span></td>
                   <td>{{ row.is_required ? t('adminStaffQuestionTemplatesPage.table.yes') : t('adminStaffQuestionTemplatesPage.table.no') }}</td>
                   <td>
                     <span class="admin-status-pill" :class="row.is_active ? 'is-success' : 'is-muted'">

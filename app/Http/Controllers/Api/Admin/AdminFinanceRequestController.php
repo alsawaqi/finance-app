@@ -19,7 +19,6 @@ use App\Models\RequestAttachment;
 use App\Services\FinanceRequestDocumentChecklistService;
 use App\Services\FinanceRequestStaffQuestionService;
 use App\Services\FinanceRequestWorkflowService;
-use App\Support\FinanceRequestWorkflowTransitionGuard;
 use App\Support\RequestTimelineLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -417,12 +416,10 @@ class AdminFinanceRequestController extends Controller
             ]);
         }
 
-        FinanceRequestWorkflowTransitionGuard::assertCanManualTransition($oldStage, $newStage);
-
         DB::transaction(function () use ($financeRequest, $newStage, $admin, $oldStage) {
             $financeRequest->workflow_stage = $newStage;
             $financeRequest->latest_activity_at = now();
-            $financeRequest->save();
+            $financeRequest->saveWithWorkflowStageOverride();
 
             RequestTimelineLogger::log(
                 $financeRequest,
@@ -463,7 +460,7 @@ class AdminFinanceRequestController extends Controller
             'staffQuestions.asker:id,name,email',
             'staffQuestions.assignedStaff:id,name,email',
             'staffQuestions.answerer:id,name,email',
-            'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
+            'staffQuestions.template:id,code,question_text_en,question_text_ar,question_type,finance_type,is_required,is_active,sort_order',
             'updateBatches.requester:id,name,email',
             'updateBatches.items.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',
             'updateItems.question:id,code,question_text,question_type,options_json,placeholder,help_text,is_required',

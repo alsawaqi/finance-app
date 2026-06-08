@@ -16,10 +16,16 @@ class FinanceRequest extends Model
 {
     use HasFactory;
 
+    private bool $bypassWorkflowStageTransitionGuard = false;
+
     protected static function booted(): void
     {
         static::saving(function (FinanceRequest $financeRequest): void {
             if (! $financeRequest->exists || ! $financeRequest->isDirty('workflow_stage')) {
+                return;
+            }
+
+            if ($financeRequest->bypassWorkflowStageTransitionGuard) {
                 return;
             }
 
@@ -28,6 +34,17 @@ class FinanceRequest extends Model
                 $financeRequest->workflow_stage,
             );
         });
+    }
+
+    public function saveWithWorkflowStageOverride(array $options = []): bool
+    {
+        $this->bypassWorkflowStageTransitionGuard = true;
+
+        try {
+            return $this->save($options);
+        } finally {
+            $this->bypassWorkflowStageTransitionGuard = false;
+        }
     }
 
     protected $fillable = [

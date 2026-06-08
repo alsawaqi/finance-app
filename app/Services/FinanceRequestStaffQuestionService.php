@@ -89,6 +89,7 @@ class FinanceRequestStaffQuestionService
         User $actor,
         array $validated,
     ): FinanceRequestStaffQuestion {
+        $this->assertStudyStageIsEditable($financeRequest);
         $this->assertQuestionBelongsToRequest($financeRequest, $staffQuestion);
 
         [$answerText, $answerJson] = $this->normalizeAnswerPayload($staffQuestion, $validated);
@@ -128,7 +129,7 @@ class FinanceRequestStaffQuestionService
             'asker:id,name,email',
             'assignedStaff:id,name,email',
             'answerer:id,name,email',
-            'template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
+            'template:id,code,question_text_en,question_text_ar,question_type,finance_type,is_required,is_active,sort_order',
         ]);
     }
 
@@ -207,7 +208,7 @@ class FinanceRequestStaffQuestionService
             'asker:id,name,email',
             'assignedStaff:id,name,email',
             'answerer:id,name,email',
-            'template:id,code,question_text_en,question_text_ar,question_type,is_required,is_active,sort_order',
+            'template:id,code,question_text_en,question_text_ar,question_type,finance_type,is_required,is_active,sort_order',
         ]);
     }
 
@@ -222,6 +223,8 @@ class FinanceRequestStaffQuestionService
         User $actor,
         string $note,
     ): FinanceRequest {
+        $this->assertStudyStageIsEditable($financeRequest);
+
         $note = trim($note);
 
         if ($note === '') {
@@ -272,6 +275,8 @@ class FinanceRequestStaffQuestionService
         User $actor,
         ?string $note,
     ): FinanceRequest {
+        $this->assertStudyStageIsEditable($financeRequest);
+
         $financeRequest->forceFill([
             'understudy_status' => FinanceRequestUnderstudyStatus::DRAFT,
             'understudy_note' => $note !== null ? trim($note) : null,
@@ -303,6 +308,14 @@ class FinanceRequestStaffQuestionService
         string $action,
         ?string $reviewNote = null,
     ): FinanceRequest {
+        $workflowStage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+
+        if ($workflowStage !== FinanceRequestWorkflowStage::AWAITING_UNDERSTUDY_REVIEW->value) {
+            throw ValidationException::withMessages([
+                'workflow_stage' => 'The understudy package must be submitted for admin review before it can be reviewed.',
+            ]);
+        }
+
         if ($financeRequest->understudy_status !== FinanceRequestUnderstudyStatus::SUBMITTED) {
             throw ValidationException::withMessages([
                 'understudy_status' => 'The understudy package must be submitted before the admin can review it.',
@@ -361,6 +374,20 @@ class FinanceRequestStaffQuestionService
         );
 
         return $financeRequest->fresh();
+    }
+
+    private function assertStudyStageIsEditable(FinanceRequest $financeRequest): void
+    {
+        $workflowStage = $financeRequest->workflow_stage?->value ?? (string) $financeRequest->workflow_stage;
+
+        if (! in_array($workflowStage, [
+            FinanceRequestWorkflowStage::UNDERSTUDY->value,
+            FinanceRequestWorkflowStage::AWAITING_STAFF_ANSWERS->value,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'workflow_stage' => 'The request must finish document collection and reach the staff study stage before study answers can be edited.',
+            ]);
+        }
     }
 
     private function assertQuestionBelongsToRequest(FinanceRequest $financeRequest, FinanceRequestStaffQuestion $staffQuestion): void
